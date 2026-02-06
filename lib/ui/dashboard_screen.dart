@@ -536,21 +536,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 lineTouchData: LineTouchData(
                   touchTooltipData: LineTouchTooltipData(
                     getTooltipColor: (s) => const Color(0xFF2E2F33),
-                    getTooltipItems: (spots) {
-                      if (spots.isEmpty) return [];
-                      final idx = spots.first.x.toInt();
-                      final data = history[idx];
-                      String l = "", s = "";
-                      double curL = 0, curS = 0;
-                      if (isPrinter) { 
-                        l = data.longVolDisplay; s = data.shortVolDisplay; curL = data.longVolNum - baseLong; curS = data.shortVolNum - baseShort;
-                      } else if (isBTC) { 
-                        l = data.btc?.longDisplay ?? "-"; s = data.btc?.shortDisplay ?? "-"; curL = (data.btc?.longVol ?? 0) - baseLong; curS = (data.btc?.shortVol ?? 0) - baseShort;
-                      } else { 
-                        l = data.eth?.longDisplay ?? "-"; s = data.eth?.shortDisplay ?? "-"; curL = (data.eth?.longVol ?? 0) - baseLong; curS = (data.eth?.shortVol ?? 0) - baseShort;
-                      }
-                      String fmt(double v) => (v >= 0 ? "+" : "") + (v.abs() >= 1e8 ? "${(v / 1e8).toStringAsFixed(2)}億" : "${(v / 1e4).toStringAsFixed(0)}萬");
-                      return [LineTooltipItem("${DateFormat('HH:mm:ss').format(data.timestamp)}\n多: $l (${fmt(curL)})\n空: $s (${fmt(curS)})", const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold))];
+                    getTooltipItems: (touchedSpots) {
+                      return touchedSpots.map((spot) {
+                        // Only show the tooltip for the first line (barIndex 0) to prevent duplicates
+                        if (spot.barIndex != 0) return null;
+
+                        final idx = spot.x.toInt();
+                        if (idx < 0 || idx >= history.length) return null;
+                        
+                        final data = history[idx];
+                        String l = "", s = "";
+                        double curL = 0, curS = 0;
+                        if (isPrinter) { 
+                          l = data.longVolDisplay; s = data.shortVolDisplay; curL = data.longVolNum - baseLong; curS = data.shortVolNum - baseShort;
+                        } else if (isBTC) { 
+                          l = data.btc?.longDisplay ?? "-"; s = data.btc?.shortDisplay ?? "-"; curL = (data.btc?.longVol ?? 0) - baseLong; curS = (data.btc?.shortVol ?? 0) - baseShort;
+                        } else { 
+                          l = data.eth?.longDisplay ?? "-"; s = data.eth?.shortDisplay ?? "-"; curL = (data.eth?.longVol ?? 0) - baseLong; curS = (data.eth?.shortVol ?? 0) - baseShort;
+                        }
+                        String fmt(double v) => (v >= 0 ? "+" : "") + (v.abs() >= 1e8 ? "${(v / 1e8).toStringAsFixed(2)}億" : "${(v / 1e4).toStringAsFixed(0)}萬");
+                        
+                        return LineTooltipItem(
+                          "${DateFormat('HH:mm:ss').format(data.timestamp)}\n多: $l (${fmt(curL)})\n空: $s (${fmt(curS)})",
+                          const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        );
+                      }).toList();
                     },
                   ),
                 ),
