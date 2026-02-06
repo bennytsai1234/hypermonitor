@@ -526,50 +526,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildInfoCard({
+  Widget _buildMiniInfoCard({
     required String label,
     required String value,
+    String? secondaryValue,
     String? delta,
-    String? subValue,
+    bool isShortDelta = false,
     required Color color,
     required Color cardBg,
-    bool fullWidth = false,
   }) {
     Color deltaColor = Colors.grey;
     if (delta != null) {
-      deltaColor = delta.startsWith('+') ? const Color(0xFF00C087) : const Color(0xFFFF4949);
+      bool isPositive = delta.startsWith('+');
+      if (isShortDelta) {
+        deltaColor = isPositive ? const Color(0xFFFF4949) : const Color(0xFF00C087);
+      } else {
+        deltaColor = isPositive ? const Color(0xFF00C087) : const Color(0xFFFF4949);
+      }
     }
 
     return Container(
-      width: fullWidth ? double.infinity : null,
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: color.withAlpha(80), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: color.withAlpha(20),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-          const SizedBox(height: 4),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                value,
-                style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              if (subValue != null) ...[
-                const SizedBox(width: 4),
-                Text(subValue, style: TextStyle(color: color.withValues(alpha: 0.7), fontSize: 12)),
-              ],
+              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+              if (delta != null)
+                Text(
+                  delta,
+                  style: TextStyle(color: deltaColor, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
             ],
           ),
-          if (delta != null) ...[
-            const SizedBox(height: 4),
-            Text(delta, style: TextStyle(color: deltaColor, fontSize: 14, fontWeight: FontWeight.bold)),
-          ],
+          const SizedBox(height: 4),
+          Text(
+            value.replaceAll("亿", "億").replaceAll("万", "萬"),
+            style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          if (secondaryValue != null)
+            Text(
+              secondaryValue.replaceAll("亿", "億").replaceAll("万", "萬"),
+              style: TextStyle(color: Colors.white30, fontSize: 9),
+            ),
         ],
       ),
     );
