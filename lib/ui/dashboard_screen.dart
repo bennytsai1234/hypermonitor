@@ -161,8 +161,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   label: isBearish ? "BTC 空單" : "BTC 多單",
                                   value: (isBearish ? _currentData!.btc?.shortDisplay : _currentData!.btc?.longDisplay) ?? "---",
                                   delta: isBearish 
-                                      ? _calculateVolumeDelta(_previousData?.btc?.shortVol, _currentData!.btc?.shortVolNum)
-                                      : _calculateVolumeDelta(_previousData?.btc?.longVol, _currentData!.btc?.longVolNum),
+                                      ? _calculateVolumeDelta(_previousData?.btc?.shortVol, _currentData!.btc?.shortVol)
+                                      : _calculateVolumeDelta(_previousData?.btc?.longVol, _currentData!.btc?.longVol),
                                   color: sentimentColor,
                                   cardBg: cardBg,
                                 ),
@@ -171,8 +171,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   label: isBearish ? "ETH 空單" : "ETH 多單",
                                   value: (isBearish ? _currentData!.eth?.shortDisplay : _currentData!.eth?.longDisplay) ?? "---",
                                   delta: isBearish 
-                                      ? _calculateVolumeDelta(_previousData?.eth?.shortVol, _currentData!.eth?.shortVolNum)
-                                      : _calculateVolumeDelta(_previousData?.eth?.longVol, _currentData!.eth?.longVolNum),
+                                      ? _calculateVolumeDelta(_previousData?.eth?.shortVol, _currentData!.eth?.shortVol)
+                                      : _calculateVolumeDelta(_previousData?.eth?.longVol, _currentData!.eth?.longVol),
                                   color: sentimentColor,
                                   cardBg: cardBg,
                                 ),
@@ -585,7 +585,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       child: Text(
         sentiment,
-        style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.black),
+        style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.w900),
       ),
     );
   }

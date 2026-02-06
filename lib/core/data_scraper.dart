@@ -71,7 +71,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   void _startScrapingLoop() {
     _scrapeBoth();
     _scrapeTimer?.cancel();
-    _scrapeTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+    _scrapeTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       _scrapeBoth();
     });
   }
