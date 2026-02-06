@@ -101,11 +101,16 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       (function() {
         try {
           const rows = document.querySelectorAll('tr');
+          let debugRows = [];
+
           for (const row of rows) {
+            const text = row.innerText;
+            // Collect first 5 rows for debug if we fail
+            if (debugRows.length < 5) debugRows.push(text.substring(0, 100).replace(/\\n/g, ' '));
+
             // Find the Super Money Printer row
-            if (row.innerText.includes('超级印钞机') || row.innerText.includes('Super Money Printer')) {
+            if (text.includes('超级印钞机') || text.includes('Super Money Printer')) {
                const cells = row.querySelectorAll('td');
-               // Defensive check based on log findings (approx 9-11 cells)
                if (cells.length < 5) return JSON.stringify({error: "Found row but cells < 5"});
 
                // 1. Wallet Count (Index 2)
@@ -113,11 +118,15 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
                // 2. Long & Short Volume (Index 4 - Merged with newline)
                // Log confirmed: "\$5.65亿\\n\$14.43亿"
+               // Note: Sometimes columns shift. We should ideally use headers but let's stick to this for now.
                let longVol = "0";
                let shortVol = "0";
 
+               // Try to match the cell structure more dynamically if possible, but index 4 is our best guess from previous logs.
+               // Let's also check if cells[4] has the expected currency format.
                const volCell = cells[4].innerText.trim();
                const volParts = volCell.split('\\n');
+
                if (volParts.length > 0) longVol = volParts[0].trim();
                if (volParts.length > 1) shortVol = volParts[1].trim();
 
@@ -125,16 +134,14 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
                let netVol = cells[5].innerText.trim();
 
                // 4. Sentiment (Usually 2nd to last, or find by text content if available)
-               // Log showed: ..., "223\n70", "看跌", ""
-               // So it is cells[cells.length - 2]
                let sentiment = "Unknown";
                if (cells.length >= 2) {
                  sentiment = cells[cells.length - 2].innerText.trim();
-                 // If that is empty (e.g. sometimes no empty action col), try last
                  if (!sentiment) sentiment = cells[cells.length - 1].innerText.trim();
                }
 
                return JSON.stringify({
+                 found: true,
                  walletCount: wallet,
                  longVol: longVol,
                  shortVol: shortVol,
@@ -143,7 +150,14 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
                });
             }
           }
-          return null;
+
+          // Return debug info if not found
+          return JSON.stringify({
+             found: false,
+             message: "Row not found",
+             totalRows: rows.length,
+             sampleRows: debugRows
+          });
         } catch (e) {
           return JSON.stringify({error: e.toString()});
         }
@@ -166,7 +180,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       print("Scrape Result: $result");
 
       if (result != null && result != 'null' && !result.contains('error')) {
-         _parseAndNotify(result);
+         _parseAndNotify(result!.replaceAll(r'\\', r'\')); // Unescape slashes for jsonDecode
       }
     } catch (e) {
       print("Scrape Execution Error: $e");
@@ -176,82 +190,45 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
   void _parseAndNotify(String rawJson) {
      try {
-       // Manual simple JSON parsing to avoid heavy imports if possible,
-       // but since we are in Flutter, let's use dart:convert if we imported it?
-       // We didn't import dart:convert. Let's add it or do simple regex.
-       // Actually, adding import 'dart:convert'; is cleaner.
-       // For now, let's assume we can add the import to the top of the file in a separate edit
-       // or just do string manipulation if it's simple.
-       // But wait, I can modify the import in this same file using multi_replace or just assume I will do it.
-       // Let's use regex for safety without changing imports yet, or better,
-       // I'll assume valid JSON structure: {"key":"value", ...}
-
-       // Let's replace the whole file content helper to include dart:convert or just use string split if I want to be lazy.
-       // No, I should be professional. I will include 'dart:convert' in a separate edit or use regex.
-       // Given the constraints, I'll use a regex "parser" for this simple flat object to save an import cycle if I can't edit top.
-       // Structure: {"key":"value", ...}
-
-       String val(String key) {
-         final match = RegExp('"$key":\\s*"([^"]+)"').firstMatch(rawJson);
-         return match?.group(1) ?? ""; // This simple regex might fail on newlines inside value if not strictly escaped
+       // Clean up the JSON string for the Dart parser
+       // Sometimes windows webview returns double escaped strings
+       String cleanJson = rawJson;
+       if (cleanJson.startsWith('"') && cleanJson.endsWith('"')) {
+          cleanJson = cleanJson.substring(1, cleanJson.length - 1).replaceAll(r'\"', '"');
        }
 
-       // Robust simple JSON unescape for values that might contain \n
-       String extract(String key) {
-           final start = rawJson.indexOf('"$key":');
-           if (start == -1) return "";
-           final valStart = rawJson.indexOf('"', start + key.length + 3);
-           if (valStart == -1) return "";
+       final Map<String, dynamic> data = jsonDecode(cleanJson);
 
-           // Find end quote, avoiding escaped quotes (simple check)
-           int valEnd = valStart + 1;
-           while (valEnd < rawJson.length) {
-             if (rawJson[valEnd] == '"' && rawJson[valEnd-1] != '\\') {
-               break;
-             }
-             valEnd++;
+       if (data['found'] == true) {
+           final wCountStr = data['walletCount']?.toString() ?? "";
+           final longStr = data['longVol']?.toString() ?? "0";
+           final shortStr = data['shortVol']?.toString() ?? "0";
+           final netStr = data['netVol']?.toString() ?? "0";
+           final sentimentStr = data['sentiment']?.toString() ?? "Unknown";
+
+           if (wCountStr.isNotEmpty) {
+               final count = int.tryParse(wCountStr.replaceAll(',', '')) ?? 0;
+
+               final hyperData = HyperData(
+                  timestamp: DateTime.now(),
+                  walletCount: count,
+                  longVolDisplay: longStr,
+                  shortVolDisplay: shortStr,
+                  netVolDisplay: netStr,
+                  sentiment: sentimentStr,
+                  longVolNum: _parseValue(longStr),
+                  shortVolNum: _parseValue(shortStr),
+                  netVolNum: _parseValue(netStr),
+               );
+               widget.onDataScraped(hyperData);
            }
-           if (valEnd >= rawJson.length) return "";
-
-           String rawVal = rawJson.substring(valStart + 1, valEnd);
-           // Unescape basic json chars
-           return rawVal.replaceAll(r'\n', '\n').replaceAll(r'\"', '"').replaceAll(r'\\', '\\');
-       }
-
-       final wCountStr = extract("walletCount");
-       final longShortStr = extract("longShortVol");
-       final netStr = extract("netVol");
-       final sentimentStr = extract("sentiment").trim();
-
-       if (wCountStr.isNotEmpty) {
-           final count = int.tryParse(wCountStr.replaceAll(',', '')) ?? 0;
-
-           // Split Long/Short
-           // Expected: "$5.32亿\n$14.39亿"
-           // Or sometimes tab separated?
-           String longStr = "0";
-           String shortStr = "0";
-
-           final vols = longShortStr.split(RegExp(r'[\n\t]'));
-           if (vols.isNotEmpty) longStr = vols[0].trim();
-           if (vols.length > 1) shortStr = vols[1].trim();
-
-           final data = HyperData(
-              timestamp: DateTime.now(),
-              walletCount: count,
-              longVolDisplay: longStr,
-              shortVolDisplay: shortStr,
-              netVolDisplay: netStr,
-              sentiment: sentimentStr,
-              longVolNum: _parseValue(longStr),
-              shortVolNum: _parseValue(shortStr),
-              netVolNum: _parseValue(netStr),
-           );
-           widget.onDataScraped(data);
+       } else {
+         // Log debug info
+         print("Scraper failed to find row. Debug info: ${data['sampleRows']}");
        }
 
      } catch (e) {
-       print("JSON Parse Error: $e");
+       print("JSON Parse Error: $e \nRaw: $rawJson");
      }
   }
 
