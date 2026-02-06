@@ -113,30 +113,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     children: [
-                      // HEADER: Title + Sentiment + Update Time
+                      // HEADER: All in one row
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "超级印钞机",
-                                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                              ),
-                              if (_lastUpdate != null)
-                                Text(
-                                  "更新於 ${DateFormat('HH:mm:ss').format(_lastUpdate!)}",
-                                  style: TextStyle(color: textGrey, fontSize: 10),
-                                ),
-                            ],
+                          const Text(
+                            "超级印钞机",
+                            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                           ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "| 實時監控",
+                            style: TextStyle(color: textGrey, fontSize: 12),
+                          ),
+                          const Spacer(),
+                          if (_lastUpdate != null)
+                            Text(
+                              "${DateFormat('HH:mm:ss').format(_lastUpdate!)} ",
+                              style: TextStyle(color: textGrey, fontSize: 10, fontFamily: 'monospace'),
+                            ),
                           _buildSentimentBadge(_currentData!.sentiment),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
 
-                      // ROW 1: PRIMARY FOCUS & KEY METRICS
+                      // ROW 1: PRIMARY FOCUS & KEY METRICS (Same as before)
                       Row(
                         children: [
                           Expanded(
@@ -183,74 +183,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      // ROW 2: TUG OF WAR (VOLUME RATIO)
-                      _buildTugOfWarBar(
-                        label: "多空持倉實力對比 (Volume)",
-                        leftVal: _currentData!.longVolNum,
-                        rightVal: _currentData!.shortVolNum,
-                        leftColor: textGreen,
-                        rightColor: textRed,
-                        leftLabel: "多頭",
-                        rightLabel: "空頭",
-                        cardBg: cardBg,
-                      ),
-                      const SizedBox(height: 8),
-
-                      // ROW 3: PROFIT/LOSS RATIO (WINNERS VS LOSERS)
-                      _buildTugOfWarBar(
-                        label: isBearish ? "當前優勢：空軍盈利中" : "當前優勢：多頭盈利中",
-                        leftVal: _currentData!.profitCount.toDouble(),
-                        rightVal: _currentData!.lossCount.toDouble(),
-                        leftColor: textGreen,
-                        rightColor: textRed,
-                        leftLabel: "賺錢",
-                        rightLabel: "虧錢",
-                        isMirrored: true, // Specific look for P/L
-                        cardBg: cardBg,
+                      // ROW 2 & 3: TUG OF WAR BARS
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildTugOfWarBar(
+                              label: "多空持倉對比",
+                              leftVal: _currentData!.longVolNum,
+                              rightVal: _currentData!.shortVolNum,
+                              leftColor: textGreen,
+                              rightColor: textRed,
+                              leftLabel: "多頭",
+                              rightLabel: "空頭",
+                              cardBg: cardBg,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildTugOfWarBar(
+                              label: isBearish ? "空軍盈利中" : "多頭盈利中",
+                              leftVal: _currentData!.profitCount.toDouble(),
+                              rightVal: _currentData!.lossCount.toDouble(),
+                              leftColor: textGreen,
+                              rightColor: textRed,
+                              leftLabel: "賺錢",
+                              rightLabel: "虧錢",
+                              isMirrored: true,
+                              cardBg: cardBg,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
 
-                      // ROW 3.5: BTC & ETH Details
-                      if (_currentData!.btc != null || _currentData!.eth != null) ...[
-                        Row(
-                          children: [
-                            if (_currentData!.btc != null)
-                              Expanded(
-                                child: _buildCoinRatioBar(
-                                  coin: _currentData!.btc!,
-                                  leftColor: textGreen,
-                                  rightColor: textRed,
-                                  cardBg: cardBg,
-                                ),
-                              ),
-                            if (_currentData!.btc != null && _currentData!.eth != null)
-                              const SizedBox(width: 8),
-                            if (_currentData!.eth != null)
-                              Expanded(
-                                child: _buildCoinRatioBar(
-                                  coin: _currentData!.eth!,
-                                  leftColor: textGreen,
-                                  rightColor: textRed,
-                                  cardBg: cardBg,
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-
-                      // ROW 4: TRIPLE CHARTS (Overall, BTC, ETH)
+                      // ROW 4: TRIPLE CHARTS (Side-by-Side)
                       Expanded(
-                        child: Column(
+                        child: Row(
                           children: [
-                            Expanded(child: _buildChartCard("總體持倉趨勢", _getRecentHistory(), isPrinter: true)),
-                            const SizedBox(height: 8),
-                            Expanded(child: _buildChartCard("BTC 持倉趨勢", _getRecentHistory(), isBTC: true)),
-                            const SizedBox(height: 8),
-                            Expanded(child: _buildChartCard("ETH 持倉趨勢", _getRecentHistory(), isETH: true)),
+                            Expanded(child: _buildChartCard("總體持倉", _getRecentHistory(), isPrinter: true)),
+                            const SizedBox(width: 8),
+                            Expanded(child: _buildChartCard("BTC 趨勢", _getRecentHistory(), isBTC: true)),
+                            const SizedBox(width: 8),
+                            Expanded(child: _buildChartCard("ETH 趨勢", _getRecentHistory(), isETH: true)),
                           ],
                         ),
                       ),
+                    ],
+                  ),
+                ),
+          ),
+        ],
+      ),
+    );
+  }
                     ],
                   ),
                 ),
