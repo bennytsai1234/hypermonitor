@@ -149,14 +149,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      // ROW 1: NET POSITIONS (All subtracted)
+                      // ROW 1: CORE METRICS (Net + Directional)
                       Row(
                         children: [
                           Expanded(
                             flex: 3,
                             child: _buildPrimaryCard(
-                              label: "總淨持倉 (對沖後)",
+                              label: "全市場資金流向",
                               value: _currentData!.netVolDisplay,
+                              secondaryValue: isBearish ? "空單: ${_currentData!.shortVolDisplay}" : "多單: ${_currentData!.longVolDisplay}",
                               delta: _calculateVolumeDelta(_previousData?.netVolNum, _currentData!.netVolNum),
                               isShortDelta: _currentData!.netVolNum < 0,
                               accentColor: sentimentColor,
@@ -169,8 +170,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Column(
                               children: [
                                 _buildMiniInfoCard(
-                                  label: "BTC 淨持倉",
+                                  label: "BTC 持倉",
                                   value: _currentData!.btc?.netDisplay ?? "---",
+                                  secondaryValue: isBearish ? "空: ${_currentData!.btc?.shortDisplay ?? ""}" : "多: ${_currentData!.btc?.longDisplay ?? ""}",
                                   delta: _calculateVolumeDelta(_previousData?.btc?.netVol, _currentData!.btc?.netVol ?? 0.0),
                                   isShortDelta: (_currentData!.btc?.netVol ?? 0) < 0,
                                   color: (_currentData!.btc?.netVol ?? 0) >= 0 ? textGreen : textRed,
@@ -178,8 +180,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 _buildMiniInfoCard(
-                                  label: "ETH 淨持倉",
+                                  label: "ETH 持倉",
                                   value: _currentData!.eth?.netDisplay ?? "---",
+                                  secondaryValue: isBearish ? "空: ${_currentData!.eth?.shortDisplay ?? ""}" : "多: ${_currentData!.eth?.longDisplay ?? ""}",
                                   delta: _calculateVolumeDelta(_previousData?.eth?.netVol, _currentData!.eth?.netVol ?? 0.0),
                                   isShortDelta: (_currentData!.eth?.netVol ?? 0) < 0,
                                   color: (_currentData!.eth?.netVol ?? 0) >= 0 ? textGreen : textRed,
