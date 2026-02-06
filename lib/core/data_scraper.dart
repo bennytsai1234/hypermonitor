@@ -74,23 +74,23 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   }
 
   void _startScrapingLoop() {
-    // Scrape immediately then every 15 seconds (relaxed to allow load)
+    // Scrape immediately
     _scrape();
     _scrapeTimer?.cancel();
-    int scrapeCount = 0;
 
-    _scrapeTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
-      scrapeCount++;
-
-      // Always reload to ensure fresh data
+    // Poll every 3 seconds for fast updates
+    _scrapeTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      // Reload logic
       if (defaultTargetPlatform == TargetPlatform.windows) {
+        // Windows needs explicit reload to refresh data on SPA
         await _windowsController.reload();
       } else {
         await _mobileController?.reload();
       }
 
-      // Give it time to load the React app (10 seconds)
-      Future.delayed(const Duration(seconds: 10), () {
+      // Check shortly after reload (give 2s for React to render)
+      // This is much faster than the previous 10s hard wait
+      Future.delayed(const Duration(seconds: 2), () {
         _scrape();
       });
     });
@@ -163,19 +163,6 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         }
       }
 
-      } catch (e) {
-        // ignore
-      }
-
-      await file.writeAsString(content);
-      print("DUMP SAVED TO ${file.absolute.path}");
-
-      // PRINT RAW DATA FOR ANALYSIS
-      print("--------------------------------------------------");
-      print("FULL PAGE DATA DUMP:");
-      print(result);
-      print("--------------------------------------------------");
-
       print("Scrape Result: $result");
 
       if (result != null && result != 'null' && !result.contains('error')) {
@@ -185,6 +172,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       print("Scrape Execution Error: $e");
     }
   }
+
 
   void _parseAndNotify(String rawJson) {
      try {
