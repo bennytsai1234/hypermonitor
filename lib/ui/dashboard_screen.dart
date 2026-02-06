@@ -452,6 +452,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildPrimaryCard({
     required String label,
     required String value,
+    String? secondaryValue,
     String? delta,
     bool isShortDelta = false,
     required Color accentColor,
@@ -469,7 +470,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(20),
@@ -497,6 +498,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
+          if (secondaryValue != null)
+            Text(
+              secondaryValue.replaceAll("亿", "億").replaceAll("万", "萬"),
+              style: TextStyle(color: Colors.white38, fontSize: 14),
+            ),
           if (delta != null) ...[
             const SizedBox(height: 8),
             Container(
