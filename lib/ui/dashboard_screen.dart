@@ -130,7 +130,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(height: 16),
 
-                        // SECONDARY INFO ROW
+                        // OPEN POSITION + WALLET COUNT ROW
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildInfoCard(
+                                label: "開倉人數",
+                                value: "${_currentData!.openPositionCount}",
+                                delta: _calculateIntDelta(_previousData?.openPositionCount, _currentData!.openPositionCount),
+                                color: Colors.amber,
+                                cardBg: cardBg,
+                                subValue: _currentData!.openPositionPct.isNotEmpty ? "(${_currentData!.openPositionPct})" : null,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildInfoCard(
+                                label: "錢包數",
+                                value: "${_currentData!.walletCount}",
+                                delta: _calculateIntDelta(_previousData?.walletCount, _currentData!.walletCount),
+                                color: textWhite,
+                                cardBg: cardBg,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // PROFIT/LOSS COUNT ROW (賺錢/虧錢人數)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildInfoCard(
+                                label: "盈利人數",
+                                value: "${_currentData!.profitCount}",
+                                delta: _calculateIntDelta(_previousData?.profitCount, _currentData!.profitCount),
+                                color: textGreen,
+                                cardBg: cardBg,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildInfoCard(
+                                label: "虧損人數",
+                                value: "${_currentData!.lossCount}",
+                                delta: _calculateIntDelta(_previousData?.lossCount, _currentData!.lossCount),
+                                color: textRed,
+                                cardBg: cardBg,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // VOLUME ROW (次要持倉 + 淨持倉)
                         Row(
                           children: [
                             Expanded(
@@ -147,25 +200,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: _buildInfoCard(
-                                label: "錢包數",
-                                value: "${_currentData!.walletCount}",
-                                delta: _calculateIntDelta(_previousData?.walletCount, _currentData!.walletCount),
-                                color: textWhite,
+                                label: "淨持倉",
+                                value: _currentData!.netVolDisplay,
+                                delta: _calculateVolumeDelta(_previousData?.netVolNum, _currentData!.netVolNum),
+                                color: Colors.blueAccent,
                                 cardBg: cardBg,
                               ),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // NET VOLUME
-                        _buildInfoCard(
-                          label: "淨持倉",
-                          value: _currentData!.netVolDisplay,
-                          delta: _calculateVolumeDelta(_previousData?.netVolNum, _currentData!.netVolNum),
-                          color: Colors.blueAccent,
-                          cardBg: cardBg,
-                          fullWidth: true,
                         ),
                         const SizedBox(height: 20),
 
@@ -266,6 +308,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String label,
     required String value,
     String? delta,
+    String? subValue,
     required Color color,
     required Color cardBg,
     bool fullWidth = false,
@@ -288,9 +331,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                value,
+                style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              if (subValue != null) ...[
+                const SizedBox(width: 4),
+                Text(subValue, style: TextStyle(color: color.withOpacity(0.7), fontSize: 12)),
+              ],
+            ],
           ),
           if (delta != null) ...[
             const SizedBox(height: 4),

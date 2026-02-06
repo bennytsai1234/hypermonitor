@@ -113,40 +113,75 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
                const cells = row.querySelectorAll('td');
                if (cells.length < 5) return JSON.stringify({error: "Found row but cells < 5"});
 
-               // 1. Wallet Count (Index 2)
+               // Dump all cells for debugging
+               let cellDump = [];
+               for (let i = 0; i < cells.length; i++) {
+                 cellDump.push({idx: i, text: cells[i].innerText.trim().replace(/\\n/g, '|')});
+               }
+
+               // Confirmed Coinglass table structure from debug:
+               // cells[0]: Filter range ($100万 到 ∞)
+               // cells[1]: Name (超级印钞机)
+               // cells[2]: Wallet count (578)
+               // cells[3]: Open position count with percentage (e.g. "294 (50.87%)")
+               // cells[4]: Long/Short Volume (e.g. "$5.74亿|$14.06亿")
+               // cells[5]: Net Volume ($19.80亿)
+               // cells[6]: Profit/Loss count (e.g. "225|70")
+               // cells[7]: Sentiment (看跌)
+
                let wallet = cells[2].innerText.trim();
 
-               // 2. Long & Short Volume (Index 4 - Merged with newline)
-               // Log confirmed: "\$5.65亿\\n\$14.43亿"
-               // Note: Sometimes columns shift. We should ideally use headers but let's stick to this for now.
+               // Open Position Count (Index 3)
+               // Format: "294 (50.87%)" or just "294"
+               let openPositionCount = "0";
+               let openPositionPct = "";
+               const posCell = cells[3].innerText.trim();
+               // Extract number and percentage separately
+               const pctMatch = posCell.match(/\\((\\d+\\.?\\d*%)\\)/);
+               if (pctMatch) {
+                 openPositionPct = pctMatch[1];
+               }
+               openPositionCount = posCell.replace(/\\(.*?\\)/, '').trim();
+
+               // Long/Short Volume (Index 4)
                let longVol = "0";
                let shortVol = "0";
-
-               // Try to match the cell structure more dynamically if possible, but index 4 is our best guess from previous logs.
-               // Let's also check if cells[4] has the expected currency format.
                const volCell = cells[4].innerText.trim();
                const volParts = volCell.split('\\n');
-
                if (volParts.length > 0) longVol = volParts[0].trim();
                if (volParts.length > 1) shortVol = volParts[1].trim();
 
-               // 3. Net Volume (Index 5)
+               // Net Volume (Index 5)
                let netVol = cells[5].innerText.trim();
 
-               // 4. Sentiment (Usually 2nd to last, or find by text content if available)
+               // Profit/Loss Count (Index 6)
+               let profitCount = "0";
+               let lossCount = "0";
+               if (cells.length > 6) {
+                 const plCell = cells[6].innerText.trim();
+                 const plParts = plCell.split('\\n');
+                 if (plParts.length > 0) profitCount = plParts[0].trim();
+                 if (plParts.length > 1) lossCount = plParts[1].trim();
+               }
+
+               // Sentiment (Index 7)
                let sentiment = "Unknown";
-               if (cells.length >= 2) {
-                 sentiment = cells[cells.length - 2].innerText.trim();
-                 if (!sentiment) sentiment = cells[cells.length - 1].innerText.trim();
+               if (cells.length > 7) {
+                 sentiment = cells[7].innerText.trim();
                }
 
                return JSON.stringify({
                  found: true,
                  walletCount: wallet,
+                 openPositionCount: openPositionCount,
+                 openPositionPct: openPositionPct,
                  longVol: longVol,
                  shortVol: shortVol,
                  netVol: netVol,
-                 sentiment: sentiment
+                 profitCount: profitCount,
+                 lossCount: lossCount,
+                 sentiment: sentiment,
+                 debug_cells: cellDump
                });
             }
           }
@@ -179,6 +214,25 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
       print("Scrape Result: $result");
 
+      // Debug: Print full cells if available
+      if (result != null && result.contains('debug_cells')) {
+        try {
+          String toParse = result;
+          if (toParse.startsWith('"') && toParse.endsWith('"')) {
+            toParse = toParse.substring(1, toParse.length - 1).replaceAll(r'\"', '"');
+          }
+          final debugData = jsonDecode(toParse);
+          final cells = debugData['debug_cells'] as List;
+          print("=== DEBUG CELLS (${cells.length} total) ===");
+          for (var cell in cells) {
+            print("  [${cell['idx']}] ${cell['text']}");
+          }
+          print("=== END DEBUG ===");
+        } catch (e) {
+          print("Debug parse error: $e");
+        }
+      }
+
       if (result != null && result != 'null' && !result.contains('error')) {
          _parseAndNotify(result!.replaceAll(r'\\', r'\')); // Unescape slashes for jsonDecode
       }
@@ -201,6 +255,10 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
        if (data['found'] == true) {
            final wCountStr = data['walletCount']?.toString() ?? "";
+           final openPosCountStr = data['openPositionCount']?.toString() ?? "0";
+           final openPosPctStr = data['openPositionPct']?.toString() ?? "";
+           final profitCountStr = data['profitCount']?.toString() ?? "0";
+           final lossCountStr = data['lossCount']?.toString() ?? "0";
            final longStr = data['longVol']?.toString() ?? "0";
            final shortStr = data['shortVol']?.toString() ?? "0";
            final netStr = data['netVol']?.toString() ?? "0";
@@ -208,10 +266,17 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
            if (wCountStr.isNotEmpty) {
                final count = int.tryParse(wCountStr.replaceAll(',', '')) ?? 0;
+               final openPosCount = int.tryParse(openPosCountStr.replaceAll(',', '')) ?? 0;
+               final profitCount = int.tryParse(profitCountStr.replaceAll(',', '')) ?? 0;
+               final lossCount = int.tryParse(lossCountStr.replaceAll(',', '')) ?? 0;
 
                final hyperData = HyperData(
                   timestamp: DateTime.now(),
                   walletCount: count,
+                  openPositionCount: openPosCount,
+                  openPositionPct: openPosPctStr,
+                  profitCount: profitCount,
+                  lossCount: lossCount,
                   longVolDisplay: longStr,
                   shortVolDisplay: shortStr,
                   netVolDisplay: netStr,
