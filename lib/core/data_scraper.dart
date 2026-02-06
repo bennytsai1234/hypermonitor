@@ -1,338 +1,302 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_windows/webview_windows.dart' as win;
 import 'data_model.dart';
-import 'package:intl/intl.dart';
 
 class CoinglassScraper extends StatefulWidget {
   final Function(HyperData) onDataScraped;
 
-  const CoinglassScraper({Key? key, required this.onDataScraped}) : super(key: key);
+  const CoinglassScraper({super.key, required this.onDataScraped});
 
   @override
   State<CoinglassScraper> createState() => _CoinglassScraperState();
 }
 
 class _CoinglassScraperState extends State<CoinglassScraper> {
-  // Mobile WebViewController
-  WebViewController? _mobileController;
+  // Webview A: Printer
+  WebViewController? _mobileA;
+  final _winA = win.WebviewController();
+  bool _isWinAInit = false;
 
-  // Windows WebViewController
-  final _windowsController = win.WebviewController();
-  bool _isWindowsInitialized = false;
+  // Webview B: Range/9 (BTC/ETH)
+  WebViewController? _mobileB;
+  final _winB = win.WebviewController();
+  bool _isWinBInit = false;
 
   Timer? _scrapeTimer;
+  HyperData? _lastHyperData; // Accumulate data from both sources
 
   @override
   void initState() {
     super.initState();
+    _initWebviews();
+  }
+
+  void _initWebviews() {
     if (defaultTargetPlatform == TargetPlatform.windows) {
-      _initWindowsWebview();
+      _initWindowsWebview(_winA, 'https://www.coinglass.com/zh/hl', (ok) => setState(() => _isWinAInit = ok));
+      _initWindowsWebview(_winB, 'https://www.coinglass.com/zh/hl/range/9', (ok) => setState(() => _isWinBInit = ok));
     } else {
-      _initMobileWebview();
+      _mobileA = _createMobileController('https://www.coinglass.com/zh/hl');
+      _mobileB = _createMobileController('https://www.coinglass.com/zh/hl/range/9');
     }
+    
+    // Start loop after a delay to allow initialization
+    Future.delayed(const Duration(seconds: 5), () {
+      _startScrapingLoop();
+    });
   }
 
-  void _initMobileWebview() {
-    _mobileController = WebViewController()
+  WebViewController _createMobileController(String url) {
+    return WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageFinished: (String url) {
-            print('Page finished loading: $url');
-            _startScrapingLoop();
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse('https://www.coinglass.com/zh/hl'));
+      ..loadRequest(Uri.parse(url));
   }
 
-  Future<void> _initWindowsWebview() async {
+  Future<void> _initWindowsWebview(win.WebviewController ctrl, String url, Function(bool) onInit) async {
     try {
-      await _windowsController.initialize();
-      await _windowsController.setBackgroundColor(Colors.transparent);
-      await _windowsController.setPopupWindowPolicy(win.WebviewPopupWindowPolicy.deny);
-      await _windowsController.loadUrl('https://www.coinglass.com/zh/hl');
-
-      _windowsController.loadingState.listen((state) {
-        if (state == win.LoadingState.navigationCompleted) {
-            print('Windows Page loaded');
-            _startScrapingLoop();
-        }
-      });
-
-      if (mounted) setState(() {
-        _isWindowsInitialized = true;
-      });
+      await ctrl.initialize();
+      await ctrl.setBackgroundColor(Colors.transparent);
+      await ctrl.setPopupWindowPolicy(win.WebviewPopupWindowPolicy.deny);
+      await ctrl.loadUrl(url);
+      onInit(true);
     } catch (e) {
-      print('Error initializing Windows webview: $e');
+      print('Error init $url: $e');
     }
   }
 
   void _startScrapingLoop() {
-    // Scrape immediately
-    _scrape();
+    _scrapeBoth();
     _scrapeTimer?.cancel();
-
-    // Poll every 10 seconds per user request
-    _scrapeTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
-      // Reload logic
-      if (defaultTargetPlatform == TargetPlatform.windows) {
-        // Windows needs explicit reload to refresh data on SPA
-        await _windowsController.reload();
-      } else {
-        await _mobileController?.reload();
-      }
-
-      // Check shortly after reload (give 2s for React to render)
-      // This is much faster than the previous 10s hard wait
-      Future.delayed(const Duration(seconds: 2), () {
-        _scrape();
-      });
+    _scrapeTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+      _scrapeBoth();
     });
   }
 
-  Future<void> _scrape() async {
-    const jsScript = """
-      (function() {
-        try {
-          const rows = document.querySelectorAll('tr');
-          let debugRows = [];
+  Future<void> _scrapeBoth() async {
+    // 1. Scrape Printer
+    final printerResult = await _executeScrape(_winA, _mobileA, _printerJs);
+    print("--- [DEBUG] 印鈔機原始數據 ---");
+    print(printerResult);
+    _parsePrinter(printerResult);
 
-          for (const row of rows) {
-            const text = row.innerText;
-            // Collect first 5 rows for debug if we fail
-            if (debugRows.length < 5) debugRows.push(text.substring(0, 100).replace(/\\n/g, ' '));
-
-            // Find the Super Money Printer row
-            if (text.includes('超级印钞机') || text.includes('Super Money Printer')) {
-               const cells = row.querySelectorAll('td');
-               if (cells.length < 5) return JSON.stringify({error: "Found row but cells < 5"});
-
-               // Dump all cells for debugging
-               let cellDump = [];
-               for (let i = 0; i < cells.length; i++) {
-                 cellDump.push({idx: i, text: cells[i].innerText.trim().replace(/\\n/g, '|')});
-               }
-
-               // Confirmed Coinglass table structure from debug:
-               // cells[0]: Filter range (100万 到 ∞)
-               // cells[1]: Name (超级印钞机)
-               // cells[2]: Wallet count (578)
-               // cells[3]: Open position count with percentage (e.g. "294 (50.87%)")
-               // cells[4]: Long/Short Volume (e.g. "5.74亿|14.06亿")
-               // cells[5]: Net Volume (19.80亿)
-               // cells[6]: Profit/Loss count (e.g. "225|70")
-               // cells[7]: Sentiment (看跌)
-
-               let wallet = cells[2].innerText.trim();
-
-               // Open Position Count (Index 3)
-               // Format: "294 (50.87%)" or just "294"
-               let openPositionCount = "0";
-               let openPositionPct = "";
-               const posCell = cells[3].innerText.trim();
-               // Extract number and percentage separately
-               const pctMatch = posCell.match(/\\((\\d+\\.?\\d*%)\\)/);
-               if (pctMatch) {
-                 openPositionPct = pctMatch[1];
-               }
-               openPositionCount = posCell.replace(/\\(.*?\\)/, '').trim();
-
-               // Long/Short Volume (Index 4)
-               let longVol = "0";
-               let shortVol = "0";
-               const volCell = cells[4].innerText.trim();
-               const volParts = volCell.split('\\n');
-               if (volParts.length > 0) longVol = volParts[0].trim();
-               if (volParts.length > 1) shortVol = volParts[1].trim();
-
-               // Net Volume (Index 5)
-               let netVol = cells[5].innerText.trim();
-
-               // Profit/Loss Count (Index 6)
-               let profitCount = "0";
-               let lossCount = "0";
-               if (cells.length > 6) {
-                 const plCell = cells[6].innerText.trim();
-                 const plParts = plCell.split('\\n');
-                 if (plParts.length > 0) profitCount = plParts[0].trim();
-                 if (plParts.length > 1) lossCount = plParts[1].trim();
-               }
-
-               // Sentiment (Index 7)
-               let sentiment = "Unknown";
-               if (cells.length > 7) {
-                 sentiment = cells[7].innerText.trim();
-               }
-
-               return JSON.stringify({
-                 found: true,
-                 walletCount: wallet,
-                 openPositionCount: openPositionCount,
-                 openPositionPct: openPositionPct,
-                 longVol: longVol,
-                 shortVol: shortVol,
-                 netVol: netVol,
-                 profitCount: profitCount,
-                 lossCount: lossCount,
-                 sentiment: sentiment,
-                 debug_cells: cellDump
-               });
-            }
-          }
-
-          // Return debug info if not found
-          return JSON.stringify({
-             found: false,
-             message: "Row not found",
-             totalRows: rows.length,
-             sampleRows: debugRows
-          });
-        } catch (e) {
-          return JSON.stringify({error: e.toString()});
-        }
-      })();
-    """;
-
-    try {
-      String? result;
-      if (defaultTargetPlatform == TargetPlatform.windows) {
-        result = await _windowsController.executeScript(jsScript);
-      } else {
-        final mobileResult = await _mobileController?.runJavaScriptReturningResult(jsScript);
-        result = mobileResult.toString();
-        if (result != null && (result.startsWith('"') || result.startsWith("'"))) {
-           result = result.substring(1, result.length - 1);
-           result = result.replaceAll(r'\"', '"');
-        }
-      }
-
-      print("Scrape Result: $result");
-
-      // Debug: Print full cells if available
-      if (result != null && result.contains('debug_cells')) {
-        try {
-          String toParse = result;
-          if (toParse.startsWith('"') && toParse.endsWith('"')) {
-            toParse = toParse.substring(1, toParse.length - 1).replaceAll(r'\"', '"');
-          }
-          final debugData = jsonDecode(toParse);
-          final cells = debugData['debug_cells'] as List;
-          print("=== DEBUG CELLS (${cells.length} total) ===");
-          for (var cell in cells) {
-            print("  [${cell['idx']}] ${cell['text']}");
-          }
-          print("=== END DEBUG ===");
-        } catch (e) {
-          print("Debug parse error: $e");
-        }
-      }
-
-      if (result != null && result != 'null' && !result.contains('error')) {
-         _parseAndNotify(result!.replaceAll(r'\\', r'\')); // Unescape slashes for jsonDecode
-      }
-    } catch (e) {
-      print("Scrape Execution Error: $e");
+    // 2. Scrape Range
+    final rangeResult = await _executeScrape(_winB, _mobileB, _rangeJs);
+    print("--- [DEBUG] BTC/ETH 原始數據 ---");
+    print(rangeResult);
+    _parseRange(rangeResult);
+    
+    // 3. Notify UI
+    if (_lastHyperData != null) {
+      widget.onDataScraped(_lastHyperData!);
     }
   }
 
+  Future<String?> _executeScrape(win.WebviewController? winCtrl, WebViewController? mobCtrl, String js) async {
+    try {
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        if (winCtrl == null) return null;
+        await winCtrl.reload();
+        await Future.delayed(const Duration(seconds: 5)); // Increased to 5s
+        return await winCtrl.executeScript(js);
+      } else {
+        if (mobCtrl == null) return null;
+        await mobCtrl.reload();
+        await Future.delayed(const Duration(seconds: 5)); // Increased to 5s
+        final res = await mobCtrl.runJavaScriptReturningResult(js);
+        String s = res.toString();
+        if (s.startsWith('"') || s.startsWith("'")) s = s.substring(1, s.length - 1);
+        return s.replaceAll(r'\"', '"');
+      }
+    } catch (e) {
+      print("Scrape Error: $e");
+      return null;
+    }
+  }
 
-  void _parseAndNotify(String rawJson) {
-     try {
-       // Clean up the JSON string for the Dart parser
-       // Sometimes windows webview returns double escaped strings
-       String cleanJson = rawJson;
-       if (cleanJson.startsWith('"') && cleanJson.endsWith('"')) {
-          cleanJson = cleanJson.substring(1, cleanJson.length - 1).replaceAll(r'\"', '"');
-       }
+  static const _printerJs = r"""
+    (function() {
+      const rows = document.querySelectorAll('tr');
+      for (const row of rows) {
+        const text = row.innerText;
+        // Check for both Simplified and Traditional Chinese
+        if (text.includes('超级印钞机') || text.includes('超级印鈔機') || text.includes('Super Money Printer')) {
+          const cells = row.querySelectorAll('td');
+          if (cells.length < 8) return null;
+          const volParts = cells[4].innerText.trim().split('\n');
+          const plParts = cells[6].innerText.trim().split('\n');
+          return JSON.stringify({
+            walletCount: cells[2].innerText.trim(),
+            openPositionCount: cells[3].innerText.trim().replace(/\(.*\)/, '').trim(),
+            openPositionPct: (cells[3].innerText.match(/\((\d+\.?\d*%)\)/) || [])[1] || "",
+            longVol: volParts[0] || "0",
+            shortVol: volParts[1] || "0",
+            netVol: cells[5].innerText.trim(),
+            profitCount: plParts[0] || "0",
+            lossCount: plParts[1] || "0",
+            sentiment: cells[7].innerText.trim()
+          });
+        }
+      }
+      return null;
+    })();
+  """;
 
-       final Map<String, dynamic> data = jsonDecode(cleanJson);
+  static const _rangeJs = r"""
+    (function() {
+      const rows = document.querySelectorAll('div[class*="cg-style-g99dwx"]');
+      if (rows.length === 0) return JSON.stringify({error: "No rows found with cg-style-g99dwx"});
+      
+      let data = { btc: null, eth: null, debug_all_text: "" };
+      
+      for (const row of rows) {
+        const text = row.innerText;
+        data.debug_all_text += text.substring(0, 50).replace(/\n/g, ' ') + " | ";
+        
+        let symbol = "";
+        if (text.includes('BTC') && !text.includes('WBTC')) symbol = "BTC";
+        else if (text.includes('ETH') && !text.includes('WETH')) symbol = "ETH";
+        
+        if (symbol && !data[symbol.toLowerCase()]) {
+          // Robust regex: Match $ followed by numbers/dots and ending with unit
+          const matches = text.match(/\$[\d,.]+[亿万]/g);
+          
+          if (matches && matches.length >= 2) {
+            data[symbol.toLowerCase()] = {
+              symbol: symbol,
+              long: matches[0],
+              short: matches[1],
+              total: matches[2] || matches[1] || "0",
+              match_count: matches.length
+            };
+          } else {
+            data[symbol.toLowerCase()] = {
+              symbol: symbol,
+              error: "Regex failed",
+              found_text: text.replace(/\n/g, ' ')
+            };
+          }
+        }
+      }
+      return JSON.stringify(data);
+    })();
+  """;
 
-       if (data['found'] == true) {
-           final wCountStr = data['walletCount']?.toString() ?? "";
-           final openPosCountStr = data['openPositionCount']?.toString() ?? "0";
-           final openPosPctStr = data['openPositionPct']?.toString() ?? "";
-           final profitCountStr = data['profitCount']?.toString() ?? "0";
-           final lossCountStr = data['lossCount']?.toString() ?? "0";
-           final longStr = data['longVol']?.toString() ?? "0";
-           final shortStr = data['shortVol']?.toString() ?? "0";
-           final netStr = data['netVol']?.toString() ?? "0";
-           final sentimentStr = data['sentiment']?.toString() ?? "Unknown";
+  void _parsePrinter(String? raw) {
+    if (raw == null || raw == "null") return;
+    try {
+      final d = jsonDecode(_cleanJson(raw));
+      _lastHyperData = HyperData(
+        timestamp: DateTime.now(),
+        walletCount: _toInt(d['walletCount']),
+        openPositionCount: _toInt(d['openPositionCount']),
+        openPositionPct: d['openPositionPct'],
+        profitCount: _toInt(d['profitCount']),
+        lossCount: _toInt(d['lossCount']),
+        longVolDisplay: d['longVol'],
+        shortVolDisplay: d['shortVol'],
+        netVolDisplay: d['netVol'],
+        sentiment: d['sentiment'],
+        longVolNum: _parseValue(d['longVol']),
+        shortVolNum: _parseValue(d['shortVol']),
+        netVolNum: _parseValue(d['netVol']),
+        btc: _lastHyperData?.btc,
+        eth: _lastHyperData?.eth,
+      );
+    } catch (e) { print("Printer Parse Error: \$e"); }
+  }
 
-           if (wCountStr.isNotEmpty) {
-               final count = int.tryParse(wCountStr.replaceAll(',', '')) ?? 0;
-               final openPosCount = int.tryParse(openPosCountStr.replaceAll(',', '')) ?? 0;
-               final profitCount = int.tryParse(profitCountStr.replaceAll(',', '')) ?? 0;
-               final lossCount = int.tryParse(lossCountStr.replaceAll(',', '')) ?? 0;
+  void _parseRange(String? raw) {
+    if (raw == null || raw == "null" || _lastHyperData == null) return;
+    try {
+      final d = jsonDecode(_cleanJson(raw));
+      final btc = d['btc'] != null ? _toCoinPos(d['btc']) : _lastHyperData?.btc;
+      final eth = d['eth'] != null ? _toCoinPos(d['eth']) : _lastHyperData?.eth;
+      
+      _lastHyperData = HyperData(
+        timestamp: _lastHyperData!.timestamp,
+        walletCount: _lastHyperData!.walletCount,
+        openPositionCount: _lastHyperData!.openPositionCount,
+        openPositionPct: _lastHyperData!.openPositionPct,
+        profitCount: _lastHyperData!.profitCount,
+        lossCount: _lastHyperData!.lossCount,
+        longVolDisplay: _lastHyperData!.longVolDisplay,
+        shortVolDisplay: _lastHyperData!.shortVolDisplay,
+        netVolDisplay: _lastHyperData!.netVolDisplay,
+        sentiment: _lastHyperData!.sentiment,
+        longVolNum: _lastHyperData!.longVolNum,
+        shortVolNum: _lastHyperData!.shortVolNum,
+        netVolNum: _lastHyperData!.netVolNum,
+        btc: btc,
+        eth: eth,
+      );
+    } catch (e) { print("Range Parse Error: \$e"); }
+  }
 
-               final hyperData = HyperData(
-                  timestamp: DateTime.now(),
-                  walletCount: count,
-                  openPositionCount: openPosCount,
-                  openPositionPct: openPosPctStr,
-                  profitCount: profitCount,
-                  lossCount: lossCount,
-                  longVolDisplay: longStr,
-                  shortVolDisplay: shortStr,
-                  netVolDisplay: netStr,
-                  sentiment: sentimentStr,
-                  longVolNum: _parseValue(longStr),
-                  shortVolNum: _parseValue(shortStr),
-                  netVolNum: _parseValue(netStr),
-               );
-               widget.onDataScraped(hyperData);
-           }
-       } else {
-         // Log debug info
-         print("Scraper failed to find row. Debug info: ${data['sampleRows']}");
-       }
+  CoinPosition _toCoinPos(Map<String, dynamic> d) {
+    return CoinPosition(
+      symbol: d['symbol'],
+      longVol: _parseValue(d['long']),
+      shortVol: _parseValue(d['short']),
+      totalVol: _parseValue(d['total']),
+      longDisplay: d['long'],
+      shortDisplay: d['short'],
+      totalDisplay: d['total'],
+    );
+  }
 
-     } catch (e) {
-       print("JSON Parse Error: $e \nRaw: $rawJson");
-     }
+  int _toInt(dynamic v) => int.tryParse(v.toString().replaceAll(',', '')) ?? 0;
+
+  String _cleanJson(String s) {
+    if (s.startsWith('"') && s.endsWith('"')) {
+      s = s.substring(1, s.length - 1).replaceAll(r'\"', '"');
+    }
+    return s.replaceAll(r'\\', r'\');
   }
 
   double _parseValue(String raw) {
-    // Expected formats: "$5.21亿", "$7497.65万", "$100"
     try {
       String clean = raw.replaceAll(r'$', '').replaceAll(',', '').trim();
       double multiplier = 1.0;
-
-      if (clean.contains('亿')) {
-        multiplier = 100000000.0;
-        clean = clean.replaceAll('亿', '');
-      } else if (clean.contains('万')) {
-        multiplier = 10000.0;
-        clean = clean.replaceAll('万', '');
+      if (clean.contains('亿') || clean.contains('億')) { 
+        multiplier = 100000000.0; 
+        clean = clean.replaceAll('亿', '').replaceAll('億', ''); 
       }
-
+      else if (clean.contains('万') || clean.contains('萬')) { 
+        multiplier = 10000.0; 
+        clean = clean.replaceAll('万', '').replaceAll('萬', ''); 
+      }
       return (double.tryParse(clean) ?? 0.0) * multiplier;
-    } catch (e) {
-      return 0.0;
-    }
+    } catch (e) { return 0.0; }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Hide the webview but keep it active
+    return Stack(
+      children: [
+        _buildWebviewItem(_winA, _mobileA, _isWinAInit),
+        _buildWebviewItem(_winB, _mobileB, _isWinBInit),
+      ],
+    );
+  }
+
+  Widget _buildWebviewItem(win.WebviewController winCtrl, WebViewController? mobCtrl, bool isWinInit) {
     return SizedBox(
-      width: 1,
-      height: 1,
+      width: 1, height: 1,
       child: defaultTargetPlatform == TargetPlatform.windows
-          ? (_isWindowsInitialized ? win.Webview(_windowsController) : Container())
-          : WebViewWidget(controller: _mobileController!),
+          ? (isWinInit ? win.Webview(winCtrl) : Container())
+          : (mobCtrl != null ? WebViewWidget(controller: mobCtrl) : Container()),
     );
   }
 
   @override
   void dispose() {
     _scrapeTimer?.cancel();
-    _windowsController.dispose();
+    _winA.dispose();
+    _winB.dispose();
     super.dispose();
   }
 }

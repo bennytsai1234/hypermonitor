@@ -1,3 +1,23 @@
+class CoinPosition {
+  final String symbol;
+  final double longVol;
+  final double shortVol;
+  final double totalVol;
+  final String longDisplay;
+  final String shortDisplay;
+  final String totalDisplay;
+
+  CoinPosition({
+    required this.symbol,
+    required this.longVol,
+    required this.shortVol,
+    required this.totalVol,
+    required this.longDisplay,
+    required this.shortDisplay,
+    required this.totalDisplay,
+  });
+}
+
 class HyperData {
   final DateTime timestamp;
   final int walletCount;
@@ -21,6 +41,10 @@ class HyperData {
   final double shortVolNum;
   final double netVolNum;
 
+  // Main Coins Data
+  final CoinPosition? btc;
+  final CoinPosition? eth;
+
   HyperData({
     required this.timestamp,
     required this.walletCount,
@@ -35,6 +59,8 @@ class HyperData {
     required this.longVolNum,
     required this.shortVolNum,
     required this.netVolNum,
+    this.btc,
+    this.eth,
   });
 
   @override
