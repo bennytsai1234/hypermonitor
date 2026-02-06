@@ -48,8 +48,8 @@ class TugOfWarBar extends StatelessWidget {
             children: [
               Text(label, style: const TextStyle(color: Colors.white54, fontSize: 9)),
               Text(
-                "${(leftPct * 100).toStringAsFixed(1)}% : ${(rightPct * 100).toStringAsFixed(1)}%",
-                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                "${(leftPct * 100).toStringAsFixed(1)}% (${_formatValue(leftVal)}) : ${(rightPct * 100).toStringAsFixed(1)}% (${_formatValue(rightVal)})",
+                style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold),
               ),
             ],
           ),
