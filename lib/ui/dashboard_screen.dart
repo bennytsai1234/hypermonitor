@@ -5,7 +5,7 @@ import '../core/data_model.dart';
 import '../core/data_scraper.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({Key? key}) : super(key: key);
+  const DashboardScreen({super.key});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -72,7 +72,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: bgDark,
       appBar: AppBar(
-        title: const Text("Hyperliquid Monitor"),
+        title: const Text("Hyperliquid 實時監控儀表板"),
         backgroundColor: bgDark,
         elevation: 0,
         centerTitle: true,
@@ -96,158 +96,317 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
 
           // Main Content
-          Center(
+          SafeArea(
             child: _currentData == null
-              ? Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const CircularProgressIndicator(color: Color(0xFF00C087)),
-                    const SizedBox(height: 20),
-                    Text("正在載入數據...", style: TextStyle(color: textGrey)),
-                  ],
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(color: Color(0xFF00C087)),
+                      const SizedBox(height: 20),
+                      Text("正在載入數據...", style: TextStyle(color: textGrey)),
+                    ],
+                  ),
                 )
-              : SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        // Title and Sentiment Badge
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              "超级印钞机",
-                              style: TextStyle(
-                                color: textWhite,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
+              : Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      // HEADER: Title + Sentiment + Update Time
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "超级印钞机",
+                                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            _buildSentimentBadge(_currentData!.sentiment),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          isBearish ? "趨勢看跌・關注空單" : "趨勢看漲・關注多單",
-                          style: TextStyle(color: textGrey, fontSize: 14),
-                        ),
-                        const SizedBox(height: 24),
+                              if (_lastUpdate != null)
+                                Text(
+                                  "更新於 ${DateFormat('HH:mm:ss').format(_lastUpdate!)}",
+                                  style: TextStyle(color: textGrey, fontSize: 10),
+                                ),
+                            ],
+                          ),
+                          _buildSentimentBadge(_currentData!.sentiment),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
 
-                        // PRIMARY FOCUS CARD (Dynamic: Short or Long based on sentiment)
-                        _buildPrimaryCard(
-                          isBearish: isBearish,
-                          primaryLabel: isBearish ? "空單持倉" : "多單持倉",
-                          primaryValue: isBearish ? _currentData!.shortVolDisplay : _currentData!.longVolDisplay,
-                          primaryDelta: isBearish
-                              ? _calculateVolumeDelta(_previousData?.shortVolNum, _currentData!.shortVolNum)
-                              : _calculateVolumeDelta(_previousData?.longVolNum, _currentData!.longVolNum),
-                          accentColor: isBearish ? textRed : textGreen,
-                          cardBg: cardBg,
-                        ),
-                        const SizedBox(height: 16),
+                      // ROW 1: PRIMARY FOCUS & KEY METRICS
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: _buildPrimaryCard(
+                              isBearish: isBearish,
+                              primaryLabel: isBearish ? "空單持倉" : "多單持倉",
+                              primaryValue: isBearish ? _currentData!.shortVolDisplay : _currentData!.longVolDisplay,
+                              primaryDelta: isBearish
+                                  ? _calculateVolumeDelta(_previousData?.shortVolNum, _currentData!.shortVolNum)
+                                  : _calculateVolumeDelta(_previousData?.longVolNum, _currentData!.longVolNum),
+                              accentColor: isBearish ? textRed : textGreen,
+                              cardBg: cardBg,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: Column(
+                              children: [
+                                _buildMiniInfoCard(
+                                  label: "開倉",
+                                  value: "${_currentData!.openPositionCount}",
+                                  subValue: _currentData!.openPositionPct,
+                                  color: Colors.amber,
+                                  cardBg: cardBg,
+                                ),
+                                const SizedBox(height: 8),
+                                _buildMiniInfoCard(
+                                  label: "淨持倉",
+                                  value: _currentData!.netVolDisplay,
+                                  color: Colors.blueAccent,
+                                  cardBg: cardBg,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
 
-                        // OPEN POSITION + WALLET COUNT ROW
+                      // ROW 2: TUG OF WAR (VOLUME RATIO)
+                      _buildTugOfWarBar(
+                        label: "多空持倉實力對比 (Volume)",
+                        leftVal: _currentData!.longVolNum,
+                        rightVal: _currentData!.shortVolNum,
+                        leftColor: textGreen,
+                        rightColor: textRed,
+                        leftLabel: "多頭",
+                        rightLabel: "空頭",
+                        cardBg: cardBg,
+                      ),
+                      const SizedBox(height: 8),
+
+                      // ROW 3: PROFIT/LOSS RATIO (WINNERS VS LOSERS)
+                      _buildTugOfWarBar(
+                        label: isBearish ? "當前優勢：空軍盈利中" : "當前優勢：多頭盈利中",
+                        leftVal: _currentData!.profitCount.toDouble(),
+                        rightVal: _currentData!.lossCount.toDouble(),
+                        leftColor: textGreen,
+                        rightColor: textRed,
+                        leftLabel: "賺錢",
+                        rightLabel: "虧錢",
+                        isMirrored: true, // Specific look for P/L
+                        cardBg: cardBg,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // ROW 3.5: BTC & ETH Details
+                      if (_currentData!.btc != null || _currentData!.eth != null) ...[
                         Row(
                           children: [
-                            Expanded(
-                              child: _buildInfoCard(
-                                label: "開倉人數",
-                                value: "${_currentData!.openPositionCount}",
-                                delta: _calculateIntDelta(_previousData?.openPositionCount, _currentData!.openPositionCount),
-                                color: Colors.amber,
-                                cardBg: cardBg,
-                                subValue: _currentData!.openPositionPct.isNotEmpty ? "(${_currentData!.openPositionPct})" : null,
+                            if (_currentData!.btc != null)
+                              Expanded(
+                                child: _buildCoinRatioBar(
+                                  coin: _currentData!.btc!,
+                                  leftColor: textGreen,
+                                  rightColor: textRed,
+                                  cardBg: cardBg,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildInfoCard(
-                                label: "錢包數",
-                                value: "${_currentData!.walletCount}",
-                                delta: _calculateIntDelta(_previousData?.walletCount, _currentData!.walletCount),
-                                color: textWhite,
-                                cardBg: cardBg,
+                            if (_currentData!.btc != null && _currentData!.eth != null)
+                              const SizedBox(width: 8),
+                            if (_currentData!.eth != null)
+                              Expanded(
+                                child: _buildCoinRatioBar(
+                                  coin: _currentData!.eth!,
+                                  leftColor: textGreen,
+                                  rightColor: textRed,
+                                  cardBg: cardBg,
+                                ),
                               ),
-                            ),
                           ],
                         ),
                         const SizedBox(height: 12),
-
-                        // PROFIT/LOSS COUNT ROW (賺錢/虧錢人數)
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildInfoCard(
-                                label: "盈利人數",
-                                value: "${_currentData!.profitCount}",
-                                delta: _calculateIntDelta(_previousData?.profitCount, _currentData!.profitCount),
-                                color: textGreen,
-                                cardBg: cardBg,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildInfoCard(
-                                label: "虧損人數",
-                                value: "${_currentData!.lossCount}",
-                                delta: _calculateIntDelta(_previousData?.lossCount, _currentData!.lossCount),
-                                color: textRed,
-                                cardBg: cardBg,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // VOLUME ROW (次要持倉 + 淨持倉)
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildInfoCard(
-                                label: isBearish ? "多單持倉" : "空單持倉",
-                                value: isBearish ? _currentData!.longVolDisplay : _currentData!.shortVolDisplay,
-                                delta: isBearish
-                                    ? _calculateVolumeDelta(_previousData?.longVolNum, _currentData!.longVolNum)
-                                    : _calculateVolumeDelta(_previousData?.shortVolNum, _currentData!.shortVolNum),
-                                color: isBearish ? textGreen : textRed,
-                                cardBg: cardBg,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildInfoCard(
-                                label: "淨持倉",
-                                value: _currentData!.netVolDisplay,
-                                delta: _calculateVolumeDelta(_previousData?.netVolNum, _currentData!.netVolNum),
-                                color: Colors.blueAccent,
-                                cardBg: cardBg,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Last Updated
-                        if (_lastUpdate != null)
-                          Text(
-                            "更新於 ${DateFormat('HH:mm:ss').format(_lastUpdate!)}",
-                            style: TextStyle(color: textGrey, fontSize: 12),
-                          ),
-                        const SizedBox(height: 20),
-
-                        // Chart (Only for the primary focus)
-                        if (_history.length > 2)
-                          _buildChartCard(
-                            isBearish ? "空單趨勢" : "多單趨勢",
-                            _history,
-                            isBearish ? textRed : textGreen,
-                          ),
                       ],
-                    ),
+
+                      // ROW 4: CHART (STRETCHED)
+                      Expanded(
+                        child: _buildChartCard(
+                          isBearish ? "空單趨勢" : "多單趨勢",
+                          _history,
+                          isBearish ? textRed : textGreen,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoinRatioBar({
+    required CoinPosition coin,
+    required Color leftColor,
+    required Color rightColor,
+    required Color cardBg,
+  }) {
+    final total = coin.longVol + coin.shortVol;
+    final leftPct = total > 0 ? (coin.longVol / total) : 0.5;
+    final rightPct = 1.0 - leftPct;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(coin.symbol, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text(
+                "${(leftPct * 100).toStringAsFixed(0)}% : ${(rightPct * 100).toStringAsFixed(0)}%",
+                style: const TextStyle(color: Colors.white54, fontSize: 9),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: SizedBox(
+              height: 6,
+              child: Row(
+                children: [
+                  Expanded(flex: (leftPct * 100).round().clamp(1, 99), child: Container(color: leftColor)),
+                  const SizedBox(width: 1),
+                  Expanded(flex: (rightPct * 100).round().clamp(1, 99), child: Container(color: rightColor)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(coin.longDisplay.replaceAll("亿", "億").replaceAll("万", "萬"), style: TextStyle(color: leftColor, fontSize: 8)),
+              Text(coin.shortDisplay.replaceAll("亿", "億").replaceAll("万", "萬"), style: TextStyle(color: rightColor, fontSize: 8)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniInfoCard({
+    required String label,
+    required String value,
+    String? subValue,
+    required Color color,
+    required Color cardBg,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                value,
+                style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              if (subValue != null) ...[
+                const SizedBox(width: 4),
+                Text(subValue, style: TextStyle(color: color.withValues(alpha: 0.6), fontSize: 10)),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTugOfWarBar({
+    required String label,
+    required double leftVal,
+    required double rightVal,
+    required Color leftColor,
+    required Color rightColor,
+    required String leftLabel,
+    required String rightLabel,
+    bool isMirrored = false,
+    required Color cardBg,
+  }) {
+    final total = leftVal + rightVal;
+    final leftPct = total > 0 ? (leftVal / total) : 0.5;
+    final rightPct = 1.0 - leftPct;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+              Text(
+                "${(leftPct * 100).toStringAsFixed(1)}% : ${(rightPct * 100).toStringAsFixed(1)}%",
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: SizedBox(
+                  height: 12,
+                  child: Row(
+                    children: [
+                      Expanded(flex: (leftPct * 1000).round(), child: Container(color: leftColor.withValues(alpha: 0.8))),
+                      Expanded(flex: (rightPct * 1000).round(), child: Container(color: rightColor.withValues(alpha: 0.8))),
+                    ],
+                  ),
+                ),
+              ),
+              // Center Marker
+              Container(width: 2, height: 16, color: Colors.white),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(leftLabel, style: TextStyle(color: leftColor, fontSize: 9, fontWeight: FontWeight.bold)),
+              Text(rightLabel, style: TextStyle(color: rightColor, fontSize: 9, fontWeight: FontWeight.bold)),
+            ],
           ),
         ],
       ),
@@ -273,10 +432,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: accentColor.withOpacity(0.5), width: 1.5),
+        border: Border.all(color: accentColor.withValues(alpha: 0.5), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withOpacity(0.15),
+            color: accentColor.withValues(alpha: 0.15),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -286,7 +445,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Text(
             primaryLabel,
-            style: TextStyle(color: Colors.white70, fontSize: 14),
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
           const SizedBox(height: 8),
           Text(
@@ -302,7 +461,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
-                color: deltaColor.withOpacity(0.15),
+                color: deltaColor.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -356,7 +515,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               if (subValue != null) ...[
                 const SizedBox(width: 4),
-                Text(subValue, style: TextStyle(color: color.withOpacity(0.7), fontSize: 12)),
+                Text(subValue, style: TextStyle(color: color.withValues(alpha: 0.7), fontSize: 12)),
               ],
             ],
           ),
@@ -369,28 +528,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildHeader(Color accent) {
-    return Column(
-      children: [
-        Icon(Icons.monitor_heart_outlined, size: 50, color: accent),
-        const SizedBox(height: 10),
-        const Text(
-          "Smart Money Tracker",
-          style: TextStyle(color: Colors.white54, fontSize: 14),
-        ),
-      ],
-    );
-  }
-
   Widget _buildSentimentBadge(String sentiment) {
     Color badgeColor = Colors.grey;
     if (sentiment.contains("跌")) badgeColor = const Color(0xFFFF4949);
-    if (sentiment.contains("涨")) badgeColor = const Color(0xFF00C087);
+    if (sentiment.contains("漲")) badgeColor = const Color(0xFF00C087);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: badgeColor.withOpacity(0.2),
+        color: badgeColor.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: badgeColor),
       ),
@@ -399,47 +545,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         style: TextStyle(color: badgeColor, fontSize: 12, fontWeight: FontWeight.bold),
       ),
     );
-  }
-
-  Widget _buildRowItem(String label, String value, {String? delta, Color? valueColor, String? subValue, bool isHighlighted = false}) {
-     Color deltaColor = Colors.grey;
-     if (delta != null) {
-       if (delta.startsWith('+')) deltaColor = const Color(0xFF00C087); // Increase green
-       else deltaColor = const Color(0xFFFF4949); // Decrease red
-     }
-
-     return Container(
-       padding: isHighlighted ? const EdgeInsets.symmetric(vertical: 8, horizontal: 4) : EdgeInsets.zero,
-       decoration: isHighlighted ? BoxDecoration(
-         color: Colors.white.withOpacity(0.05),
-         borderRadius: BorderRadius.circular(8),
-       ) : null,
-       child: Row(
-         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-         children: [
-           Column(
-             crossAxisAlignment: CrossAxisAlignment.start,
-             children: [
-               Text(label, style: const TextStyle(color: Colors.white70, fontSize: 16)),
-               if (subValue != null)
-                  Text(subValue, style: const TextStyle(color: Colors.white30, fontSize: 12)),
-             ],
-           ),
-           Column(
-             crossAxisAlignment: CrossAxisAlignment.end,
-             children: [
-               Text(value, style: TextStyle(color: valueColor ?? Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-               if (delta != null)
-                 Text(delta, style: TextStyle(
-                   color: deltaColor,
-                   fontSize: 14,
-                   fontWeight: FontWeight.bold
-                 )),
-             ],
-           )
-         ],
-       ),
-     );
   }
 
   Widget _buildChartCard(String title, List<HyperData> history, Color lineColor) {
@@ -453,49 +558,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double minVal = dataPoints.reduce((curr, next) => curr < next ? curr : next);
     double maxVal = dataPoints.reduce((curr, next) => curr > next ? curr : next);
 
-    // Add padding to chart
-    final double padding = (maxVal - minVal) * 0.15;
-    double chartMin, chartMax;
-
-    if (padding == 0) {
-      chartMin = minVal - 1000;
-      chartMax = maxVal + 1000;
-    } else {
-      chartMin = minVal - padding;
-      chartMax = maxVal + padding;
-    }
+    // Dynamic padding: If the range is very small, use tighter padding to show movement
+    double range = maxVal - minVal;
+    final double padding = range > 0 ? (range * 0.2) : 1000000; 
+    
+    double chartMin = minVal - padding;
+    double chartMax = maxVal + padding;
 
     return Container(
-      height: 220, // Increased height for titles
-      padding: const EdgeInsets.fromLTRB(12, 16, 20, 12),
+      padding: const EdgeInsets.fromLTRB(4, 16, 12, 8), // Tighter padding for dashboard
       decoration: BoxDecoration(
-        color: const Color(0xFF16171B).withOpacity(0.95),
+        color: const Color(0xFF16171B).withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title, style: TextStyle(color: lineColor, fontWeight: FontWeight.bold, fontSize: 16)),
-              if (history.length > 5)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(title, style: TextStyle(color: lineColor, fontWeight: FontWeight.bold, fontSize: 14)),
                 Text(
-                  "近${(history.length * 10 / 60).toStringAsFixed(1)}分鐘趨勢",
-                  style: const TextStyle(color: Colors.white30, fontSize: 12),
+                  "增量監控中",
+                  style: TextStyle(color: lineColor.withValues(alpha: 0.5), fontSize: 10),
                 ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Expanded(
             child: LineChart(
               LineChartData(
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
+                  horizontalInterval: range > 0 ? range / 3 : null,
                   getDrawingHorizontalLine: (value) => FlLine(
-                    color: Colors.white.withOpacity(0.05),
+                    color: Colors.white.withValues(alpha: 0.03),
                     strokeWidth: 1,
                   ),
                 ),
@@ -506,21 +608,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 30,
-                      interval: (history.length / 4).clamp(1.0, 100.0),
+                      reservedSize: 24,
+                      interval: (history.length / 3).clamp(1.0, 500.0),
                       getTitlesWidget: (value, meta) {
                         int index = value.toInt();
                         if (index < 0 || index >= history.length) return const SizedBox.shrink();
-                        // Only show specific intervals to avoid crowding
-                        if (index % (history.length ~/ 4 + 1) != 0 && index != history.length - 1) {
-                           return const SizedBox.shrink();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Text(
-                            DateFormat('HH:mm').format(history[index].timestamp),
-                            style: const TextStyle(color: Colors.white30, fontSize: 10),
-                          ),
+                        return Text(
+                          DateFormat('HH:mm').format(history[index].timestamp),
+                          style: const TextStyle(color: Colors.white24, fontSize: 9),
                         );
                       },
                     ),
@@ -528,17 +623,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 45,
+                      reservedSize: 55, // Increased for labels like 14.12B
                       getTitlesWidget: (value, meta) {
+                        if (value == chartMin || value == chartMax) return const SizedBox.shrink();
                         String text = "";
-                        if (value >= 100000000) {
-                          text = "${(value / 100000000).toStringAsFixed(1)}B";
-                        } else if (value >= 10000) {
+                        if (value >= 100000000 || value <= -100000000) {
+                          text = "${(value / 100000000).toStringAsFixed(2)}B";
+                        } else if (value >= 10000 || value <= -10000) {
                           text = "${(value / 10000).toStringAsFixed(0)}W";
                         } else {
                           text = value.toStringAsFixed(0);
                         }
-                        return Text(text, style: const TextStyle(color: Colors.white30, fontSize: 10));
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Text(text, style: const TextStyle(color: Colors.white24, fontSize: 9), textAlign: TextAlign.right),
+                        );
                       },
                     ),
                   ),
@@ -550,11 +649,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     getTooltipColor: (spot) => const Color(0xFF2E2F33),
                     getTooltipItems: (List<LineBarSpot> touchedSpots) {
                       return touchedSpots.map((spot) {
-                        final data = history[spot.x.toInt()];
+                        final index = spot.x.toInt();
+                        final data = history[index];
                         String vol = isBearish ? data.shortVolDisplay : data.longVolDisplay;
+                        
+                        // Calculate Delta from previous point
+                        String deltaText = "";
+                        if (index > 0) {
+                          final prev = history[index - 1];
+                          final currentVal = isBearish ? data.shortVolNum : data.longVolNum;
+                          final prevVal = isBearish ? prev.shortVolNum : prev.longVolNum;
+                          final diff = currentVal - prevVal;
+                          if (diff != 0) {
+                            String sign = diff > 0 ? "+" : "";
+                            String formattedDiff;
+                            double absDiff = diff.abs();
+                            if (absDiff >= 100000000) formattedDiff = "${(diff / 100000000).toStringAsFixed(2)}亿";
+                            else if (absDiff >= 10000) formattedDiff = "${(diff / 10000).toStringAsFixed(1)}万";
+                            else formattedDiff = diff.toStringAsFixed(0);
+                            deltaText = "\n$sign$formattedDiff";
+                          }
+                        }
+
                         return LineTooltipItem(
-                          "${DateFormat('HH:mm:ss').format(data.timestamp)}\n$vol",
-                          const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          "${DateFormat('HH:mm:ss').format(data.timestamp)}\n$vol$deltaText",
+                          TextStyle(
+                            color: lineColor, 
+                            fontSize: 11, 
+                            fontWeight: FontWeight.bold,
+                          ),
                         );
                       }).toList();
                     },
@@ -568,19 +691,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       return FlSpot(e.key.toDouble(), e.value);
                     }).toList(),
                     isCurved: true,
-                    curveSmoothness: 0.3,
+                    curveSmoothness: 0.2,
                     color: lineColor,
-                    barWidth: 3,
+                    barWidth: 2,
                     isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
+                    // Enable dots for each data point
+                    dotData: FlDotData(
+                      show: true,
+                      getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                        radius: 2,
+                        color: lineColor,
+                        strokeWidth: 1,
+                        strokeColor: Colors.black,
+                      ),
+                    ),
                     belowBarData: BarAreaData(
                       show: true,
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          lineColor.withOpacity(0.2),
-                          lineColor.withOpacity(0.0),
+                          lineColor.withValues(alpha: 0.15),
+                          lineColor.withValues(alpha: 0.0),
                         ],
                       ),
                     ),
@@ -610,9 +742,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double absDiff = diff.abs();
 
     if (absDiff >= 100000000) {
-      formatted = "\$${(absDiff / 100000000).toStringAsFixed(2)}亿";
+      formatted = "\$${(absDiff / 100000000).toStringAsFixed(2)}億";
     } else if (absDiff >= 10000) {
-      formatted = "\$${(absDiff / 10000).toStringAsFixed(2)}万";
+      formatted = "\$${(absDiff / 10000).toStringAsFixed(2)}萬";
     } else {
        formatted = "\$${absDiff.toStringAsFixed(0)}";
     }
