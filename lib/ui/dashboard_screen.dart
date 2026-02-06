@@ -18,12 +18,24 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   HyperData? _currentData;
-  HyperData? _previousData;
   DateTime? _lastUpdate;
   bool _scraperReady = false;
 
   final List<HyperData> _history = [];
-  final int _maxHistoryPoints = 360; // 60 minutes
+  final int _maxHistoryPoints = 360; // 60 minutes internal storage
+
+  // Sticky Deltas: Store the last observed changes
+  String? _lastPrinterLongDelta;
+  String? _lastPrinterShortDelta;
+  String? _lastPrinterNetDelta;
+  
+  String? _lastBtcLongDelta;
+  String? _lastBtcShortDelta;
+  String? _lastBtcNetDelta;
+  
+  String? _lastEthLongDelta;
+  String? _lastEthShortDelta;
+  String? _lastEthNetDelta;
 
   @override
   void initState() {
@@ -34,36 +46,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  Future<void> _loadHistory() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final data = prefs.getString('scrape_history');
-      if (data != null) {
-        final List<dynamic> list = jsonDecode(data);
-        setState(() {
-          _history.clear();
-          _history.addAll(list.map((e) => HyperData.fromJson(e)));
-          if (_history.isNotEmpty) _currentData = _history.last;
-        });
-      }
-    } catch (_) { }
-  }
-
-  Future<void> _saveHistory() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final data = jsonEncode(_history.map((e) => e.toJson()).toList());
-      await prefs.setString('scrape_history', data);
-    } catch (_) { }
-  }
+  // ... (load/save history remains same)
 
   void _handleNewData(HyperData newData) {
     if (_currentData != null) {
-      if (_currentData!.walletCount != newData.walletCount ||
-          _currentData!.netVolDisplay != newData.netVolDisplay) {
-        _previousData = _currentData;
-      }
+      final old = _currentData!;
+      final bool isBearish = newData.sentiment.contains("跌");
+
+      // 1. Printer Deltas
+      if (old.longVolNum != newData.longVolNum) 
+        _lastPrinterLongDelta = _calculateVolumeDelta(old.longVolNum, newData.longVolNum);
+      if (old.shortVolNum != newData.shortVolNum)
+        _lastPrinterShortDelta = _calculateVolumeDelta(old.shortVolNum, newData.shortVolNum);
+      
+      final double oldPNet = isBearish ? (old.shortVolNum - old.longVolNum) : (old.longVolNum - old.shortVolNum);
+      final double newPNet = isBearish ? (newData.shortVolNum - newData.longVolNum) : (newData.longVolNum - newData.shortVolNum);
+      if (oldPNet != newPNet)
+        _lastPrinterNetDelta = _calculateVolumeDelta(oldPNet, newPNet, isShortDelta: isBearish);
+
+      // 2. BTC Deltas
+      if ((old.btc?.longVol ?? 0) != (newData.btc?.longVol ?? 0))
+        _lastBtcLongDelta = _calculateVolumeDelta(old.btc?.longVol, newData.btc?.longVol ?? 0);
+      if ((old.btc?.shortVol ?? 0) != (newData.btc?.shortVol ?? 0))
+        _lastBtcShortDelta = _calculateVolumeDelta(old.btc?.shortVol, newData.btc?.shortVol ?? 0);
+      
+      final double oldBNet = isBearish ? ((old.btc?.shortVol ?? 0) - (old.btc?.longVol ?? 0)) : ((old.btc?.longVol ?? 0) - (old.btc?.shortVol ?? 0));
+      final double newBNet = isBearish ? ((newData.btc?.shortVol ?? 0) - (newData.btc?.longVol ?? 0)) : ((newData.btc?.longVol ?? 0) - (newData.btc?.shortVol ?? 0));
+      if (oldBNet != newBNet)
+        _lastBtcNetDelta = _calculateVolumeDelta(oldBNet, newBNet, isShortDelta: isBearish);
+
+      // 3. ETH Deltas
+      if ((old.eth?.longVol ?? 0) != (newData.eth?.longVol ?? 0))
+        _lastEthLongDelta = _calculateVolumeDelta(old.eth?.longVol, newData.eth?.longVol ?? 0);
+      if ((old.eth?.shortVol ?? 0) != (newData.eth?.shortVol ?? 0))
+        _lastEthShortDelta = _calculateVolumeDelta(old.eth?.shortVol, newData.eth?.shortVol ?? 0);
+      
+      final double oldENet = isBearish ? ((old.eth?.shortVol ?? 0) - (old.eth?.longVol ?? 0)) : ((old.eth?.longVol ?? 0) - (old.eth?.shortVol ?? 0));
+      final double newENet = isBearish ? ((newData.eth?.shortVol ?? 0) - (newData.eth?.longVol ?? 0)) : ((newData.eth?.longVol ?? 0) - (newData.eth?.shortVol ?? 0));
+      if (oldENet != newENet)
+        _lastEthNetDelta = _calculateVolumeDelta(oldENet, newENet, isShortDelta: isBearish);
     }
+
     setState(() {
       _currentData = newData;
       _lastUpdate = DateTime.now();
@@ -71,6 +94,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (_history.length > _maxHistoryPoints) _history.removeAt(0);
     });
     _saveHistory();
+  }
+
+  // Helper for 10 min charts
+  List<HyperData> _get10MinHistory() {
+    if (_history.length <= 60) return _history; // 60 * 10s = 10 mins
+    return _history.sublist(_history.length - 60);
   }
 
   @override
@@ -122,11 +151,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildAssetColumn("總體", _currentData!.longVolNum, _currentData!.shortVolNum, _currentData!.longVolDisplay, _currentData!.shortVolDisplay, _previousData?.longVolNum, _previousData?.shortVolNum, isBearish, sentimentColor, cardBg),
+                      _buildAssetColumn("總體", _currentData!.longVolNum, _currentData!.shortVolNum, _currentData!.longVolDisplay, _currentData!.shortVolDisplay, _lastPrinterLongDelta, _lastPrinterShortDelta, _lastPrinterNetDelta, isBearish, sentimentColor, cardBg),
                       const SizedBox(width: 8),
-                      _buildAssetColumn("BTC", _currentData!.btc?.longVol ?? 0, _currentData!.btc?.shortVol ?? 0, _currentData!.btc?.longDisplay ?? "---", _currentData!.btc?.shortDisplay ?? "---", _previousData?.btc?.longVol, _previousData?.btc?.shortVol, isBearish, isBearish ? textRed : textGreen, cardBg),
+                      _buildAssetColumn("BTC", _currentData!.btc?.longVol ?? 0, _currentData!.btc?.shortVol ?? 0, _currentData!.btc?.longDisplay ?? "---", _currentData!.btc?.shortDisplay ?? "---", _lastBtcLongDelta, _lastBtcShortDelta, _lastBtcNetDelta, isBearish, isBearish ? textRed : textGreen, cardBg),
                       const SizedBox(width: 8),
-                      _buildAssetColumn("ETH", _currentData!.eth?.longVol ?? 0, _currentData!.eth?.shortVol ?? 0, _currentData!.eth?.longDisplay ?? "---", _currentData!.eth?.shortDisplay ?? "---", _previousData?.eth?.longVol, _previousData?.eth?.shortVol, isBearish, isBearish ? textRed : textGreen, cardBg),
+                      _buildAssetColumn("ETH", _currentData!.eth?.longVol ?? 0, _currentData!.eth?.shortVol ?? 0, _currentData!.eth?.longDisplay ?? "---", _currentData!.eth?.shortDisplay ?? "---", _lastEthLongDelta, _lastEthShortDelta, _lastEthNetDelta, isBearish, isBearish ? textRed : textGreen, cardBg),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -151,7 +180,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white10)),
-                        child: Text("歷史點數: ${_history.length}", style: const TextStyle(color: Colors.white24, fontSize: 10)),
+                        child: Text("10m 動態點: ${_get10MinHistory().length}", style: const TextStyle(color: Colors.white24, fontSize: 10)),
                       ),
                     ],
                   ),
@@ -161,11 +190,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Expanded(
                     child: Row(
                       children: [
-                        Expanded(child: TrendChart(title: "總體 60m 變動", history: _history, isPrinter: true)),
+                        Expanded(child: TrendChart(title: "總體 10m 變動", history: _get10MinHistory(), isPrinter: true)),
                         const SizedBox(width: 8),
-                        Expanded(child: TrendChart(title: "BTC 60m 變動", history: _history, isBTC: true)),
+                        Expanded(child: TrendChart(title: "BTC 10m 變動", history: _get10MinHistory(), isBTC: true)),
                         const SizedBox(width: 8),
-                        Expanded(child: TrendChart(title: "ETH 60m 變動", history: _history, isETH: true)),
+                        Expanded(child: TrendChart(title: "ETH 10m 變動", history: _get10MinHistory(), isETH: true)),
                       ],
                     ),
                   ),
@@ -178,9 +207,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildAssetColumn(String name, double long, double short, String longDisp, String shortDisp, double? prevLong, double? prevShort, bool isBearish, Color accent, Color bg) {
+  Widget _buildAssetColumn(String name, double long, double short, String longDisp, String shortDisp, String? lDelta, String? sDelta, String? nDelta, bool isBearish, Color accent, Color bg) {
     final double net = isBearish ? (short - long) : (long - short);
-    final double? prevNet = (prevLong != null && prevShort != null) ? (isBearish ? (prevShort - prevLong) : (prevLong - prevShort)) : null;
     
     return Expanded(
       child: Column(
@@ -188,7 +216,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           MetricCard(
             label: isBearish ? "$name 空單" : "$name 多單",
             value: isBearish ? shortDisp : longDisp,
-            delta: _calculateVolumeDelta(isBearish ? prevShort : prevLong, isBearish ? short : long, isShortDelta: isBearish),
+            delta: isBearish ? sDelta : lDelta,
             isShortDelta: isBearish,
             color: accent,
             cardBg: bg,
@@ -197,7 +225,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           MetricCard(
             label: isBearish ? "$name 淨空壓" : "$name 淨多壓",
             value: _formatVolume(net),
-            delta: _calculateVolumeDelta(prevNet, net, isShortDelta: isBearish),
+            delta: nDelta,
             isShortDelta: isBearish,
             color: accent,
             cardBg: bg,
@@ -227,7 +255,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (prev == null) return null;
     final diff = curr - prev;
     if (diff == 0) return null;
-    String formatted = diff.abs() >= 1e8 ? "${(diff.abs() / 1e8).toStringAsFixed(2)}億" : "${(diff.abs() / 1e4).toStringAsFixed(0)}萬";
-    return (diff > 0 ? "+" : "-") + "\$" + formatted;
+    
+    final double absDiff = diff.abs();
+    String formatted;
+    if (absDiff >= 1e8) {
+      formatted = "${(absDiff / 1e8).toStringAsFixed(2)}億";
+    } else if (absDiff >= 1e4) {
+      formatted = "${(absDiff / 1e4).toStringAsFixed(0)}萬";
+    } else {
+      formatted = absDiff.toStringAsFixed(0);
+    }
+    
+    final String sign = diff > 0 ? "+" : "-";
+    return "$sign\$$formatted";
   }
 }
