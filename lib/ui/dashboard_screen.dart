@@ -40,33 +40,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _loadHistory();
+    // App now starts fresh every time
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) setState(() => _scraperReady = true);
     });
-  }
-
-  Future<void> _loadHistory() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final data = prefs.getString('scrape_history');
-      if (data != null) {
-        final List<dynamic> list = jsonDecode(data);
-        setState(() {
-          _history.clear();
-          _history.addAll(list.map((e) => HyperData.fromJson(e)));
-          if (_history.isNotEmpty) _currentData = _history.last;
-        });
-      }
-    } catch (_) { }
-  }
-
-  Future<void> _saveHistory() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final data = jsonEncode(_history.map((e) => e.toJson()).toList());
-      await prefs.setString('scrape_history', data);
-    } catch (_) { }
   }
 
   void _handleNewData(HyperData newData) {
@@ -123,7 +100,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _history.add(newData);
       if (_history.length > _maxHistoryPoints) _history.removeAt(0);
     });
-    _saveHistory();
   }
 
   // Helper for 10 min charts
