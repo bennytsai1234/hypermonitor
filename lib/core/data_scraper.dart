@@ -103,31 +103,25 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
           for (const row of rows) {
             if (row.innerText.includes('超级印钞机') || row.innerText.includes('Super Money Printer')) {
                const cells = row.querySelectorAll('td');
-               // Defensive check for column count (expecting around 10)
-               if (cells.length < 9) return null;
+               // Defensive check
+               if (cells.length < 6) return null;
 
-               // Indexes based on observation:
-               // 0: Range
-               // 1: Class (Super Money Printer)
-               // 2: Wallets
-               // 3: Open Interest
-               // 4: Long
-               // 5: Short
-               // 6: Net (Total?)
-               // 7: Profitable
-               // 8: Loss
-               // 9: Sentiment (Text)
+               // Observed Layout from logs:
+               // Index 2: Wallet Count (e.g. 578)
+               // Index 4: Long Volume AND Short Volume combined (e.g. "\$5.36亿\n\$14.0亿")
+               // Index 5: Net/Total Volume (e.g. "\$19.42亿")
+               // Index 6: Profit/Loss counts (e.g. "224\n70")
+               // Last Index: Sentiment (e.g. "看跌" or "Bearish")
 
                let sentiment = "Unknown";
-               if (cells.length > 9) {
-                 sentiment = cells[9].innerText.trim();
+               if (cells.length > 0) {
+                 sentiment = cells[cells.length - 1].innerText.trim();
                }
 
                return JSON.stringify({
                  walletCount: cells[2].innerText.trim(),
-                 longVol: cells[4].innerText.trim(),
-                 shortVol: cells[5].innerText.trim(),
-                 netVol: cells[6].innerText.trim(),
+                 longShortVol: cells[4].innerText.trim(), // Contains both
+                 netVol: cells[5].innerText.trim(),
                  sentiment: sentiment
                });
             }
@@ -179,21 +173,52 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
        // Let's replace the whole file content helper to include dart:convert or just use string split if I want to be lazy.
        // No, I should be professional. I will include 'dart:convert' in a separate edit or use regex.
        // Given the constraints, I'll use a regex "parser" for this simple flat object to save an import cycle if I can't edit top.
-       // Structure: {"walletCount":"579","longVol":"$5.32亿",...}
+       // Structure: {"key":"value", ...}
 
        String val(String key) {
          final match = RegExp('"$key":\\s*"([^"]+)"').firstMatch(rawJson);
-         return match?.group(1) ?? "";
+         return match?.group(1) ?? ""; // This simple regex might fail on newlines inside value if not strictly escaped
        }
 
-       final wCountStr = val("walletCount");
-       final longStr = val("longVol");
-       final shortStr = val("shortVol");
-       final netStr = val("netVol");
-       final sentimentStr = val("sentiment").replaceAll(r'\n', '').trim(); // Clean up newlines if any
+       // Robust simple JSON unescape for values that might contain \n
+       String extract(String key) {
+           final start = rawJson.indexOf('"$key":');
+           if (start == -1) return "";
+           final valStart = rawJson.indexOf('"', start + key.length + 3);
+           if (valStart == -1) return "";
+
+           // Find end quote, avoiding escaped quotes (simple check)
+           int valEnd = valStart + 1;
+           while (valEnd < rawJson.length) {
+             if (rawJson[valEnd] == '"' && rawJson[valEnd-1] != '\\') {
+               break;
+             }
+             valEnd++;
+           }
+           if (valEnd >= rawJson.length) return "";
+
+           String rawVal = rawJson.substring(valStart + 1, valEnd);
+           // Unescape basic json chars
+           return rawVal.replaceAll(r'\n', '\n').replaceAll(r'\"', '"').replaceAll(r'\\', '\\');
+       }
+
+       final wCountStr = extract("walletCount");
+       final longShortStr = extract("longShortVol");
+       final netStr = extract("netVol");
+       final sentimentStr = extract("sentiment").trim();
 
        if (wCountStr.isNotEmpty) {
            final count = int.tryParse(wCountStr.replaceAll(',', '')) ?? 0;
+
+           // Split Long/Short
+           // Expected: "$5.32亿\n$14.39亿"
+           // Or sometimes tab separated?
+           String longStr = "0";
+           String shortStr = "0";
+
+           final vols = longShortStr.split(RegExp(r'[\n\t]'));
+           if (vols.isNotEmpty) longStr = vols[0].trim();
+           if (vols.length > 1) shortStr = vols[1].trim();
 
            final data = HyperData(
               timestamp: DateTime.now(),
