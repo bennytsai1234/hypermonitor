@@ -134,18 +134,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      // ROW 1: PRIMARY FOCUS & KEY METRICS (Same as before)
+                      // ROW 1: PRIMARY FOCUS & KEY METRICS
                       Row(
                         children: [
                           Expanded(
                             flex: 3,
                             child: _buildPrimaryCard(
-                              isBearish: isBearish,
-                              primaryLabel: isBearish ? "空單持倉" : "多單持倉",
-                              primaryValue: isBearish ? _currentData!.shortVolDisplay : _currentData!.longVolDisplay,
-                              primaryDelta: isBearish
+                              label: isBearish ? "空單持倉" : "多單持倉",
+                              value: isBearish ? _currentData!.shortVolDisplay : _currentData!.longVolDisplay,
+                              delta: isBearish
                                   ? _calculateVolumeDelta(_previousData?.shortVolNum, _currentData!.shortVolNum)
                                   : _calculateVolumeDelta(_previousData?.longVolNum, _currentData!.longVolNum),
+                              isShortDelta: isBearish,
                               accentColor: sentimentColor,
                               cardBg: cardBg,
                             ),
@@ -161,6 +161,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   delta: isBearish 
                                       ? _calculateVolumeDelta(_previousData?.btc?.shortVol, _currentData!.btc?.shortVol ?? 0.0)
                                       : _calculateVolumeDelta(_previousData?.btc?.longVol, _currentData!.btc?.longVol ?? 0.0),
+                                  isShortDelta: isBearish,
                                   color: sentimentColor,
                                   cardBg: cardBg,
                                 ),
@@ -171,6 +172,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   delta: isBearish 
                                       ? _calculateVolumeDelta(_previousData?.eth?.shortVol, _currentData!.eth?.shortVol ?? 0.0)
                                       : _calculateVolumeDelta(_previousData?.eth?.longVol, _currentData!.eth?.longVol ?? 0.0),
+                                  isShortDelta: isBearish,
                                   color: sentimentColor,
                                   cardBg: cardBg,
                                 ),
@@ -342,14 +344,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 value.replaceAll("亿", "億").replaceAll("万", "萬"),
                 style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              if (subValue != null) ...[
-                const SizedBox(width: 4),
-                Text(subValue, style: TextStyle(color: color.withValues(alpha: 0.6), fontSize: 10)),
-              ],
             ],
           ),
         ],
       ),
+    );
+  }
+
+  // Helper moved inside to fix analyzer warnings and keep integrity
+  Widget _buildLegend(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(color: color.withAlpha(200), fontSize: 8, fontWeight: FontWeight.bold)),
+      ],
     );
   }
 
@@ -421,16 +431,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildPrimaryCard({
-    required bool isBearish,
-    required String primaryLabel,
-    required String primaryValue,
-    String? primaryDelta,
+    required String label,
+    required String value,
+    String? delta,
+    bool isShortDelta = false,
     required Color accentColor,
     required Color cardBg,
   }) {
     Color deltaColor = Colors.grey;
-    if (primaryDelta != null) {
-      deltaColor = primaryDelta.startsWith('+') ? const Color(0xFF00C087) : const Color(0xFFFF4949);
+    if (delta != null) {
+      bool isPositive = delta.startsWith('+');
+      if (isShortDelta) {
+        deltaColor = isPositive ? const Color(0xFFFF4949) : const Color(0xFF00C087);
+      } else {
+        deltaColor = isPositive ? const Color(0xFF00C087) : const Color(0xFFFF4949);
+      }
     }
 
     return Container(
@@ -439,10 +454,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: accentColor.withValues(alpha: 0.5), width: 1.5),
+        border: Border.all(color: accentColor.withAlpha(128), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withValues(alpha: 0.15),
+            color: accentColor.withAlpha(40),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -451,28 +466,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         children: [
           Text(
-            primaryLabel,
+            label,
             style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
           const SizedBox(height: 8),
           Text(
-            primaryValue,
+            value.replaceAll("亿", "億").replaceAll("万", "萬"),
             style: TextStyle(
               color: accentColor,
               fontSize: 42,
               fontWeight: FontWeight.bold,
             ),
           ),
-          if (primaryDelta != null) ...[
+          if (delta != null) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
-                color: deltaColor.withValues(alpha: 0.15),
+                color: deltaColor.withAlpha(40),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                primaryDelta,
+                delta,
                 style: TextStyle(
                   color: deltaColor,
                   fontSize: 18,
