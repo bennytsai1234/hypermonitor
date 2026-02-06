@@ -73,12 +73,12 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   }
 
   void _startScrapingLoop() {
-    // Scrape immediately then every 60 seconds
+    // Scrape immediately then every 15 seconds (relaxed to allow load)
     _scrape();
     _scrapeTimer?.cancel();
     int scrapeCount = 0;
-    // User requested reload every 5 seconds
-    _scrapeTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+
+    _scrapeTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       scrapeCount++;
 
       // Always reload to ensure fresh data
@@ -88,8 +88,8 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         await _mobileController?.reload();
       }
 
-      // Give it time to load the React app (3 seconds)
-      Future.delayed(const Duration(seconds: 3), () {
+      // Give it time to load the React app (10 seconds)
+      Future.delayed(const Duration(seconds: 10), () {
         _scrape();
       });
     });
@@ -100,18 +100,14 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       (function() {
         try {
           const rows = document.querySelectorAll('tr');
+          let found = false;
           for (const row of rows) {
             if (row.innerText.includes('超级印钞机') || row.innerText.includes('Super Money Printer')) {
                const cells = row.querySelectorAll('td');
                // Defensive check
-               if (cells.length < 6) return null;
+               if (cells.length < 6) return JSON.stringify({error: "Found row but cells < 6"});
 
-               // Observed Layout from logs:
-               // Index 2: Wallet Count (e.g. 578)
-               // Index 4: Long Volume AND Short Volume combined (e.g. "\$5.36亿\n\$14.0亿")
-               // Index 5: Net/Total Volume (e.g. "\$19.42亿")
-               // Index 6: Profit/Loss counts (e.g. "224\n70")
-               // Last Index: Sentiment (e.g. "看跌" or "Bearish")
+               // Observed Layout matching fixes
 
                let sentiment = "Unknown";
                if (cells.length > 0) {
@@ -120,13 +116,13 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
                return JSON.stringify({
                  walletCount: cells[2].innerText.trim(),
-                 longShortVol: cells[4].innerText.trim(), // Contains both
+                 longShortVol: cells[4].innerText.trim(),
                  netVol: cells[5].innerText.trim(),
                  sentiment: sentiment
                });
             }
           }
-          return null;
+          return JSON.stringify({debug: "Row not found", title: document.title, rowCount: rows.length});
         } catch (e) {
           return JSON.stringify({error: e.toString()});
         }
