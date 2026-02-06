@@ -1,16 +1,75 @@
-# hyper_monitor
+# Hyperliquid Monitor (超級印鈔機監控)
 
-A new Flutter project.
+這是一個基於 Flutter 開發的跨平台應用程式 (Windows & Android)，旨在實時監控 Coinglass 上 Hyperliquid 的「超級印鈔機 (Super Money Printer)」數據。
 
-## Getting Started
+由於 Coinglass 未提供公開 API，本專案採用 **Headless WebView** 技術進行數據採集，並針對中文數字單位進行自動化解析，提供直觀的即時儀表板。
 
-This project is a starting point for a Flutter application.
+## ✨ 核心功能
 
-A few resources to get you started if this is your first Flutter project:
+- **實時監控**: 每 5 秒自動刷新並採集 Coinglass 數據。
+- **跨平台支援**:
+  - **Windows**: 使用 `webview_windows` 進行背景採集。
+  - **Android**: 使用 `webview_flutter` 進行背景採集。
+- **智能解析**:
+  - 自動識別「超級印鈔機」或「Super Money Printer」所在的數據行。
+  - 支援中文金融單位解析（如「億」、「萬」）轉換為數值。
+  - 實時計算並顯示：錢包數量、多單規模、空單規模、淨部位。
+- **現代化 UI**:
+  - 深色模式 (Dark Mode) 設計。
+  - 針對交易員優化的視覺呈現。
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## 🛠️ 技術棧
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- **框架**: [Flutter](https://flutter.dev/) (Dart)
+- **核心依賴**:
+  - `webview_windows`: Windows 桌面端網頁渲染與注入。
+  - `webview_flutter`: 行動端網頁渲染與注入。
+  - `fl_chart`: (預計用途) 用於繪製歷史數據趨勢圖。
+  - `intl`: 數值格式化。
+
+## 🚀 快速開始
+
+### 環境需求
+
+- Flutter SDK (建議版本 >= 3.10.0)
+- **Windows**: Visual Studio 2019+ (需安裝 "Desktop development with C++")
+- **Android**: Android Studio & SDK
+
+### 安裝依賴
+
+```bash
+flutter pub get
+```
+
+### 執行專案
+
+**Windows 桌面端:**
+```bash
+flutter run -d windows
+```
+
+**Android 模擬器/實機:**
+```bash
+flutter run -d android
+```
+
+## 📂 專案結構
+
+```
+lib/
+├── core/
+│   ├── data_model.dart    # 數據模型定義 (HyperData)
+│   └── data_scraper.dart  # 核心爬蟲邏輯 (Headless WebView 封裝)
+├── ui/
+│   └── dashboard_screen.dart # 主儀表板界面
+└── main.dart              # 程式入口與主題配置
+```
+
+## ⚠️ 注意事項
+
+- 本程式依賴 Coinglass 的網頁結構 (`tr` 標籤解析)，若該網站改版可能導致採集失效，需更新 `data_scraper.dart` 中的 JS 注入腳本。
+- Windows 版本運行時需要 WebView2 Runtime 支援（Windows 10/11 通常內建）。
+
+---
+
+**狀態**: 開發中 (Alpha)
