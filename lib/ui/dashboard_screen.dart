@@ -72,7 +72,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Opacity(
                 opacity: 1.0, // Visible!
                 child: Container(
-                  border: Border.all(color: Colors.red, width: 2), // Red border to spot it
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.red, width: 2), // Red border to spot it
+                  ),
                   child: CoinglassScraper(onDataScraped: _handleNewData),
                 ),
               ),
