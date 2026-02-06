@@ -120,12 +120,12 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
                }
 
                // Confirmed Coinglass table structure from debug:
-               // cells[0]: Filter range ($100万 到 ∞)
+               // cells[0]: Filter range (100万 到 ∞)
                // cells[1]: Name (超级印钞机)
                // cells[2]: Wallet count (578)
                // cells[3]: Open position count with percentage (e.g. "294 (50.87%)")
-               // cells[4]: Long/Short Volume (e.g. "$5.74亿|$14.06亿")
-               // cells[5]: Net Volume ($19.80亿)
+               // cells[4]: Long/Short Volume (e.g. "5.74亿|14.06亿")
+               // cells[5]: Net Volume (19.80亿)
                // cells[6]: Profit/Loss count (e.g. "225|70")
                // cells[7]: Sentiment (看跌)
 
