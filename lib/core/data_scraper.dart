@@ -232,14 +232,22 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   }
 
   CoinPosition _toCoinPos(Map<String, dynamic> d) {
+    final l = _parseValue(d['long']);
+    final s = _parseValue(d['short']);
+    final net = l - s;
+    final String netStr = (net >= 0 ? "+" : "") + 
+        (net.abs() >= 100000000 ? "${(net / 100000000).toStringAsFixed(2)}億" : "${(net / 10000).toStringAsFixed(0)}萬");
+
     return CoinPosition(
       symbol: d['symbol'],
-      longVol: _parseValue(d['long']),
-      shortVol: _parseValue(d['short']),
+      longVol: l,
+      shortVol: s,
       totalVol: _parseValue(d['total']),
+      netVol: net,
       longDisplay: d['long'],
       shortDisplay: d['short'],
       totalDisplay: d['total'],
+      netDisplay: netStr,
     );
   }
 

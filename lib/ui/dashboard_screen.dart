@@ -149,18 +149,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      // ROW 1: PRIMARY FOCUS & KEY METRICS
+                      // ROW 1: NET POSITIONS (All subtracted)
                       Row(
                         children: [
                           Expanded(
                             flex: 3,
                             child: _buildPrimaryCard(
-                              label: isBearish ? "空單持倉" : "多單持倉",
-                              value: isBearish ? _currentData!.shortVolDisplay : _currentData!.longVolDisplay,
-                              delta: isBearish
-                                  ? _calculateVolumeDelta(_previousData?.shortVolNum, _currentData!.shortVolNum)
-                                  : _calculateVolumeDelta(_previousData?.longVolNum, _currentData!.longVolNum),
-                              isShortDelta: isBearish,
+                              label: "總淨持倉 (對沖後)",
+                              value: _currentData!.netVolDisplay,
+                              delta: _calculateVolumeDelta(_previousData?.netVolNum, _currentData!.netVolNum),
+                              isShortDelta: _currentData!.netVolNum < 0,
                               accentColor: sentimentColor,
                               cardBg: cardBg,
                             ),
@@ -171,24 +169,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Column(
                               children: [
                                 _buildMiniInfoCard(
-                                  label: isBearish ? "BTC 空單" : "BTC 多單",
-                                  value: (isBearish ? _currentData!.btc?.shortDisplay : _currentData!.btc?.longDisplay) ?? "---",
-                                  delta: isBearish 
-                                      ? _calculateVolumeDelta(_previousData?.btc?.shortVol, _currentData!.btc?.shortVol ?? 0.0)
-                                      : _calculateVolumeDelta(_previousData?.btc?.longVol, _currentData!.btc?.longVol ?? 0.0),
-                                  isShortDelta: isBearish,
-                                  color: sentimentColor,
+                                  label: "BTC 淨持倉",
+                                  value: _currentData!.btc?.netDisplay ?? "---",
+                                  delta: _calculateVolumeDelta(_previousData?.btc?.netVol, _currentData!.btc?.netVol ?? 0.0),
+                                  isShortDelta: (_currentData!.btc?.netVol ?? 0) < 0,
+                                  color: (_currentData!.btc?.netVol ?? 0) >= 0 ? textGreen : textRed,
                                   cardBg: cardBg,
                                 ),
                                 const SizedBox(height: 8),
                                 _buildMiniInfoCard(
-                                  label: isBearish ? "ETH 空單" : "ETH 多單",
-                                  value: (isBearish ? _currentData!.eth?.shortDisplay : _currentData!.eth?.longDisplay) ?? "---",
-                                  delta: isBearish 
-                                      ? _calculateVolumeDelta(_previousData?.eth?.shortVol, _currentData!.eth?.shortVol ?? 0.0)
-                                      : _calculateVolumeDelta(_previousData?.eth?.longVol, _currentData!.eth?.longVol ?? 0.0),
-                                  isShortDelta: isBearish,
-                                  color: sentimentColor,
+                                  label: "ETH 淨持倉",
+                                  value: _currentData!.eth?.netDisplay ?? "---",
+                                  delta: _calculateVolumeDelta(_previousData?.eth?.netVol, _currentData!.eth?.netVol ?? 0.0),
+                                  isShortDelta: (_currentData!.eth?.netVol ?? 0) < 0,
+                                  color: (_currentData!.eth?.netVol ?? 0) >= 0 ? textGreen : textRed,
                                   cardBg: cardBg,
                                 ),
                               ],
@@ -334,7 +328,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: color.withAlpha(80), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: color.withAlpha(20),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

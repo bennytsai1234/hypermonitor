@@ -3,18 +3,22 @@ class CoinPosition {
   final double longVol;
   final double shortVol;
   final double totalVol;
+  final double netVol; // New: Net Position
   final String longDisplay;
   final String shortDisplay;
   final String totalDisplay;
+  final String netDisplay; // New: Formatted Net
 
   CoinPosition({
     required this.symbol,
     required this.longVol,
     required this.shortVol,
     required this.totalVol,
+    required this.netVol,
     required this.longDisplay,
     required this.shortDisplay,
     required this.totalDisplay,
+    required this.netDisplay,
   });
 
   Map<String, dynamic> toJson() => {
@@ -22,9 +26,11 @@ class CoinPosition {
     'longVol': longVol,
     'shortVol': shortVol,
     'totalVol': totalVol,
+    'netVol': netVol,
     'longDisplay': longDisplay,
     'shortDisplay': shortDisplay,
     'totalDisplay': totalDisplay,
+    'netDisplay': netDisplay,
   };
 
   factory CoinPosition.fromJson(Map<String, dynamic> j) => CoinPosition(
@@ -32,9 +38,11 @@ class CoinPosition {
     longVol: (j['longVol'] as num).toDouble(),
     shortVol: (j['shortVol'] as num).toDouble(),
     totalVol: (j['totalVol'] as num).toDouble(),
+    netVol: (j['netVol'] ?? 0.0 as num).toDouble(),
     longDisplay: j['longDisplay'],
     shortDisplay: j['shortDisplay'],
     totalDisplay: j['totalDisplay'],
+    netDisplay: j['netDisplay'] ?? "",
   );
 }
 
