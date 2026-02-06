@@ -68,6 +68,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     // Dynamic focus based on sentiment
     final bool isBearish = _currentData?.sentiment.contains("跌") ?? false;
+    final Color sentimentColor = _currentData != null ? _getSentimentColor(_currentData!.sentiment) : textGrey;
 
     return Scaffold(
       backgroundColor: bgDark,
@@ -147,7 +148,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               primaryDelta: isBearish
                                   ? _calculateVolumeDelta(_previousData?.shortVolNum, _currentData!.shortVolNum)
                                   : _calculateVolumeDelta(_previousData?.longVolNum, _currentData!.longVolNum),
-                              accentColor: isBearish ? textRed : textGreen,
+                              accentColor: sentimentColor,
                               cardBg: cardBg,
                             ),
                           ),
@@ -162,7 +163,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   delta: isBearish 
                                       ? _calculateVolumeDelta(_previousData?.btc?.shortVol, _currentData!.btc?.shortVolNum)
                                       : _calculateVolumeDelta(_previousData?.btc?.longVol, _currentData!.btc?.longVolNum),
-                                  color: isBearish ? textRed : textGreen,
+                                  color: sentimentColor,
                                   cardBg: cardBg,
                                 ),
                                 const SizedBox(height: 8),
@@ -172,7 +173,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   delta: isBearish 
                                       ? _calculateVolumeDelta(_previousData?.eth?.shortVol, _currentData!.eth?.shortVolNum)
                                       : _calculateVolumeDelta(_previousData?.eth?.longVol, _currentData!.eth?.longVolNum),
-                                  color: isBearish ? textRed : textGreen,
+                                  color: sentimentColor,
                                   cardBg: cardBg,
                                 ),
                               ],
@@ -559,48 +560,68 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Color _getSentimentColor(String sentiment) {
+    if (sentiment.contains("非常")) {
+      return sentiment.contains("跌") ? const Color(0xFFB71C1C) : const Color(0xFF1B5E20);
+    } else if (sentiment.contains("略")) {
+      return sentiment.contains("跌") ? const Color(0xFFEF9A9A) : const Color(0xFFA5D6A7);
+    } else if (sentiment.contains("看跌")) {
+      return const Color(0xFFFF4949);
+    } else if (sentiment.contains("看漲") || sentiment.contains("看漲")) {
+      return const Color(0xFF00C087);
+    }
+    return Colors.grey; // 中性 / 猶豫不決
+  }
+
   Widget _buildSentimentBadge(String sentiment) {
-    Color badgeColor = Colors.grey;
-    if (sentiment.contains("跌")) badgeColor = const Color(0xFFFF4949);
-    if (sentiment.contains("漲")) badgeColor = const Color(0xFF00C087);
+    final Color badgeColor = _getSentimentColor(sentiment);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: badgeColor.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: badgeColor),
+        color: badgeColor.withAlpha(30),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: badgeColor, width: 1.5),
       ),
       child: Text(
         sentiment,
-        style: TextStyle(color: badgeColor, fontSize: 12, fontWeight: FontWeight.bold),
+        style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.black),
       ),
     );
   }
 
-  Widget _buildChartCard(String title, List<HyperData> history) {
-    if (history.length < 2) return const SizedBox.shrink();
+  Widget _buildChartCard(String title, List<HyperData> history, {bool isPrinter = false, bool isBTC = false, bool isETH = false}) {
+    if (history.length < 2) return const Center(child: Text("等待數據中...", style: TextStyle(color: Colors.white24, fontSize: 10)));
 
-    final pLong = history.map((e) => e.longVolNum).toList();
-    final pShort = history.map((e) => e.shortVolNum).toList();
-    final bLong = history.map((e) => e.btc?.longVol ?? 0.0).toList();
-    final bShort = history.map((e) => e.btc?.shortVol ?? 0.0).toList();
-    final eLong = history.map((e) => e.eth?.longVol ?? 0.0).toList();
-    final eShort = history.map((e) => e.eth?.shortVol ?? 0.0).toList();
+    final List<double> longSeries;
+    final List<double> shortSeries;
+    final Color longColor = const Color(0xFF00C087);
+    final Color shortColor = const Color(0xFFFF4949);
 
-    final all = [...pLong, ...pShort, ...bLong, ...bShort, ...eLong, ...eShort].where((v) => v > 0).toList();
-    if (all.isEmpty) return const Center(child: Text("等待數據中...", style: TextStyle(color: Colors.white24)));
+    if (isPrinter) {
+      longSeries = history.map((e) => e.longVolNum).toList();
+      shortSeries = history.map((e) => e.shortVolNum).toList();
+    } else if (isBTC) {
+      longSeries = history.map((e) => e.btc?.longVol ?? 0.0).toList();
+      shortSeries = history.map((e) => e.btc?.shortVol ?? 0.0).toList();
+    } else {
+      longSeries = history.map((e) => e.eth?.longVol ?? 0.0).toList();
+      shortSeries = history.map((e) => e.eth?.shortVol ?? 0.0).toList();
+    }
+
+    final all = [...longSeries, ...shortSeries].where((v) => v > 0).toList();
+    if (all.isEmpty) return const SizedBox.shrink();
     
     double minV = all.reduce((c, n) => c < n ? c : n);
     double maxV = all.reduce((c, n) => c > n ? c : n);
     double range = maxV - minV;
-    double pad = range > 0 ? (range * 0.15) : 1000000;
+    double pad = range > 0 ? (range * 0.1) : 1000000;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(4, 12, 12, 8),
+      padding: const EdgeInsets.fromLTRB(4, 8, 12, 4),
       decoration: BoxDecoration(
         color: const Color(0xFF16171B),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white10),
       ),
       child: Column(
@@ -610,27 +631,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    _buildLegend("總", const Color(0xFF00C087)),
-                    _buildLegend("BTC", Colors.orange),
-                    _buildLegend("ETH", Colors.blue),
-                  ],
+                Text(title, style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+                Text(
+                  "10m 增量: ${isPrinter ? history.last.netVolDisplay : (isBTC ? history.last.btc?.totalDisplay ?? "" : history.last.eth?.totalDisplay ?? "")}",
+                  style: const TextStyle(color: Colors.white24, fontSize: 8),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
           Expanded(
             child: LineChart(
               LineChartData(
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  horizontalInterval: range > 0 ? range / 4 : null,
-                  getDrawingHorizontalLine: (v) => FlLine(color: Colors.white.withValues(alpha: 0.02), strokeWidth: 1),
+                  horizontalInterval: range > 0 ? range / 3 : null,
+                  getDrawingHorizontalLine: (v) => FlLine(color: Colors.white.withAlpha(5), strokeWidth: 1),
                 ),
                 titlesData: FlTitlesData(
                   rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -638,23 +655,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 20,
-                      interval: (history.length / 4).clamp(1.0, 500.0),
+                      reservedSize: 16,
+                      interval: 10, 
                       getTitlesWidget: (v, m) {
                         int idx = v.toInt();
-                        if (idx < 0 || idx >= history.length) return const SizedBox.shrink();
-                        return Text(DateFormat('HH:mm').format(history[idx].timestamp), style: const TextStyle(color: Colors.white24, fontSize: 8));
+                        if (idx < 0 || idx >= history.length || idx % 10 != 0) return const SizedBox.shrink();
+                        return Text(DateFormat('HH:mm').format(history[idx].timestamp), style: const TextStyle(color: Colors.white24, fontSize: 7));
                       },
                     ),
                   ),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 45,
+                      reservedSize: 40,
                       getTitlesWidget: (v, m) {
                         if (v == minV - pad || v == maxV + pad) return const SizedBox.shrink();
                         String t = v >= 1e8 ? "${(v / 1e8).toStringAsFixed(1)}B" : v >= 1e4 ? "${(v / 1e4).toStringAsFixed(0)}W" : v.toStringAsFixed(0);
-                        return Text(t, style: const TextStyle(color: Colors.white24, fontSize: 8), textAlign: TextAlign.right);
+                        return Text(t, style: const TextStyle(color: Colors.white24, fontSize: 7), textAlign: TextAlign.right);
                       },
                     ),
                   ),
@@ -665,13 +682,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     getTooltipColor: (s) => const Color(0xFF2E2F33),
                     getTooltipItems: (spots) {
                       if (spots.isEmpty) return [];
-                      final data = history[spots.first.x.toInt()];
+                      final idx = spots.first.x.toInt();
+                      final data = history[idx];
+                      String l = "", s = "";
+                      if (isPrinter) { l = data.longVolDisplay; s = data.shortVolDisplay; }
+                      else if (isBTC) { l = data.btc?.longDisplay ?? "-"; s = data.btc?.shortDisplay ?? "-"; }
+                      else { l = data.eth?.longDisplay ?? "-"; s = data.eth?.shortDisplay ?? "-"; }
+                      
                       return [
                         LineTooltipItem(
-                          "${DateFormat('HH:mm:ss').format(data.timestamp)}\n"
-                          "Printer: L:${data.longVolDisplay} S:${data.shortVolDisplay}\n"
-                          "BTC: L:${data.btc?.longDisplay ?? "-"} S:${data.btc?.shortDisplay ?? "-"}\n"
-                          "ETH: L:${data.eth?.longDisplay ?? "-"} S:${data.eth?.shortDisplay ?? "-"}",
+                          "${DateFormat('HH:mm:ss').format(data.timestamp)}\n多: $l\n空: $s",
                           const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                         )
                       ];
@@ -681,12 +701,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 minY: minV - pad,
                 maxY: maxV + pad,
                 lineBarsData: [
-                  _chartLine(pLong, const Color(0xFF00C087), false),
-                  _chartLine(pShort, const Color(0xFFFF4949), false),
-                  _chartLine(bLong, Colors.orange.withValues(alpha: 0.5), true),
-                  _chartLine(bShort, Colors.deepOrange.withValues(alpha: 0.5), true),
-                  _chartLine(eLong, Colors.blue.withValues(alpha: 0.5), true),
-                  _chartLine(eShort, Colors.indigo.withValues(alpha: 0.5), true),
+                  _chartLine(longSeries, longColor),
+                  _chartLine(shortSeries, shortColor),
                 ],
               ),
             ),
@@ -702,19 +718,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 4),
-        Text(label, style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 8, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(color: color.withAlpha(200), fontSize: 8, fontWeight: FontWeight.bold)),
       ],
     );
   }
 
-  LineChartBarData _chartLine(List<double> spots, Color color, bool isDashed) {
+  LineChartBarData _chartLine(List<double> spots, Color color) {
     return LineChartBarData(
       spots: spots.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value)).toList(),
       isCurved: true,
       curveSmoothness: 0.1,
       color: color,
-      barWidth: isDashed ? 1.0 : 2.0,
-      dashArray: isDashed ? [4, 4] : null,
+      barWidth: 1.5,
       dotData: const FlDotData(show: false),
       belowBarData: BarAreaData(show: false),
     );
