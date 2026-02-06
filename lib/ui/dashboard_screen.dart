@@ -157,17 +157,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Column(
                               children: [
                                 _buildMiniInfoCard(
-                                  label: "開倉",
-                                  value: "${_currentData!.openPositionCount}",
-                                  subValue: _currentData!.openPositionPct,
-                                  color: Colors.amber,
+                                  label: isBearish ? "BTC 空單" : "BTC 多單",
+                                  value: (isBearish ? _currentData!.btc?.shortDisplay : _currentData!.btc?.longDisplay) ?? "---",
+                                  delta: isBearish 
+                                      ? _calculateVolumeDelta(_previousData?.btc?.shortVol, _currentData!.btc?.shortVolNum)
+                                      : _calculateVolumeDelta(_previousData?.btc?.longVol, _currentData!.btc?.longVolNum),
+                                  color: isBearish ? textRed : textGreen,
                                   cardBg: cardBg,
                                 ),
                                 const SizedBox(height: 8),
                                 _buildMiniInfoCard(
-                                  label: "淨持倉",
-                                  value: _currentData!.netVolDisplay,
-                                  color: Colors.blueAccent,
+                                  label: isBearish ? "ETH 空單" : "ETH 多單",
+                                  value: (isBearish ? _currentData!.eth?.shortDisplay : _currentData!.eth?.longDisplay) ?? "---",
+                                  delta: isBearish 
+                                      ? _calculateVolumeDelta(_previousData?.eth?.shortVol, _currentData!.eth?.shortVolNum)
+                                      : _calculateVolumeDelta(_previousData?.eth?.longVol, _currentData!.eth?.longVolNum),
+                                  color: isBearish ? textRed : textGreen,
                                   cardBg: cardBg,
                                 ),
                               ],
@@ -311,12 +316,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String label,
     required String value,
     String? subValue,
+    String? delta,
     required Color color,
     required Color cardBg,
   }) {
+    Color deltaColor = Colors.grey;
+    if (delta != null) {
+      deltaColor = delta.startsWith('+') ? const Color(0xFF00C087) : const Color(0xFFFF4949);
+    }
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
@@ -325,15 +336,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+              if (delta != null)
+                Text(
+                  delta,
+                  style: TextStyle(color: deltaColor, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+            ],
+          ),
           const SizedBox(height: 4),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                value,
-                style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold),
+                value.replaceAll("亿", "億").replaceAll("万", "萬"),
+                style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold),
               ),
               if (subValue != null) ...[
                 const SizedBox(width: 4),
