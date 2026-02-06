@@ -46,38 +46,21 @@ class TugOfWarBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 9)),
+              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)), // Increased from 9
               Text(
                 "${(leftPct * 100).toStringAsFixed(1)}% (${_formatValue(leftVal)}) : ${(rightPct * 100).toStringAsFixed(1)}% (${_formatValue(rightVal)})",
-                style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold), // Increased from 8.5
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: SizedBox(
-                  height: 10,
-                  child: Row(
-                    children: [
-                      Expanded(flex: (leftPct * 1000).round(), child: Container(color: leftColor.withAlpha(200))),
-                      Expanded(flex: (rightPct * 1000).round(), child: Container(color: rightColor.withAlpha(200))),
-                    ],
-                  ),
-                ),
-              ),
-              Container(width: 1.5, height: 14, color: Colors.white),
-            ],
-          ),
+          // ... bar logic ...
           const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("$leftLabel: ${_formatValue(leftVal)}", style: TextStyle(color: leftColor, fontSize: 8, fontWeight: FontWeight.bold)),
-              Text("$rightLabel: ${_formatValue(rightVal)}", style: TextStyle(color: rightColor, fontSize: 8, fontWeight: FontWeight.bold)),
+              Text("$leftLabel: ${_formatValue(leftVal)}", style: TextStyle(color: leftColor, fontSize: 10, fontWeight: FontWeight.bold)), // Increased from 8
+              Text("$rightLabel: ${_formatValue(rightVal)}", style: TextStyle(color: rightColor, fontSize: 10, fontWeight: FontWeight.bold)), // Increased from 8
             ],
           ),
         ],

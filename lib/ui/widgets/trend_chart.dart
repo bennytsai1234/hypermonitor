@@ -51,55 +51,57 @@ class TrendChart extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(4, 8, 12, 4),
       decoration: BoxDecoration(color: const Color(0xFF16171B), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white10)),
       child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(title, style: const TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.bold)),
-                Text(
-                  "淨壓變動", 
-                  style: TextStyle(color: themeColor.withAlpha(150), fontSize: 8, fontWeight: FontWeight.bold)
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(
-                  show: true, drawVerticalLine: false,
-                  horizontalInterval: range > 0 ? range / 4 : null,
-                  getDrawingHorizontalLine: (v) => FlLine(color: v.abs() < 1.0 ? Colors.white24 : Colors.white.withAlpha(5), strokeWidth: v.abs() < 1.0 ? 1 : 0.5),
-                ),
-                titlesData: FlTitlesData(
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true, reservedSize: 16, interval: (history.length / 4).clamp(1.0, 100.0),
-                      getTitlesWidget: (v, m) {
-                        int idx = v.toInt();
-                        if (idx < 0 || idx >= history.length || idx % 20 != 0) return const SizedBox.shrink();
-                        return Text(DateFormat('HH:mm').format(history[idx].timestamp), style: const TextStyle(color: Colors.white24, fontSize: 7));
-                      },
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(title, style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold)), // Increased from 9
+                        Text(
+                          "淨壓變動", 
+                          style: TextStyle(color: themeColor.withAlpha(150), fontSize: 9, fontWeight: FontWeight.bold) // Increased from 8
+                        ),
+                      ],
                     ),
                   ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true, reservedSize: 40,
-                      getTitlesWidget: (v, m) {
-                        if (v == minV - pad || v == maxV + pad) return const SizedBox.shrink();
-                        String sign = v > 0 ? "+" : "";
-                        double absV = v.abs();
-                        String t = absV >= 1e8 ? "$sign${(v / 1e8).toStringAsFixed(1)}B" : absV >= 1e4 ? "$sign${(v / 1e4).toStringAsFixed(0)}W" : v.toStringAsFixed(0);
-                        return Text(t, style: TextStyle(color: v >= 0 ? const Color(0xFF00C087).withAlpha(100) : const Color(0xFFFF4949).withAlpha(100), fontSize: 7), textAlign: TextAlign.right);
-                      },
-                    ),
-                  ),
-                ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: LineChart(
+                      LineChartData(
+                        gridData: FlGridData(
+                          show: true, drawVerticalLine: false,
+                          horizontalInterval: range > 0 ? range / 4 : null,
+                          getDrawingHorizontalLine: (v) => FlLine(color: v.abs() < 1.0 ? Colors.white24 : Colors.white.withAlpha(5), strokeWidth: v.abs() < 1.0 ? 1 : 0.5),
+                        ),
+                        titlesData: FlTitlesData(
+                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true, reservedSize: 16, interval: (history.length / 4).clamp(1.0, 100.0),
+                              getTitlesWidget: (v, m) {
+                                int idx = v.toInt();
+                                if (idx < 0 || idx >= history.length || idx % 20 != 0) return const SizedBox.shrink();
+                                return Text(DateFormat('HH:mm').format(history[idx].timestamp), style: const TextStyle(color: Colors.white24, fontSize: 8)); // Increased from 7
+                              },
+                            ),
+                          ),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 40,
+                              getTitlesWidget: (v, m) {
+                                if (v == minV - pad || v == maxV + pad) return const SizedBox.shrink();
+                                String sign = v > 0 ? "+" : "";
+                                double absV = v.abs();
+                                String t = absV >= 1e8 ? "$sign${(v / 1e8).toStringAsFixed(1)}B" : absV >= 1e4 ? "$sign${(v / 1e4).toStringAsFixed(0)}W" : v.toStringAsFixed(0);
+                                return Text(t, style: TextStyle(color: v >= 0 ? const Color(0xFF00C087).withAlpha(100) : const Color(0xFFFF4949).withAlpha(100), fontSize: 8), textAlign: TextAlign.right); // Increased from 7
+                              },
+                            ),
+                          ),
+                        ),
+        
                 borderData: FlBorderData(show: false),
                 lineTouchData: LineTouchData(
                   touchTooltipData: LineTouchTooltipData(
