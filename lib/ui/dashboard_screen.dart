@@ -43,7 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (_history.isNotEmpty) _currentData = _history.last;
         });
       }
-    } catch (e) { }
+    } catch (_) { }
   }
 
   Future<void> _saveHistory() async {
@@ -51,7 +51,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final prefs = await SharedPreferences.getInstance();
       final data = jsonEncode(_history.map((e) => e.toJson()).toList());
       await prefs.setString('scrape_history', data);
-    } catch (e) { }
+    } catch (_) { }
   }
 
   void _handleNewData(HyperData newData) {
@@ -79,37 +79,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final textRed = const Color(0xFFFF4949);
     final textGrey = Colors.white54;
 
-    // Dynamic focus based on sentiment
     final bool isBearish = _currentData?.sentiment.contains("跌") ?? false;
     final Color sentimentColor = _currentData != null ? _getSentimentColor(_currentData!.sentiment) : textGrey;
 
     return Scaffold(
       backgroundColor: bgDark,
-      appBar: AppBar(
-        title: const Text("Hyperliquid 實時監控儀表板"),
-        backgroundColor: bgDark,
-        elevation: 0,
-        centerTitle: true,
-      ),
       body: Stack(
         children: [
-          // Background Scraper (Hidden but isolated for performance)
-          // Delayed initialization to allow loading animation to run smoothly
           if (_scraperReady)
             Positioned(
-                bottom: 0,
-                right: 0,
-                width: 1,
-                height: 1,
+                bottom: 0, right: 0, width: 1, height: 1,
                 child: RepaintBoundary(
                   child: Opacity(
-                    opacity: 0.0, // Hidden
+                    opacity: 0.0,
                     child: CoinglassScraper(onDataScraped: _handleNewData),
                   ),
                 ),
             ),
 
-          // Main Content
           SafeArea(
             child: _currentData == null
               ? Center(
@@ -123,7 +110,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 )
               : Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(12.0),
                   child: Column(
                     children: [
                       // HEADER: All in one row
@@ -149,44 +136,89 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      // ROW 1: CORE METRICS (Net + Directional)
+                      // ROW 1: 3-COLUMN METRICS (Overall, BTC, ETH)
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Column 1: Overall
                           Expanded(
-                            flex: 3,
-                            child: _buildPrimaryCard(
-                              label: "全市場資金流向",
-                              value: _currentData!.netVolDisplay,
-                              secondaryValue: isBearish ? "空單: ${_currentData!.shortVolDisplay}" : "多單: ${_currentData!.longVolDisplay}",
-                              delta: _calculateVolumeDelta(_previousData?.netVolNum, _currentData!.netVolNum),
-                              isShortDelta: _currentData!.netVolNum < 0,
-                              accentColor: sentimentColor,
-                              cardBg: cardBg,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 2,
                             child: Column(
                               children: [
-                                _buildMiniInfoCard(
-                                  label: "BTC 持倉",
-                                  value: _currentData!.btc?.netDisplay ?? "---",
-                                  secondaryValue: isBearish ? "空: ${_currentData!.btc?.shortDisplay ?? ""}" : "多: ${_currentData!.btc?.longDisplay ?? ""}",
-                                  delta: _calculateVolumeDelta(_previousData?.btc?.netVol, _currentData!.btc?.netVol ?? 0.0),
-                                  isShortDelta: (_currentData!.btc?.netVol ?? 0) < 0,
-                                  color: (_currentData!.btc?.netVol ?? 0) >= 0 ? textGreen : textRed,
+                                _buildMetricCard(
+                                  label: isBearish ? "總體空單" : "總體多單",
+                                  value: isBearish ? _currentData!.shortVolDisplay : _currentData!.longVolDisplay,
+                                  delta: isBearish 
+                                      ? _calculateVolumeDelta(_previousData?.shortVolNum, _currentData!.shortVolNum)
+                                      : _calculateVolumeDelta(_previousData?.longVolNum, _currentData!.longVolNum),
+                                  isShortDelta: isBearish,
+                                  color: sentimentColor,
                                   cardBg: cardBg,
                                 ),
                                 const SizedBox(height: 8),
-                                _buildMiniInfoCard(
-                                  label: "ETH 持倉",
-                                  value: _currentData!.eth?.netDisplay ?? "---",
-                                  secondaryValue: isBearish ? "空: ${_currentData!.eth?.shortDisplay ?? ""}" : "多: ${_currentData!.eth?.longDisplay ?? ""}",
-                                  delta: _calculateVolumeDelta(_previousData?.eth?.netVol, _currentData!.eth?.netVol ?? 0.0),
-                                  isShortDelta: (_currentData!.eth?.netVol ?? 0) < 0,
-                                  color: (_currentData!.eth?.netVol ?? 0) >= 0 ? textGreen : textRed,
+                                _buildMetricCard(
+                                  label: isBearish ? "總淨空頭壓力" : "總淨多頭壓力",
+                                  value: _calculateNetPressureStr(_currentData!, isBearish),
+                                  delta: _calculateNetPressureDelta(_previousData, _currentData!, isBearish),
+                                  isShortDelta: isBearish,
+                                  color: sentimentColor,
                                   cardBg: cardBg,
+                                  isSmall: true,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Column 2: BTC
+                          Expanded(
+                            child: Column(
+                              children: [
+                                _buildMetricCard(
+                                  label: isBearish ? "BTC 空單" : "BTC 多單",
+                                  value: (isBearish ? _currentData!.btc?.shortDisplay : _currentData!.btc?.longDisplay) ?? "---",
+                                  delta: isBearish 
+                                      ? _calculateVolumeDelta(_previousData?.btc?.shortVol, _currentData!.btc?.shortVol ?? 0.0)
+                                      : _calculateVolumeDelta(_previousData?.btc?.longVol, _currentData!.btc?.longVol ?? 0.0),
+                                  isShortDelta: isBearish,
+                                  color: isBearish ? textRed : textGreen,
+                                  cardBg: cardBg,
+                                ),
+                                const SizedBox(height: 8),
+                                _buildMetricCard(
+                                  label: isBearish ? "BTC 淨空壓" : "BTC 淨多壓",
+                                  value: _calculateCoinNetStr(_currentData!.btc, isBearish),
+                                  delta: _calculateCoinNetDelta(_previousData?.btc, _currentData!.btc, isBearish),
+                                  isShortDelta: isBearish,
+                                  color: isBearish ? textRed : textGreen,
+                                  cardBg: cardBg,
+                                  isSmall: true,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Column 3: ETH
+                          Expanded(
+                            child: Column(
+                              children: [
+                                _buildMetricCard(
+                                  label: isBearish ? "ETH 空單" : "ETH 多單",
+                                  value: (isBearish ? _currentData!.eth?.shortDisplay : _currentData!.eth?.longDisplay) ?? "---",
+                                  delta: isBearish 
+                                      ? _calculateVolumeDelta(_previousData?.eth?.shortVol, _currentData!.eth?.shortVol ?? 0.0)
+                                      : _calculateVolumeDelta(_previousData?.eth?.longVol, _currentData!.eth?.longVol ?? 0.0),
+                                  isShortDelta: isBearish,
+                                  color: isBearish ? textRed : textGreen,
+                                  cardBg: cardBg,
+                                ),
+                                const SizedBox(height: 8),
+                                _buildMetricCard(
+                                  label: isBearish ? "ETH 淨空壓" : "ETH 淨多壓",
+                                  value: _calculateCoinNetStr(_currentData!.eth, isBearish),
+                                  delta: _calculateCoinNetDelta(_previousData?.eth, _currentData!.eth, isBearish),
+                                  isShortDelta: isBearish,
+                                  color: isBearish ? textRed : textGreen,
+                                  cardBg: cardBg,
+                                  isSmall: true,
                                 ),
                               ],
                             ),
@@ -232,11 +264,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Expanded(
                         child: Row(
                           children: [
-                            Expanded(child: _buildChartCard("總體持倉", _getRecentHistory(), isPrinter: true)),
+                            Expanded(child: _buildChartCard("總體 60m 變動", _history, isPrinter: true)),
                             const SizedBox(width: 8),
-                            Expanded(child: _buildChartCard("BTC 趨勢", _getRecentHistory(), isBTC: true)),
+                            Expanded(child: _buildChartCard("BTC 60m 變動", _history, isBTC: true)),
                             const SizedBox(width: 8),
-                            Expanded(child: _buildChartCard("ETH 趨勢", _getRecentHistory(), isETH: true)),
+                            Expanded(child: _buildChartCard("ETH 60m 變動", _history, isETH: true)),
                           ],
                         ),
                       ),
@@ -249,315 +281,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  List<HyperData> _getRecentHistory() {
-    // 10 mins = 600s. At 15s interval, that's 40 points.
-    if (_history.length <= 40) return _history;
-    return _history.sublist(_history.length - 40);
+  // --- CALCULATION HELPERS ---
+
+  String _calculateNetPressureStr(HyperData data, bool isBearish) {
+    final double net = isBearish ? (data.shortVolNum - data.longVolNum) : (data.longVolNum - data.shortVolNum);
+    return _formatVolume(net);
   }
 
-  Widget _buildCoinRatioBar({
-    required CoinPosition coin,
-    required Color leftColor,
-    required Color rightColor,
-    required Color cardBg,
-  }) {
-    final total = coin.longVol + coin.shortVol;
-    final leftPct = total > 0 ? (coin.longVol / total) : 0.5;
-    final rightPct = 1.0 - leftPct;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(coin.symbol, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-              Text(
-                "${(leftPct * 100).toStringAsFixed(0)}% : ${(rightPct * 100).toStringAsFixed(0)}%",
-                style: const TextStyle(color: Colors.white54, fontSize: 9),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: SizedBox(
-              height: 6,
-              child: Row(
-                children: [
-                  Expanded(flex: (leftPct * 100).round().clamp(1, 99), child: Container(color: leftColor)),
-                  const SizedBox(width: 1),
-                  Expanded(flex: (rightPct * 100).round().clamp(1, 99), child: Container(color: rightColor)),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(coin.longDisplay.replaceAll("亿", "億").replaceAll("万", "萬"), style: TextStyle(color: leftColor, fontSize: 8)),
-              Text(coin.shortDisplay.replaceAll("亿", "億").replaceAll("万", "萬"), style: TextStyle(color: rightColor, fontSize: 8)),
-            ],
-          ),
-        ],
-      ),
-    );
+  String? _calculateNetPressureDelta(HyperData? prev, HyperData curr, bool isBearish) {
+    if (prev == null) return null;
+    final double prevNet = isBearish ? (prev.shortVolNum - prev.longVolNum) : (prev.longVolNum - prev.shortVolNum);
+    final double currNet = isBearish ? (curr.shortVolNum - curr.longVolNum) : (curr.longVolNum - curr.shortVolNum);
+    return _calculateVolumeDelta(prevNet, currNet, isShortDelta: isBearish);
   }
 
-  Widget _buildMiniInfoCard({
+  String _calculateCoinNetStr(CoinPosition? coin, bool isBearish) {
+    if (coin == null) return "---";
+    final double net = isBearish ? (coin.shortVol - coin.longVol) : (coin.longVol - coin.shortVol);
+    return _formatVolume(net);
+  }
+
+  String? _calculateCoinNetDelta(CoinPosition? prev, CoinPosition? curr, bool isBearish) {
+    if (prev == null || curr == null) return null;
+    final double pNet = isBearish ? (prev.shortVol - prev.longVol) : (prev.longVol - prev.shortVol);
+    final double cNet = isBearish ? (curr.shortVol - curr.longVol) : (curr.longVol - curr.shortVol);
+    return _calculateVolumeDelta(pNet, cNet, isShortDelta: isBearish);
+  }
+
+  String _formatVolume(double v) {
+    String sign = v >= 0 ? "+" : "";
+    double absV = v.abs();
+    if (absV >= 1e8) return "$sign\$${(v / 1e8).toStringAsFixed(2)}億";
+    if (absV >= 1e4) return "$sign\$${(v / 1e4).toStringAsFixed(0)}萬";
+    return "$sign\$${v.toStringAsFixed(0)}";
+  }
+
+  // --- UI COMPONENTS ---
+
+  Widget _buildMetricCard({
     required String label,
     required String value,
-    String? subValue,
-    String? delta,
-    required Color color,
-    required Color cardBg,
-  }) {
-    Color deltaColor = Colors.grey;
-    if (delta != null) {
-      deltaColor = delta.startsWith('+') ? const Color(0xFF00C087) : const Color(0xFFFF4949);
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withAlpha(80), width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: color.withAlpha(20),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
-              if (delta != null)
-                Text(
-                  delta,
-                  style: TextStyle(color: deltaColor, fontSize: 10, fontWeight: FontWeight.bold),
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                value.replaceAll("亿", "億").replaceAll("万", "萬"),
-                style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Helper moved inside to fix analyzer warnings and keep integrity
-  Widget _buildLegend(String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text(label, style: TextStyle(color: color.withAlpha(200), fontSize: 8, fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
-
-  Widget _buildTugOfWarBar({
-    required String label,
-    required double leftVal,
-    required double rightVal,
-    required Color leftColor,
-    required Color rightColor,
-    required String leftLabel,
-    required String rightLabel,
-    bool isMirrored = false,
-    required Color cardBg,
-  }) {
-    final total = leftVal + rightVal;
-    final leftPct = total > 0 ? (leftVal / total) : 0.5;
-    final rightPct = 1.0 - leftPct;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
-              Text(
-                "${(leftPct * 100).toStringAsFixed(1)}% : ${(rightPct * 100).toStringAsFixed(1)}%",
-                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: SizedBox(
-                  height: 12,
-                  child: Row(
-                    children: [
-                      Expanded(flex: (leftPct * 1000).round(), child: Container(color: leftColor.withValues(alpha: 0.8))),
-                      Expanded(flex: (rightPct * 1000).round(), child: Container(color: rightColor.withValues(alpha: 0.8))),
-                    ],
-                  ),
-                ),
-              ),
-              // Center Marker
-              Container(width: 2, height: 16, color: Colors.white),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(leftLabel, style: TextStyle(color: leftColor, fontSize: 9, fontWeight: FontWeight.bold)),
-              Text(rightLabel, style: TextStyle(color: rightColor, fontSize: 9, fontWeight: FontWeight.bold)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPrimaryCard({
-    required String label,
-    required String value,
-    String? secondaryValue,
     String? delta,
     bool isShortDelta = false,
-    required Color accentColor,
-    required Color cardBg,
-  }) {
-    Color deltaColor = Colors.grey;
-    if (delta != null) {
-      bool isPositive = delta.startsWith('+');
-      if (isShortDelta) {
-        deltaColor = isPositive ? const Color(0xFFFF4949) : const Color(0xFF00C087);
-      } else {
-        deltaColor = isPositive ? const Color(0xFF00C087) : const Color(0xFFFF4949);
-      }
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: accentColor.withAlpha(128), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withAlpha(40),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value.replaceAll("亿", "億").replaceAll("万", "萬"),
-            style: TextStyle(
-              color: accentColor,
-              fontSize: 42,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          if (secondaryValue != null)
-            Text(
-              secondaryValue.replaceAll("亿", "億").replaceAll("万", "萬"),
-              style: TextStyle(color: Colors.white38, fontSize: 14),
-            ),
-          if (delta != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: deltaColor.withAlpha(40),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                delta,
-                style: TextStyle(
-                  color: deltaColor,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMiniInfoCard({
-    required String label,
-    required String value,
-    String? secondaryValue,
-    String? delta,
-    bool isShortDelta = false,
+    bool isSmall = false,
     required Color color,
     required Color cardBg,
   }) {
     Color deltaColor = Colors.grey;
     if (delta != null) {
       bool isPositive = delta.startsWith('+');
-      if (isShortDelta) {
-        deltaColor = isPositive ? const Color(0xFFFF4949) : const Color(0xFF00C087);
-      } else {
-        deltaColor = isPositive ? const Color(0xFF00C087) : const Color(0xFFFF4949);
-      }
+      deltaColor = isShortDelta 
+          ? (isPositive ? const Color(0xFFFF4949) : const Color(0xFF00C087))
+          : (isPositive ? const Color(0xFF00C087) : const Color(0xFFFF4949));
     }
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+      padding: EdgeInsets.symmetric(vertical: isSmall ? 10 : 16, horizontal: 14),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withAlpha(80), width: 1.2),
+        border: Border.all(color: color.withAlpha(isSmall ? 40 : 100), width: isSmall ? 1.0 : 1.5),
         boxShadow: [
-          BoxShadow(
-            color: color.withAlpha(20),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
+          BoxShadow(color: color.withAlpha(isSmall ? 10 : 30), blurRadius: isSmall ? 6 : 12, offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -566,24 +352,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+              Text(label, style: TextStyle(color: Colors.white54, fontSize: isSmall ? 9 : 11)),
               if (delta != null)
-                Text(
-                  delta,
-                  style: TextStyle(color: deltaColor, fontSize: 10, fontWeight: FontWeight.bold),
-                ),
+                Text(delta, style: TextStyle(color: deltaColor, fontSize: isSmall ? 9 : 10, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 4),
           Text(
             value.replaceAll("亿", "億").replaceAll("万", "萬"),
-            style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          if (secondaryValue != null)
-            Text(
-              secondaryValue.replaceAll("亿", "億").replaceAll("万", "萬"),
-              style: TextStyle(color: Colors.white30, fontSize: 9),
+            style: TextStyle(
+              color: color, 
+              fontSize: isSmall ? 15 : 20, 
+              fontWeight: isSmall ? FontWeight.bold : FontWeight.w900,
+              letterSpacing: -0.5,
             ),
+          ),
         ],
       ),
     );
@@ -594,17 +377,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return sentiment.contains("跌") ? const Color(0xFFB71C1C) : const Color(0xFF1B5E20);
     } else if (sentiment.contains("略")) {
       return sentiment.contains("跌") ? const Color(0xFFEF9A9A) : const Color(0xFFA5D6A7);
-    } else if (sentiment.contains("看跌")) {
+    } else if (sentiment.contains("跌")) {
       return const Color(0xFFFF4949);
-    } else if (sentiment.contains("看漲") || sentiment.contains("看漲")) {
+    } else if (sentiment.contains("漲") || sentiment.contains("涨")) {
       return const Color(0xFF00C087);
     }
-    return Colors.grey; // 中性 / 猶豫不決
+    return Colors.grey;
   }
 
   Widget _buildSentimentBadge(String sentiment) {
     final Color badgeColor = _getSentimentColor(sentiment);
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -612,9 +394,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: badgeColor, width: 1.5),
       ),
-      child: Text(
-        sentiment,
-        style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.w900),
+      child: Text(sentiment, style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.w900)),
+    );
+  }
+
+  Widget _buildTugOfWarBar({
+    required String label, required double leftVal, required double rightVal,
+    required Color leftColor, required Color rightColor, required String leftLabel,
+    required String rightLabel, bool isMirrored = false, required Color cardBg,
+  }) {
+    final total = leftVal + rightVal;
+    final leftPct = total > 0 ? (leftVal / total) : 0.5;
+    final rightPct = 1.0 - leftPct;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white10)),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 9)),
+              Text("${(leftPct * 100).toStringAsFixed(1)}% : ${(rightPct * 100).toStringAsFixed(1)}%",
+                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: SizedBox(
+                  height: 10,
+                  child: Row(
+                    children: [
+                      Expanded(flex: (leftPct * 1000).round(), child: Container(color: leftColor.withAlpha(200))),
+                      Expanded(flex: (rightPct * 1000).round(), child: Container(color: rightColor.withAlpha(200))),
+                    ],
+                  ),
+                ),
+              ),
+              Container(width: 1.5, height: 14, color: Colors.white),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(leftLabel, style: TextStyle(color: leftColor, fontSize: 8, fontWeight: FontWeight.bold)),
+              Text(rightLabel, style: TextStyle(color: rightColor, fontSize: 8, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -636,7 +469,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       rawShort = history.map((e) => e.eth?.shortVol ?? 0.0).toList();
     }
 
-    // Normalization: Subtract the first point's value to start at zero
     final double baseLong = rawLong.first;
     final double baseShort = rawShort.first;
     final List<double> longSeries = rawLong.map((v) => v - baseLong).toList();
@@ -645,21 +477,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final all = [...longSeries, ...shortSeries];
     double minV = all.reduce((c, n) => c < n ? c : n);
     double maxV = all.reduce((c, n) => c > n ? c : n);
-    
-    // Ensure symmetric zero or at least include zero
     if (minV > 0) minV = -1000000;
     if (maxV < 0) maxV = 1000000;
-    
     double range = maxV - minV;
     double pad = range > 0 ? (range * 0.15) : 1000000;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 8, 12, 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF16171B),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
-      ),
+      decoration: BoxDecoration(color: const Color(0xFF16171B), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white10)),
       child: Column(
         children: [
           Padding(
@@ -668,13 +493,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(title, style: const TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.bold)),
-                Wrap(
-                  spacing: 6,
-                  children: [
-                    _buildLegend("多", const Color(0xFF00C087)),
-                    _buildLegend("空", const Color(0xFFFF4949)),
-                  ],
-                ),
+                Wrap(spacing: 6, children: [_buildLegend("多", const Color(0xFF00C087)), _buildLegend("空", const Color(0xFFFF4949))]),
               ],
             ),
           ),
@@ -683,24 +502,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: LineChart(
               LineChartData(
                 gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
+                  show: true, drawVerticalLine: false,
                   horizontalInterval: range > 0 ? range / 4 : null,
-                  getDrawingHorizontalLine: (v) {
-                    return FlLine(
-                      color: v.abs() < 1.0 ? Colors.white24 : Colors.white.withAlpha(5),
-                      strokeWidth: v.abs() < 1.0 ? 1 : 0.5,
-                    );
-                  },
+                  getDrawingHorizontalLine: (v) => FlLine(color: v.abs() < 1.0 ? Colors.white24 : Colors.white.withAlpha(5), strokeWidth: v.abs() < 1.0 ? 1 : 0.5),
                 ),
                 titlesData: FlTitlesData(
                   rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 16,
-                      interval: (history.length / 4).clamp(1.0, 100.0),
+                      showTitles: true, reservedSize: 16, interval: (history.length / 4).clamp(1.0, 100.0),
                       getTitlesWidget: (v, m) {
                         int idx = v.toInt();
                         if (idx < 0 || idx >= history.length || idx % 20 != 0) return const SizedBox.shrink();
@@ -710,8 +521,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 40,
+                      showTitles: true, reservedSize: 40,
                       getTitlesWidget: (v, m) {
                         if (v == minV - pad || v == maxV + pad) return const SizedBox.shrink();
                         String sign = v > 0 ? "+" : "";
@@ -733,35 +543,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       String l = "", s = "";
                       double curL = 0, curS = 0;
                       if (isPrinter) { 
-                        l = data.longVolDisplay; s = data.shortVolDisplay; 
-                        curL = data.longVolNum - baseLong; curS = data.shortVolNum - baseShort;
+                        l = data.longVolDisplay; s = data.shortVolDisplay; curL = data.longVolNum - baseLong; curS = data.shortVolNum - baseShort;
                       } else if (isBTC) { 
-                        l = data.btc?.longDisplay ?? "-"; s = data.btc?.shortDisplay ?? "-"; 
-                        curL = (data.btc?.longVol ?? 0) - baseLong; curS = (data.btc?.shortVol ?? 0) - baseShort;
+                        l = data.btc?.longDisplay ?? "-"; s = data.btc?.shortDisplay ?? "-"; curL = (data.btc?.longVol ?? 0) - baseLong; curS = (data.btc?.shortVol ?? 0) - baseShort;
                       } else { 
-                        l = data.eth?.longDisplay ?? "-"; s = data.eth?.shortDisplay ?? "-"; 
-                        curL = (data.eth?.longVol ?? 0) - baseLong; curS = (data.eth?.shortVol ?? 0) - baseShort;
+                        l = data.eth?.longDisplay ?? "-"; s = data.eth?.shortDisplay ?? "-"; curL = (data.eth?.longVol ?? 0) - baseLong; curS = (data.eth?.shortVol ?? 0) - baseShort;
                       }
-                      
                       String fmt(double v) => (v >= 0 ? "+" : "") + (v.abs() >= 1e8 ? "${(v / 1e8).toStringAsFixed(2)}億" : "${(v / 1e4).toStringAsFixed(0)}萬");
-
-                      return [
-                        LineTooltipItem(
-                          "${DateFormat('HH:mm:ss').format(data.timestamp)}\n"
-                          "多: $l (${fmt(curL)})\n"
-                          "空: $s (${fmt(curS)})",
-                          const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                        )
-                      ];
+                      return [LineTooltipItem("${DateFormat('HH:mm:ss').format(data.timestamp)}\n多: $l (${fmt(curL)})\n空: $s (${fmt(curS)})", const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold))];
                     },
                   ),
                 ),
-                minY: minV - pad,
-                maxY: maxV + pad,
-                lineBarsData: [
-                  _chartLine(longSeries, const Color(0xFF00C087)),
-                  _chartLine(shortSeries, const Color(0xFFFF4949)),
-                ],
+                minY: minV - pad, maxY: maxV + pad,
+                lineBarsData: [_chartLine(longSeries, const Color(0xFF00C087)), _chartLine(shortSeries, const Color(0xFFFF4949))],
               ),
             ),
           ),
@@ -784,51 +578,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   LineChartBarData _chartLine(List<double> spots, Color color) {
     return LineChartBarData(
       spots: spots.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value)).toList(),
-      isCurved: true,
-      curveSmoothness: 0.1,
-      color: color,
-      barWidth: 1.5,
-      dotData: const FlDotData(show: false),
-      belowBarData: BarAreaData(show: false),
+      isCurved: true, curveSmoothness: 0.1, color: color, barWidth: 1.5,
+      dotData: const FlDotData(show: false), belowBarData: BarAreaData(show: false),
     );
   }
 
-  String? _calculateIntDelta(int? prev, int curr) {
+  String? _calculateVolumeDelta(double? prev, double curr, {bool isShortDelta = false}) {
     if (prev == null) return null;
     final diff = curr - prev;
     if (diff == 0) return null;
-    return diff > 0 ? "+$diff" : "$diff";
-  }
-
-  String? _calculateVolumeDelta(double? prev, double curr, {bool isShort = false}) {
-    if (prev == null) return null;
-    final diff = curr - prev;
-    if (diff == 0) return null;
-
-    String formatted;
     double absDiff = diff.abs();
-
-    if (absDiff >= 100000000) {
-      formatted = "\$${(absDiff / 100000000).toStringAsFixed(2)}億";
-    } else if (absDiff >= 10000) {
-      formatted = "\$${(absDiff / 10000).toStringAsFixed(2)}萬";
-    } else {
-       formatted = "\$${absDiff.toStringAsFixed(0)}";
-    }
-
-    // Logic:
-    // If it's Long Volume: Increase (+, Green), Decrease (-, Red) -> Normal
-    // If it's Short Volume: Increase (+, Red for bearish pressure), Decrease (-, Green for relief)
-    // -> But user wants "加倉做空" (Increase Short) -> highlight RED
-    // -> "減倉" (Decrease Short) -> highlight GREEN/NEUTRAL
-
-    // Actually, user said: "空頭趨勢" -> "加倉做空" (Short Increase) -> He follows.
-    // So visual indicator:
-    // + Short (Red Text = Danger/Bearish Action)
-    // - Short (Green Text = Bullish Action)
-
-    // Standard Delta display:
-    String sign = diff > 0 ? "+" : "-";
-    return "$sign$formatted";
+    String formatted = absDiff >= 1e8 ? "${(absDiff / 1e8).toStringAsFixed(2)}億" : "${(absDiff / 1e4).toStringAsFixed(0)}萬";
+    return (diff > 0 ? "+" : "-") + "\$" + formatted;
   }
 }
