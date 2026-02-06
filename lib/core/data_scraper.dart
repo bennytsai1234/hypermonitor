@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -100,29 +101,60 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       (function() {
         try {
           const rows = document.querySelectorAll('tr');
-          let found = false;
           for (const row of rows) {
+            // Find the specific row for 'Super Money Printer'
             if (row.innerText.includes('超级印钞机') || row.innerText.includes('Super Money Printer')) {
                const cells = row.querySelectorAll('td');
                // Defensive check
-               if (cells.length < 6) return JSON.stringify({error: "Found row but cells < 6"});
+               if (cells.length < 5) return JSON.stringify({error: "Found row but not enough cells"});
 
-               // Observed Layout matching fixes
+               // 1. Get Wallet Count (Index 2 usually)
+               let wallet = cells[2] ? cells[2].innerText.trim() : "0";
 
+               // 2. Get Sentiment (Always the last cell in the row)
                let sentiment = "Unknown";
                if (cells.length > 0) {
                  sentiment = cells[cells.length - 1].innerText.trim();
+                 // If sentiment is empty, maybe try the second to last if there's a hidden action col
+                 if (!sentiment && cells.length > 1) {
+                    sentiment = cells[cells.length - 2].innerText.trim();
+                 }
+               }
+
+               // 3. Smart Column Detection for Volumes
+               // Desktop View (Wide): Long=4, Short=5, Net=6
+               // Mobile View (Narrow): Long/Short combined in 4, Net in 5
+
+               let longVol = "0";
+               let shortVol = "0";
+               let netVol = "0";
+
+               const rawLong = cells[4] ? cells[4].innerText.trim() : "";
+
+               // Check if Long col contains a newline (Mobile Merged View)
+               if (rawLong.includes('\\n')) {
+                  const parts = rawLong.split('\\n');
+                  longVol = parts[0];
+                  shortVol = parts.length > 1 ? parts[1] : "0";
+                  // In mobile view, Net is usually next (Index 5)
+                  netVol = cells[5] ? cells[5].innerText.trim() : "0";
+               } else {
+                  // Desktop Separate View
+                  longVol = rawLong;
+                  shortVol = cells[5] ? cells[5].innerText.trim() : "0";
+                  netVol = cells[6] ? cells[6].innerText.trim() : "0";
                }
 
                return JSON.stringify({
-                 walletCount: cells[2].innerText.trim(),
-                 longShortVol: cells[4].innerText.trim(),
-                 netVol: cells[5].innerText.trim(),
+                 walletCount: wallet,
+                 longVol: longVol,
+                 shortVol: shortVol,
+                 netVol: netVol,
                  sentiment: sentiment
                });
             }
           }
-          return JSON.stringify({debug: "Row not found", title: document.title, rowCount: rows.length});
+          return null; // Return null if row not found yet (still loading)
         } catch (e) {
           return JSON.stringify({error: e.toString()});
         }
@@ -136,17 +168,36 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       } else {
         final mobileResult = await _mobileController?.runJavaScriptReturningResult(jsScript);
         result = mobileResult.toString();
-        // clean up quotes from mobile result
         if (result != null && (result.startsWith('"') || result.startsWith("'"))) {
            result = result.substring(1, result.length - 1);
-           // Mobile sometimes returns JSON escaped doubly
            result = result.replaceAll(r'\"', '"');
         }
       }
 
+      // Write to file for full analysis
+      final file = File('scrape_dump.json');
+      // Unescape json if it was double stringified
+      String content = result ?? "{}";
+      try {
+        // Simple unescape if needed, but writing raw is safer to see what we got
+        final decoded = jsonDecode(content); // Need dart:convert
+        content = const JsonEncoder.withIndent('  ').convert(decoded);
+      } catch (e) {
+        // ignore
+      }
+
+      await file.writeAsString(content);
+      print("DUMP SAVED TO ${file.absolute.path}");
+
+      // PRINT RAW DATA FOR ANALYSIS
+      print("--------------------------------------------------");
+      print("FULL PAGE DATA DUMP:");
+      print(result);
+      print("--------------------------------------------------");
+
       print("Scrape Result: $result");
 
-      if (result != null && result != 'null' && !result.contains('Error:')) {
+      if (result != null && result != 'null' && !result.contains('error')) {
          _parseAndNotify(result);
       }
     } catch (e) {
