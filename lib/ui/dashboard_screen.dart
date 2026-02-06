@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/data_model.dart';
 import '../core/data_scraper.dart';
 
@@ -15,31 +17,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
   HyperData? _currentData;
   HyperData? _previousData;
   DateTime? _lastUpdate;
-  bool _scraperReady = false; // Delay scraper to allow smooth loading animation
+  bool _scraperReady = false;
 
-  // History for charts
   final List<HyperData> _history = [];
-  final int _maxHistoryPoints = 300; // Keep last ~50 minutes (10s interval)
+  final int _maxHistoryPoints = 360; // 60 minutes (10s interval)
 
   @override
   void initState() {
     super.initState();
-    // Delay scraper initialization to allow loading animation to run smoothly
+    _loadHistory();
     Future.delayed(const Duration(milliseconds: 300), () {
-      if (mounted) {
+      if (mounted) setState(() => _scraperReady = true);
+    });
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString('scrape_history');
+      if (data != null) {
+        final List<dynamic> list = jsonDecode(data);
         setState(() {
-          _scraperReady = true;
+          _history.clear();
+          _history.addAll(list.map((e) => HyperData.fromJson(e)));
+          if (_history.isNotEmpty) _currentData = _history.last;
         });
       }
-    });
+    } catch (e) { }
+  }
+
+  Future<void> _saveHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = jsonEncode(_history.map((e) => e.toJson()).toList());
+      await prefs.setString('scrape_history', data);
+    } catch (e) { }
   }
 
   void _handleNewData(HyperData newData) {
     if (_currentData != null) {
       if (_currentData!.walletCount != newData.walletCount ||
-          _currentData!.netVolDisplay != newData.netVolDisplay ||
-          _currentData!.longVolDisplay != newData.longVolDisplay ||
-          _currentData!.shortVolDisplay != newData.shortVolDisplay) {
+          _currentData!.netVolDisplay != newData.netVolDisplay) {
         _previousData = _currentData;
       }
     }
@@ -47,13 +65,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       _currentData = newData;
       _lastUpdate = DateTime.now();
-
-      // Add to history
       _history.add(newData);
-      if (_history.length > _maxHistoryPoints) {
-        _history.removeAt(0);
-      }
+      if (_history.length > _maxHistoryPoints) _history.removeAt(0);
     });
+    _saveHistory();
   }
 
   @override

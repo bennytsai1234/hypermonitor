@@ -16,32 +16,42 @@ class CoinPosition {
     required this.shortDisplay,
     required this.totalDisplay,
   });
+
+  Map<String, dynamic> toJson() => {
+    'symbol': symbol,
+    'longVol': longVol,
+    'shortVol': shortVol,
+    'totalVol': totalVol,
+    'longDisplay': longDisplay,
+    'shortDisplay': shortDisplay,
+    'totalDisplay': totalDisplay,
+  };
+
+  factory CoinPosition.fromJson(Map<String, dynamic> j) => CoinPosition(
+    symbol: j['symbol'],
+    longVol: (j['longVol'] as num).toDouble(),
+    shortVol: (j['shortVol'] as num).toDouble(),
+    totalVol: (j['totalVol'] as num).toDouble(),
+    longDisplay: j['longDisplay'],
+    shortDisplay: j['shortDisplay'],
+    totalDisplay: j['totalDisplay'],
+  );
 }
 
 class HyperData {
   final DateTime timestamp;
   final int walletCount;
-
-  // People counts
-  final int openPositionCount;  // 開倉人數
-  final String openPositionPct; // 開倉百分比 (50.87%)
-  final int profitCount;        // 賺錢人數
-  final int lossCount;          // 虧錢人數
-
-  // Volume displays
+  final int openPositionCount;
+  final String openPositionPct;
+  final int profitCount;
+  final int lossCount;
   final String longVolDisplay;
   final String shortVolDisplay;
   final String netVolDisplay;
-
-  // Sentiment (e.g. "看跌", "看涨")
   final String sentiment;
-
-  // Numeric values for calculation
   final double longVolNum;
   final double shortVolNum;
   final double netVolNum;
-
-  // Main Coins Data
   final CoinPosition? btc;
   final CoinPosition? eth;
 
@@ -62,6 +72,42 @@ class HyperData {
     this.btc,
     this.eth,
   });
+
+  Map<String, dynamic> toJson() => {
+    'timestamp': timestamp.toIso8601String(),
+    'walletCount': walletCount,
+    'openPositionCount': openPositionCount,
+    'openPositionPct': openPositionPct,
+    'profitCount': profitCount,
+    'lossCount': lossCount,
+    'longVolDisplay': longVolDisplay,
+    'shortVolDisplay': shortVolDisplay,
+    'netVolDisplay': netVolDisplay,
+    'sentiment': sentiment,
+    'longVolNum': longVolNum,
+    'shortVolNum': shortVolNum,
+    'netVolNum': netVolNum,
+    'btc': btc?.toJson(),
+    'eth': eth?.toJson(),
+  };
+
+  factory HyperData.fromJson(Map<String, dynamic> j) => HyperData(
+    timestamp: DateTime.parse(j['timestamp']),
+    walletCount: j['walletCount'],
+    openPositionCount: j['openPositionCount'],
+    openPositionPct: j['openPositionPct'],
+    profitCount: j['profitCount'],
+    lossCount: j['lossCount'],
+    longVolDisplay: j['longVolDisplay'],
+    shortVolDisplay: j['shortVolDisplay'],
+    netVolDisplay: j['netVolDisplay'],
+    sentiment: j['sentiment'],
+    longVolNum: (j['longVolNum'] as num).toDouble(),
+    shortVolNum: (j['shortVolNum'] as num).toDouble(),
+    netVolNum: (j['netVolNum'] as num).toDouble(),
+    btc: j['btc'] != null ? CoinPosition.fromJson(j['btc']) : null,
+    eth: j['eth'] != null ? CoinPosition.fromJson(j['eth']) : null,
+  );
 
   @override
   String toString() {
