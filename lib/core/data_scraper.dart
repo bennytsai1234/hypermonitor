@@ -78,8 +78,8 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
     _scrape();
     _scrapeTimer?.cancel();
 
-    // Poll every 3 seconds for fast updates
-    _scrapeTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+    // Poll every 10 seconds per user request
+    _scrapeTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       // Reload logic
       if (defaultTargetPlatform == TargetPlatform.windows) {
         // Windows needs explicit reload to refresh data on SPA
