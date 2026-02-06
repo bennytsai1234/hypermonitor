@@ -46,7 +46,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  // ... (load/save history remains same)
+  Future<void> _loadHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString('scrape_history');
+      if (data != null) {
+        final List<dynamic> list = jsonDecode(data);
+        setState(() {
+          _history.clear();
+          _history.addAll(list.map((e) => HyperData.fromJson(e)));
+          if (_history.isNotEmpty) _currentData = _history.last;
+        });
+      }
+    } catch (_) { }
+  }
+
+  Future<void> _saveHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = jsonEncode(_history.map((e) => e.toJson()).toList());
+      await prefs.setString('scrape_history', data);
+    } catch (_) { }
+  }
 
   void _handleNewData(HyperData newData) {
     if (_currentData != null) {
@@ -54,37 +75,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final bool isBearish = newData.sentiment.contains("跌");
 
       // 1. Printer Deltas
-      if (old.longVolNum != newData.longVolNum) 
+      if (old.longVolNum != newData.longVolNum) {
         _lastPrinterLongDelta = _calculateVolumeDelta(old.longVolNum, newData.longVolNum);
-      if (old.shortVolNum != newData.shortVolNum)
+      }
+      if (old.shortVolNum != newData.shortVolNum) {
         _lastPrinterShortDelta = _calculateVolumeDelta(old.shortVolNum, newData.shortVolNum);
+      }
       
       final double oldPNet = isBearish ? (old.shortVolNum - old.longVolNum) : (old.longVolNum - old.shortVolNum);
       final double newPNet = isBearish ? (newData.shortVolNum - newData.longVolNum) : (newData.longVolNum - newData.shortVolNum);
-      if (oldPNet != newPNet)
+      if (oldPNet != newPNet) {
         _lastPrinterNetDelta = _calculateVolumeDelta(oldPNet, newPNet, isShortDelta: isBearish);
+      }
 
       // 2. BTC Deltas
-      if ((old.btc?.longVol ?? 0) != (newData.btc?.longVol ?? 0))
+      if ((old.btc?.longVol ?? 0) != (newData.btc?.longVol ?? 0)) {
         _lastBtcLongDelta = _calculateVolumeDelta(old.btc?.longVol, newData.btc?.longVol ?? 0);
-      if ((old.btc?.shortVol ?? 0) != (newData.btc?.shortVol ?? 0))
+      }
+      if ((old.btc?.shortVol ?? 0) != (newData.btc?.shortVol ?? 0)) {
         _lastBtcShortDelta = _calculateVolumeDelta(old.btc?.shortVol, newData.btc?.shortVol ?? 0);
+      }
       
       final double oldBNet = isBearish ? ((old.btc?.shortVol ?? 0) - (old.btc?.longVol ?? 0)) : ((old.btc?.longVol ?? 0) - (old.btc?.shortVol ?? 0));
       final double newBNet = isBearish ? ((newData.btc?.shortVol ?? 0) - (newData.btc?.longVol ?? 0)) : ((newData.btc?.longVol ?? 0) - (newData.btc?.shortVol ?? 0));
-      if (oldBNet != newBNet)
+      if (oldBNet != newBNet) {
         _lastBtcNetDelta = _calculateVolumeDelta(oldBNet, newBNet, isShortDelta: isBearish);
+      }
 
       // 3. ETH Deltas
-      if ((old.eth?.longVol ?? 0) != (newData.eth?.longVol ?? 0))
+      if ((old.eth?.longVol ?? 0) != (newData.eth?.longVol ?? 0)) {
         _lastEthLongDelta = _calculateVolumeDelta(old.eth?.longVol, newData.eth?.longVol ?? 0);
-      if ((old.eth?.shortVol ?? 0) != (newData.eth?.shortVol ?? 0))
+      }
+      if ((old.eth?.shortVol ?? 0) != (newData.eth?.shortVol ?? 0)) {
         _lastEthShortDelta = _calculateVolumeDelta(old.eth?.shortVol, newData.eth?.shortVol ?? 0);
+      }
       
       final double oldENet = isBearish ? ((old.eth?.shortVol ?? 0) - (old.eth?.longVol ?? 0)) : ((old.eth?.longVol ?? 0) - (old.eth?.shortVol ?? 0));
       final double newENet = isBearish ? ((newData.eth?.shortVol ?? 0) - (newData.eth?.longVol ?? 0)) : ((newData.eth?.longVol ?? 0) - (newData.eth?.shortVol ?? 0));
-      if (oldENet != newENet)
+      if (oldENet != newENet) {
         _lastEthNetDelta = _calculateVolumeDelta(oldENet, newENet, isShortDelta: isBearish);
+      }
     }
 
     setState(() {
