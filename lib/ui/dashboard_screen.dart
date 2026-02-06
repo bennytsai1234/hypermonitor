@@ -238,11 +238,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(height: 12),
                       ],
 
-                      // ROW 4: CHART (STRETCHED)
+                      // ROW 4: TRIPLE CHARTS (Overall, BTC, ETH)
                       Expanded(
-                        child: _buildChartCard(
-                          "持倉增量趨勢 (總市場/BTC/ETH)",
-                          _history,
+                        child: Column(
+                          children: [
+                            Expanded(child: _buildChartCard("總體持倉趨勢", _getRecentHistory(), isPrinter: true)),
+                            const SizedBox(height: 8),
+                            Expanded(child: _buildChartCard("BTC 持倉趨勢", _getRecentHistory(), isBTC: true)),
+                            const SizedBox(height: 8),
+                            Expanded(child: _buildChartCard("ETH 持倉趨勢", _getRecentHistory(), isETH: true)),
+                          ],
                         ),
                       ),
                     ],
@@ -252,6 +257,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  List<HyperData> _getRecentHistory() {
+    // 10 mins = 600s. At 15s interval, that's 40 points.
+    if (_history.length <= 40) return _history;
+    return _history.sublist(_history.length - 40);
   }
 
   Widget _buildCoinRatioBar({
