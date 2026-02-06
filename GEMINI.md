@@ -82,3 +82,12 @@ Agent 注意：在執行任何指令前，請先讀取並適配以下專案特�
   - 若修改導致環境報錯且無法在一輪內修復，應主動回滾 (`git revert` 或 `git checkout`)，不要留下壞掉的代碼庫。
 
 ---
+
+## 🐞 Debug Log (2025-02-06)
+- **Issue**: Scraper was returning `null`, then fixed syntax but scraping failed silently.
+- **Action**: Improved `data_scraper.dart` with debug logging (sample rows) and replaced RegEx JSON parsing with `jsonDecode` for robustness.
+- **Result**:
+  ```json
+  Scrape Result: {"found":true,"walletCount":"578","longVol":"$5.7..." ...}
+  ```
+  (Complete payload verified in terminal)
