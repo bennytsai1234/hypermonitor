@@ -205,7 +205,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   // ROW 3: PROFIT/LOSS & STATUS
                   Row(
                     children: [
-                      Expanded(child: TugOfWarBar(label: isBearish ? "空軍盈利中" : "多頭盈利中", leftVal: _currentData!.profitCount.toDouble(), rightVal: _currentData!.lossCount.toDouble(), leftColor: textGreen, rightColor: textRed, leftLabel: "賺錢", rightLabel: "虧錢", cardBg: cardBg)),
+                      Expanded(child: TugOfWarBar(label: "總體盈利分布", leftVal: _currentData!.profitCount.toDouble(), rightVal: _currentData!.lossCount.toDouble(), leftColor: textGreen, rightColor: textRed, leftLabel: "賺錢", rightLabel: "虧錢", cardBg: cardBg)),
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
