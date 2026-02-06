@@ -444,68 +444,156 @@ class _DashboardScreenState extends State<DashboardScreen> {
      );
   }
 
-  Widget _buildChartCard(String title, List<double> dataPoints, Color lineColor) {
-     if (dataPoints.isEmpty) return const SizedBox.shrink();
+  Widget _buildChartCard(String title, List<HyperData> history, Color lineColor) {
+    if (history.length < 2) return const SizedBox.shrink();
 
-     double minVal = dataPoints.reduce((curr, next) => curr < next ? curr : next);
-     double maxVal = dataPoints.reduce((curr, next) => curr > next ? curr : next);
+    final bool isBearish = _currentData?.sentiment.contains("跌") ?? false;
+    final dataPoints = isBearish 
+        ? history.map((e) => e.shortVolNum).toList() 
+        : history.map((e) => e.longVolNum).toList();
 
-     // Add output padding
-     final double padding = (maxVal - minVal) * 0.1;
-     double chartMin, chartMax;
+    double minVal = dataPoints.reduce((curr, next) => curr < next ? curr : next);
+    double maxVal = dataPoints.reduce((curr, next) => curr > next ? curr : next);
 
-     if (padding == 0) { // Flat line
-         chartMin = minVal - 1000;
-         chartMax = maxVal + 1000;
-     } else {
-         chartMin = minVal - padding;
-         chartMax = maxVal + padding;
-     }
+    // Add padding to chart
+    final double padding = (maxVal - minVal) * 0.15;
+    double chartMin, chartMax;
 
-     return Container(
-       height: 150,
-       padding: const EdgeInsets.all(16),
-       decoration: BoxDecoration(
-         color: const Color(0xFF16171B).withOpacity(0.95), // Consistent opactiy
-         borderRadius: BorderRadius.circular(20),
-         border: Border.all(color: Colors.white10),
-       ),
-       child: Column(
-         crossAxisAlignment: CrossAxisAlignment.start,
-         children: [
-           Text(title, style: TextStyle(color: lineColor, fontWeight: FontWeight.bold, fontSize: 14)),
-           const SizedBox(height: 10),
-           Expanded(
-             child: LineChart(
-               LineChartData(
-                 gridData: FlGridData(show: false),
-                 titlesData: FlTitlesData(show: false),
-                 borderData: FlBorderData(show: false),
-                 lineTouchData: LineTouchData(enabled: false), // Disable touch for performance
-                 minY: chartMin,
-                 maxY: chartMax,
-                 lineBarsData: [
-                   LineChartBarData(
-                     spots: dataPoints.asMap().entries.map((e) {
-                       return FlSpot(e.key.toDouble(), e.value);
-                     }).toList(),
-                     isCurved: true,
-                     color: lineColor,
-                     barWidth: 2,
-                     isStrokeCapRound: true,
-                     dotData: FlDotData(show: false),
-                     belowBarData: BarAreaData(
-                       show: true,
-                       color: lineColor.withOpacity(0.1),
-                     ),
-                   ),
-                 ],
-               ),
-             ),
-           ),
-         ],
-       ),
-     );
+    if (padding == 0) {
+      chartMin = minVal - 1000;
+      chartMax = maxVal + 1000;
+    } else {
+      chartMin = minVal - padding;
+      chartMax = maxVal + padding;
+    }
+
+    return Container(
+      height: 220, // Increased height for titles
+      padding: const EdgeInsets.fromLTRB(12, 16, 20, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16171B).withOpacity(0.95),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(title, style: TextStyle(color: lineColor, fontWeight: FontWeight.bold, fontSize: 16)),
+              if (history.length > 5)
+                Text(
+                  "近${(history.length * 10 / 60).toStringAsFixed(1)}分鐘趨勢",
+                  style: const TextStyle(color: Colors.white30, fontSize: 12),
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  getDrawingHorizontalLine: (value) => FlLine(
+                    color: Colors.white.withOpacity(0.05),
+                    strokeWidth: 1,
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 30,
+                      interval: (history.length / 4).clamp(1.0, 100.0),
+                      getTitlesWidget: (value, meta) {
+                        int index = value.toInt();
+                        if (index < 0 || index >= history.length) return const SizedBox.shrink();
+                        // Only show specific intervals to avoid crowding
+                        if (index % (history.length ~/ 4 + 1) != 0 && index != history.length - 1) {
+                           return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            DateFormat('HH:mm').format(history[index].timestamp),
+                            style: const TextStyle(color: Colors.white30, fontSize: 10),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 45,
+                      getTitlesWidget: (value, meta) {
+                        String text = "";
+                        if (value >= 100000000) {
+                          text = "${(value / 100000000).toStringAsFixed(1)}B";
+                        } else if (value >= 10000) {
+                          text = "${(value / 10000).toStringAsFixed(0)}W";
+                        } else {
+                          text = value.toStringAsFixed(0);
+                        }
+                        return Text(text, style: const TextStyle(color: Colors.white30, fontSize: 10));
+                      },
+                    ),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                lineTouchData: LineTouchData(
+                  enabled: true,
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipColor: (spot) => const Color(0xFF2E2F33),
+                    getTooltipItems: (List<LineBarSpot> touchedSpots) {
+                      return touchedSpots.map((spot) {
+                        final data = history[spot.x.toInt()];
+                        String vol = isBearish ? data.shortVolDisplay : data.longVolDisplay;
+                        return LineTooltipItem(
+                          "${DateFormat('HH:mm:ss').format(data.timestamp)}\n$vol",
+                          const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        );
+                      }).toList();
+                    },
+                  ),
+                ),
+                minY: chartMin,
+                maxY: chartMax,
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: dataPoints.asMap().entries.map((e) {
+                      return FlSpot(e.key.toDouble(), e.value);
+                    }).toList(),
+                    isCurved: true,
+                    curveSmoothness: 0.3,
+                    color: lineColor,
+                    barWidth: 3,
+                    isStrokeCapRound: true,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          lineColor.withOpacity(0.2),
+                          lineColor.withOpacity(0.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String? _calculateIntDelta(int? prev, int curr) {
