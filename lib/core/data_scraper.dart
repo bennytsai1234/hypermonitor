@@ -102,47 +102,36 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         try {
           const rows = document.querySelectorAll('tr');
           for (const row of rows) {
-            // Find the specific row for 'Super Money Printer'
+            // Find the Super Money Printer row
             if (row.innerText.includes('超级印钞机') || row.innerText.includes('Super Money Printer')) {
                const cells = row.querySelectorAll('td');
-               // Defensive check
-               if (cells.length < 5) return JSON.stringify({error: "Found row but not enough cells"});
+               // Defensive check based on log findings (approx 9-11 cells)
+               if (cells.length < 5) return JSON.stringify({error: "Found row but cells < 5"});
 
-               // 1. Get Wallet Count (Index 2 usually)
-               let wallet = cells[2] ? cells[2].innerText.trim() : "0";
+               // 1. Wallet Count (Index 2)
+               let wallet = cells[2].innerText.trim();
 
-               // 2. Get Sentiment (Always the last cell in the row)
-               let sentiment = "Unknown";
-               if (cells.length > 0) {
-                 sentiment = cells[cells.length - 1].innerText.trim();
-                 // If sentiment is empty, maybe try the second to last if there's a hidden action col
-                 if (!sentiment && cells.length > 1) {
-                    sentiment = cells[cells.length - 2].innerText.trim();
-                 }
-               }
-
-               // 3. Smart Column Detection for Volumes
-               // Desktop View (Wide): Long=4, Short=5, Net=6
-               // Mobile View (Narrow): Long/Short combined in 4, Net in 5
-
+               // 2. Long & Short Volume (Index 4 - Merged with newline)
+               // Log confirmed: "\$5.65亿\\n\$14.43亿"
                let longVol = "0";
                let shortVol = "0";
-               let netVol = "0";
 
-               const rawLong = cells[4] ? cells[4].innerText.trim() : "";
+               const volCell = cells[4].innerText.trim();
+               const volParts = volCell.split('\\n');
+               if (volParts.length > 0) longVol = volParts[0].trim();
+               if (volParts.length > 1) shortVol = volParts[1].trim();
 
-               // Check if Long col contains a newline (Mobile Merged View)
-               if (rawLong.includes('\\n')) {
-                  const parts = rawLong.split('\\n');
-                  longVol = parts[0];
-                  shortVol = parts.length > 1 ? parts[1] : "0";
-                  // In mobile view, Net is usually next (Index 5)
-                  netVol = cells[5] ? cells[5].innerText.trim() : "0";
-               } else {
-                  // Desktop Separate View
-                  longVol = rawLong;
-                  shortVol = cells[5] ? cells[5].innerText.trim() : "0";
-                  netVol = cells[6] ? cells[6].innerText.trim() : "0";
+               // 3. Net Volume (Index 5)
+               let netVol = cells[5].innerText.trim();
+
+               // 4. Sentiment (Usually 2nd to last, or find by text content if available)
+               // Log showed: ..., "223\n70", "看跌", ""
+               // So it is cells[cells.length - 2]
+               let sentiment = "Unknown";
+               if (cells.length >= 2) {
+                 sentiment = cells[cells.length - 2].innerText.trim();
+                 // If that is empty (e.g. sometimes no empty action col), try last
+                 if (!sentiment) sentiment = cells[cells.length - 1].innerText.trim();
                }
 
                return JSON.stringify({
@@ -154,7 +143,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
                });
             }
           }
-          return null; // Return null if row not found yet (still loading)
+          return null;
         } catch (e) {
           return JSON.stringify({error: e.toString()});
         }
@@ -174,14 +163,6 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         }
       }
 
-      // Write to file for full analysis
-      final file = File('scrape_dump.json');
-      // Unescape json if it was double stringified
-      String content = result ?? "{}";
-      try {
-        // Simple unescape if needed, but writing raw is safer to see what we got
-        final decoded = jsonDecode(content); // Need dart:convert
-        content = const JsonEncoder.withIndent('  ').convert(decoded);
       } catch (e) {
         // ignore
       }
