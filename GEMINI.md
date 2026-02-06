@@ -86,8 +86,7 @@ Agent 注意：在執行任何指令前，請先讀取並適配以下專案特�
 ## 🐞 Debug Log (2025-02-06)
 - **Issue**: Scraper was returning `null`, then fixed syntax but scraping failed silently.
 - **Action**: Improved `data_scraper.dart` with debug logging (sample rows) and replaced RegEx JSON parsing with `jsonDecode` for robustness.
-- **Result**:
-  ```json
-  Scrape Result: {"found":true,"walletCount":"578","longVol":"$5.7..." ...}
-  ```
-  (Complete payload verified in terminal)
+- **Result**: **FIXED**.
+  - Initial scrape may fail (React rendering), but subsequent scrapes (10s interval) successfully find data.
+  - Sample successful payload: `{"found":true,"walletCount":"578","shortVol":"$14.12亿",...}`
+  - JSON parsing is now stable.
