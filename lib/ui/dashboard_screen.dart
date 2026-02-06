@@ -52,6 +52,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final textWhite = Colors.white;
     final textGrey = Colors.white54;
 
+    // Dynamic focus based on sentiment
+    final bool isBearish = _currentData?.sentiment.contains("跌") ?? false;
+
     return Scaffold(
       backgroundColor: bgDark,
       appBar: AppBar(
@@ -62,136 +65,237 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: Stack(
         children: [
-          // Background Scraper
-          // Background Scraper (Visible for Debugging)
+          // Background Scraper (Hidden in production)
           Positioned(
               bottom: 0,
               right: 0,
-              width: 400,
-              height: 300,
+              width: 1,
+              height: 1,
               child: Opacity(
-                opacity: 1.0, // Visible!
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.red, width: 2), // Red border to spot it
-                  ),
-                  child: CoinglassScraper(onDataScraped: _handleNewData),
-                ),
+                opacity: 0.0, // Hidden
+                child: CoinglassScraper(onDataScraped: _handleNewData),
               ),
           ),
 
           // Main Content
           Center(
             child: _currentData == null
-              ? const CircularProgressIndicator(color: Color(0xFF00C087))
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(color: Color(0xFF00C087)),
+                    const SizedBox(height: 20),
+                    Text("正在載入數據...", style: TextStyle(color: textGrey)),
+                  ],
+                )
               : SingleChildScrollView(
                   child: Padding(
-                    padding: const EdgeInsets.all(20.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.start,
                       children: [
-                        _buildHeader(textGreen),
-                        const SizedBox(height: 30),
-
-                        // Super Money Printer Card
-                        Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: cardBg.withOpacity(0.95), // Slightly more opaque
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white10),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
-                              )
-                            ],
-                          ),
-                          child: Column(
-                            children: [
-                               Row(
-                                 mainAxisAlignment: MainAxisAlignment.center,
-                                 children: [
-                                   Text(
-                                    "SUPER MONEY PRINTER",
-                                    style: TextStyle(
-                                      color: textGreen,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 2,
-                                    ),
-                                  ),
-                                 ],
-                               ),
-                               const SizedBox(height: 10),
-                               Row(
-                                 mainAxisAlignment: MainAxisAlignment.center,
-                                 children: [
-                                   Text(
-                                    "超级印钞机",
-                                    style: TextStyle(
-                                      color: textWhite,
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  _buildSentimentBadge(_currentData!.sentiment),
-                                 ],
-                               ),
-                               const SizedBox(height: 30),
-
-                               _buildRowItem("Wallets", "${_currentData!.walletCount}",
-                                 delta: _calculateIntDelta(_previousData?.walletCount, _currentData!.walletCount),
-                                 valueColor: textWhite,
-                               ),
-                               const Divider(height: 30, color: Colors.white10),
-
-                               _buildRowItem("Long Vol (多)", _currentData!.longVolDisplay,
-                                 delta: _calculateVolumeDelta(_previousData?.longVolNum, _currentData!.longVolNum),
-                                 valueColor: textGreen,
-                                 subValue: "多单持仓",
-                               ),
-                               const Divider(height: 30, color: Colors.white10),
-
-                               _buildRowItem("Short Vol (空)", _currentData!.shortVolDisplay,
-                                 delta: _calculateVolumeDelta(_previousData?.shortVolNum, _currentData!.shortVolNum, isShort: true), // Short delta logic
-                                 valueColor: textRed,
-                                 subValue: "空单持仓",
-                                 isHighlighted: true, // Highlight row
-                               ),
-                               const Divider(height: 30, color: Colors.white10),
-
-                               _buildRowItem("Net Vol (净)", _currentData!.netVolDisplay,
-                                 delta: _calculateVolumeDelta(_previousData?.netVolNum, _currentData!.netVolNum),
-                                 valueColor: Colors.blueAccent,
-                                 subValue: "总仓位",
-                               ),
-
-                               const SizedBox(height: 20),
-                               if (_lastUpdate != null)
-                                 Text(
-                                   "Last updated: ${DateFormat('HH:mm:ss').format(_lastUpdate!)}",
-                                   style: TextStyle(color: textGrey, fontSize: 12),
-                                 ),
-                            ],
-                          ),
+                        // Title and Sentiment Badge
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              "超级印钞机",
+                              style: TextStyle(
+                                color: textWhite,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            _buildSentimentBadge(_currentData!.sentiment),
+                          ],
                         ),
+                        const SizedBox(height: 8),
+                        Text(
+                          isBearish ? "趨勢看跌・關注空單" : "趨勢看漲・關注多單",
+                          style: TextStyle(color: textGrey, fontSize: 14),
+                        ),
+                        const SizedBox(height: 24),
 
+                        // PRIMARY FOCUS CARD (Dynamic: Short or Long based on sentiment)
+                        _buildPrimaryCard(
+                          isBearish: isBearish,
+                          primaryLabel: isBearish ? "空單持倉" : "多單持倉",
+                          primaryValue: isBearish ? _currentData!.shortVolDisplay : _currentData!.longVolDisplay,
+                          primaryDelta: isBearish
+                              ? _calculateVolumeDelta(_previousData?.shortVolNum, _currentData!.shortVolNum)
+                              : _calculateVolumeDelta(_previousData?.longVolNum, _currentData!.longVolNum),
+                          accentColor: isBearish ? textRed : textGreen,
+                          cardBg: cardBg,
+                        ),
+                        const SizedBox(height: 16),
+
+                        // SECONDARY INFO ROW
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildInfoCard(
+                                label: isBearish ? "多單持倉" : "空單持倉",
+                                value: isBearish ? _currentData!.longVolDisplay : _currentData!.shortVolDisplay,
+                                delta: isBearish
+                                    ? _calculateVolumeDelta(_previousData?.longVolNum, _currentData!.longVolNum)
+                                    : _calculateVolumeDelta(_previousData?.shortVolNum, _currentData!.shortVolNum),
+                                color: isBearish ? textGreen : textRed,
+                                cardBg: cardBg,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildInfoCard(
+                                label: "錢包數",
+                                value: "${_currentData!.walletCount}",
+                                delta: _calculateIntDelta(_previousData?.walletCount, _currentData!.walletCount),
+                                color: textWhite,
+                                cardBg: cardBg,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // NET VOLUME
+                        _buildInfoCard(
+                          label: "淨持倉",
+                          value: _currentData!.netVolDisplay,
+                          delta: _calculateVolumeDelta(_previousData?.netVolNum, _currentData!.netVolNum),
+                          color: Colors.blueAccent,
+                          cardBg: cardBg,
+                          fullWidth: true,
+                        ),
                         const SizedBox(height: 20),
 
-                        // Charts Section
-                        if (_history.length > 2) ...[
-                          _buildChartCard("Long Trend (多)", _history.map((e) => e.longVolNum).toList(), textGreen),
-                          const SizedBox(height: 15),
-                          _buildChartCard("Short Trend (空)", _history.map((e) => e.shortVolNum).toList(), textRed),
-                        ]
+                        // Last Updated
+                        if (_lastUpdate != null)
+                          Text(
+                            "更新於 ${DateFormat('HH:mm:ss').format(_lastUpdate!)}",
+                            style: TextStyle(color: textGrey, fontSize: 12),
+                          ),
+                        const SizedBox(height: 20),
+
+                        // Chart (Only for the primary focus)
+                        if (_history.length > 2)
+                          _buildChartCard(
+                            isBearish ? "空單趨勢" : "多單趨勢",
+                            isBearish
+                                ? _history.map((e) => e.shortVolNum).toList()
+                                : _history.map((e) => e.longVolNum).toList(),
+                            isBearish ? textRed : textGreen,
+                          ),
                       ],
                     ),
                   ),
                 ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrimaryCard({
+    required bool isBearish,
+    required String primaryLabel,
+    required String primaryValue,
+    String? primaryDelta,
+    required Color accentColor,
+    required Color cardBg,
+  }) {
+    Color deltaColor = Colors.grey;
+    if (primaryDelta != null) {
+      deltaColor = primaryDelta.startsWith('+') ? const Color(0xFF00C087) : const Color(0xFFFF4949);
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accentColor.withOpacity(0.5), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Text(
+            primaryLabel,
+            style: TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            primaryValue,
+            style: TextStyle(
+              color: accentColor,
+              fontSize: 42,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (primaryDelta != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: deltaColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                primaryDelta,
+                style: TextStyle(
+                  color: deltaColor,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard({
+    required String label,
+    required String value,
+    String? delta,
+    required Color color,
+    required Color cardBg,
+    bool fullWidth = false,
+  }) {
+    Color deltaColor = Colors.grey;
+    if (delta != null) {
+      deltaColor = delta.startsWith('+') ? const Color(0xFF00C087) : const Color(0xFFFF4949);
+    }
+
+    return Container(
+      width: fullWidth ? double.infinity : null,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          if (delta != null) ...[
+            const SizedBox(height: 4),
+            Text(delta, style: TextStyle(color: deltaColor, fontSize: 14, fontWeight: FontWeight.bold)),
+          ],
         ],
       ),
     );
