@@ -85,12 +85,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: cardBg.withOpacity(0.8),
+                            color: cardBg.withOpacity(0.95), // Slightly more opaque
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(color: Colors.white10),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black12,
+                                color: Colors.black26,
                                 blurRadius: 20,
                                 offset: const Offset(0, 10),
                               )
@@ -98,58 +98,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                           child: Column(
                             children: [
-                               Text(
-                                "SUPER MONEY PRINTER",
-                                style: TextStyle(
-                                  color: textGreen,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 2,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                "超级印钞机",
-                                style: TextStyle(
-                                  color: textWhite,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 30),
+                               Row(
+                                 mainAxisAlignment: MainAxisAlignment.center,
+                                 children: [
+                                   Text(
+                                    "SUPER MONEY PRINTER",
+                                    style: TextStyle(
+                                      color: textGreen,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 2,
+                                    ),
+                                  ),
+                                 ],
+                               ),
+                               const SizedBox(height: 10),
+                               Row(
+                                 mainAxisAlignment: MainAxisAlignment.center,
+                                 children: [
+                                   Text(
+                                    "超级印钞机",
+                                    style: TextStyle(
+                                      color: textWhite,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  _buildSentimentBadge(_currentData!.sentiment),
+                                 ],
+                               ),
+                               const SizedBox(height: 30),
 
-                              _buildRowItem("Wallets", "${_currentData!.walletCount}",
-                                delta: _calculateIntDelta(_previousData?.walletCount, _currentData!.walletCount),
-                                valueColor: textWhite,
-                              ),
-                              const Divider(height: 30, color: Colors.white10),
+                               _buildRowItem("Wallets", "${_currentData!.walletCount}",
+                                 delta: _calculateIntDelta(_previousData?.walletCount, _currentData!.walletCount),
+                                 valueColor: textWhite,
+                               ),
+                               const Divider(height: 30, color: Colors.white10),
 
-                              _buildRowItem("Long Vol (多)", _currentData!.longVolDisplay,
-                                delta: _calculateVolumeDelta(_previousData?.longVolNum, _currentData!.longVolNum),
-                                valueColor: textGreen,
-                                subValue: "多单持仓",
-                              ),
-                              const Divider(height: 30, color: Colors.white10),
+                               _buildRowItem("Long Vol (多)", _currentData!.longVolDisplay,
+                                 delta: _calculateVolumeDelta(_previousData?.longVolNum, _currentData!.longVolNum),
+                                 valueColor: textGreen,
+                                 subValue: "多单持仓",
+                               ),
+                               const Divider(height: 30, color: Colors.white10),
 
-                              _buildRowItem("Short Vol (空)", _currentData!.shortVolDisplay,
-                                delta: _calculateVolumeDelta(_previousData?.shortVolNum, _currentData!.shortVolNum), // Red for increase in shorts
-                                valueColor: textRed,
-                                subValue: "空单持仓",
-                              ),
-                              const Divider(height: 30, color: Colors.white10),
+                               _buildRowItem("Short Vol (空)", _currentData!.shortVolDisplay,
+                                 delta: _calculateVolumeDelta(_previousData?.shortVolNum, _currentData!.shortVolNum, isShort: true), // Short delta logic
+                                 valueColor: textRed,
+                                 subValue: "空单持仓",
+                                 isHighlighted: true, // Highlight row
+                               ),
+                               const Divider(height: 30, color: Colors.white10),
 
-                              _buildRowItem("Net Vol (净)", _currentData!.netVolDisplay,
-                                delta: _calculateVolumeDelta(_previousData?.netVolNum, _currentData!.netVolNum),
-                                valueColor: Colors.blueAccent,
-                                subValue: "总仓位",
-                              ),
+                               _buildRowItem("Net Vol (净)", _currentData!.netVolDisplay,
+                                 delta: _calculateVolumeDelta(_previousData?.netVolNum, _currentData!.netVolNum),
+                                 valueColor: Colors.blueAccent,
+                                 subValue: "总仓位",
+                               ),
 
-                              const SizedBox(height: 20),
-                              if (_lastUpdate != null)
-                                Text(
-                                  "Last updated: ${DateFormat('HH:mm:ss').format(_lastUpdate!)}",
-                                  style: TextStyle(color: textGrey, fontSize: 12),
-                                ),
+                               const SizedBox(height: 20),
+                               if (_lastUpdate != null)
+                                 Text(
+                                   "Last updated: ${DateFormat('HH:mm:ss').format(_lastUpdate!)}",
+                                   style: TextStyle(color: textGrey, fontSize: 12),
+                                 ),
                             ],
                           ),
                         ),
@@ -178,38 +191,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Icon(Icons.monitor_heart_outlined, size: 50, color: accent),
         const SizedBox(height: 10),
         const Text(
-          "Real-time Tracking",
+          "Smart Money Tracker",
           style: TextStyle(color: Colors.white54, fontSize: 14),
         ),
       ],
     );
   }
 
-  Widget _buildRowItem(String label, String value, {String? delta, Color? valueColor, String? subValue}) {
-     return Row(
-       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-       children: [
-         Column(
-           crossAxisAlignment: CrossAxisAlignment.start,
-           children: [
-             Text(label, style: const TextStyle(color: Colors.white70, fontSize: 16)),
-             if (subValue != null)
-                Text(subValue, style: const TextStyle(color: Colors.white30, fontSize: 12)),
-           ],
-         ),
-         Column(
-           crossAxisAlignment: CrossAxisAlignment.end,
-           children: [
-             Text(value, style: TextStyle(color: valueColor ?? Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-             if (delta != null)
-               Text(delta, style: TextStyle(
-                 color: delta.startsWith('+') ? const Color(0xFF00C087) : const Color(0xFFFF4949),
-                 fontSize: 14,
-                 fontWeight: FontWeight.bold
-               )),
-           ],
-         )
-       ],
+  Widget _buildSentimentBadge(String sentiment) {
+    Color badgeColor = Colors.grey;
+    if (sentiment.contains("跌")) badgeColor = const Color(0xFFFF4949);
+    if (sentiment.contains("涨")) badgeColor = const Color(0xFF00C087);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: badgeColor.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: badgeColor),
+      ),
+      child: Text(
+        sentiment,
+        style: TextStyle(color: badgeColor, fontSize: 12, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildRowItem(String label, String value, {String? delta, Color? valueColor, String? subValue, bool isHighlighted = false}) {
+     Color deltaColor = Colors.grey;
+     if (delta != null) {
+       if (delta.startsWith('+')) deltaColor = const Color(0xFF00C087); // Increase green
+       else deltaColor = const Color(0xFFFF4949); // Decrease red
+     }
+
+     return Container(
+       padding: isHighlighted ? const EdgeInsets.symmetric(vertical: 8, horizontal: 4) : EdgeInsets.zero,
+       decoration: isHighlighted ? BoxDecoration(
+         color: Colors.white.withOpacity(0.05),
+         borderRadius: BorderRadius.circular(8),
+       ) : null,
+       child: Row(
+         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+         children: [
+           Column(
+             crossAxisAlignment: CrossAxisAlignment.start,
+             children: [
+               Text(label, style: const TextStyle(color: Colors.white70, fontSize: 16)),
+               if (subValue != null)
+                  Text(subValue, style: const TextStyle(color: Colors.white30, fontSize: 12)),
+             ],
+           ),
+           Column(
+             crossAxisAlignment: CrossAxisAlignment.end,
+             children: [
+               Text(value, style: TextStyle(color: valueColor ?? Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+               if (delta != null)
+                 Text(delta, style: TextStyle(
+                   color: deltaColor,
+                   fontSize: 14,
+                   fontWeight: FontWeight.bold
+                 )),
+             ],
+           )
+         ],
+       ),
      );
   }
 
@@ -221,19 +266,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
      // Add output padding
      final double padding = (maxVal - minVal) * 0.1;
+     double chartMin, chartMax;
+
      if (padding == 0) { // Flat line
-         minVal -= 1000;
-         maxVal += 1000;
+         chartMin = minVal - 1000;
+         chartMax = maxVal + 1000;
      } else {
-         minVal -= padding;
-         maxVal += padding;
+         chartMin = minVal - padding;
+         chartMax = maxVal + padding;
      }
 
      return Container(
        height: 150,
        padding: const EdgeInsets.all(16),
        decoration: BoxDecoration(
-         color: const Color(0xFF16171B).withOpacity(0.8),
+         color: const Color(0xFF16171B).withOpacity(0.95), // Consistent opactiy
          borderRadius: BorderRadius.circular(20),
          border: Border.all(color: Colors.white10),
        ),
@@ -249,8 +296,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                  titlesData: FlTitlesData(show: false),
                  borderData: FlBorderData(show: false),
                  lineTouchData: LineTouchData(enabled: false), // Disable touch for performance
-                 minY: minVal,
-                 maxY: maxVal,
+                 minY: chartMin,
+                 maxY: chartMax,
                  lineBarsData: [
                    LineChartBarData(
                      spots: dataPoints.asMap().entries.map((e) {
@@ -282,7 +329,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return diff > 0 ? "+$diff" : "$diff";
   }
 
-  String? _calculateVolumeDelta(double? prev, double curr) {
+  String? _calculateVolumeDelta(double? prev, double curr, {bool isShort = false}) {
     if (prev == null) return null;
     final diff = curr - prev;
     if (diff == 0) return null;
@@ -291,13 +338,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double absDiff = diff.abs();
 
     if (absDiff >= 100000000) {
-      formatted = "\$${(diff / 100000000).toStringAsFixed(2)}亿";
+      formatted = "\$${(absDiff / 100000000).toStringAsFixed(2)}亿";
     } else if (absDiff >= 10000) {
-      formatted = "\$${(diff / 10000).toStringAsFixed(2)}万";
+      formatted = "\$${(absDiff / 10000).toStringAsFixed(2)}万";
     } else {
-       formatted = "\$${diff.toStringAsFixed(0)}";
+       formatted = "\$${absDiff.toStringAsFixed(0)}";
     }
 
-    return diff > 0 ? "+$formatted" : formatted;
+    // Logic:
+    // If it's Long Volume: Increase (+, Green), Decrease (-, Red) -> Normal
+    // If it's Short Volume: Increase (+, Red for bearish pressure), Decrease (-, Green for relief)
+    // -> But user wants "加倉做空" (Increase Short) -> highlight RED
+    // -> "減倉" (Decrease Short) -> highlight GREEN/NEUTRAL
+
+    // Actually, user said: "空頭趨勢" -> "加倉做空" (Short Increase) -> He follows.
+    // So visual indicator:
+    // + Short (Red Text = Danger/Bearish Action)
+    // - Short (Green Text = Bullish Action)
+
+    // Standard Delta display:
+    String sign = diff > 0 ? "+" : "-";
+    return "$sign$formatted";
   }
 }
