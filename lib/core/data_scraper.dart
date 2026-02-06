@@ -64,7 +64,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       await ctrl.loadUrl(url);
       onInit(true);
     } catch (e) {
-      print('Error init $url: $e');
+      // Error handled silently
     }
   }
 
@@ -79,14 +79,10 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   Future<void> _scrapeBoth() async {
     // 1. Scrape Printer
     final printerResult = await _executeScrape(_winA, _mobileA, _printerJs);
-    print("--- [DEBUG] 印鈔機原始數據 ---");
-    print(printerResult);
     _parsePrinter(printerResult);
 
     // 2. Scrape Range
     final rangeResult = await _executeScrape(_winB, _mobileB, _rangeJs);
-    print("--- [DEBUG] BTC/ETH 原始數據 ---");
-    print(rangeResult);
     _parseRange(rangeResult);
     
     // 3. Notify UI
@@ -112,7 +108,6 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         return s.replaceAll(r'\"', '"');
       }
     } catch (e) {
-      print("Scrape Error: $e");
       return null;
     }
   }
@@ -206,7 +201,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         btc: _lastHyperData?.btc,
         eth: _lastHyperData?.eth,
       );
-    } catch (e) { print("Printer Parse Error: \$e"); }
+    } catch (e) { }
   }
 
   void _parseRange(String? raw) {
@@ -233,7 +228,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         btc: btc,
         eth: eth,
       );
-    } catch (e) { print("Range Parse Error: \$e"); }
+    } catch (e) { }
   }
 
   CoinPosition _toCoinPos(Map<String, dynamic> d) {
