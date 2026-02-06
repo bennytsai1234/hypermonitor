@@ -19,7 +19,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // History for charts
   final List<HyperData> _history = [];
-  final int _maxHistoryPoints = 100; // Keep last ~8-10 minutes (5s interval)
+  final int _maxHistoryPoints = 300; // Keep last ~50 minutes (10s interval)
 
   @override
   void initState() {
@@ -241,9 +241,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         if (_history.length > 2)
                           _buildChartCard(
                             isBearish ? "空單趨勢" : "多單趨勢",
-                            isBearish
-                                ? _history.map((e) => e.shortVolNum).toList()
-                                : _history.map((e) => e.longVolNum).toList(),
+                            _history,
                             isBearish ? textRed : textGreen,
                           ),
                       ],
