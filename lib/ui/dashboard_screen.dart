@@ -117,7 +117,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Row(
                         children: [
                           const Text(
-                            "超级印钞机",
+                            "超級印鈔機",
                             style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(width: 8),
