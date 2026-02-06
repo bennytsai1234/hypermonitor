@@ -241,9 +241,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       // ROW 4: CHART (STRETCHED)
                       Expanded(
                         child: _buildChartCard(
-                          isBearish ? "空單趨勢" : "多單趨勢",
+                          "持倉增量趨勢 (總市場/BTC/ETH)",
                           _history,
-                          isBearish ? textRed : textGreen,
                         ),
                       ),
                     ],
@@ -568,182 +567,145 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildChartCard(String title, List<HyperData> history, Color lineColor) {
+  Widget _buildChartCard(String title, List<HyperData> history) {
     if (history.length < 2) return const SizedBox.shrink();
 
-    final bool isBearish = _currentData?.sentiment.contains("跌") ?? false;
-    final dataPoints = isBearish 
-        ? history.map((e) => e.shortVolNum).toList() 
-        : history.map((e) => e.longVolNum).toList();
+    final pLong = history.map((e) => e.longVolNum).toList();
+    final pShort = history.map((e) => e.shortVolNum).toList();
+    final bLong = history.map((e) => e.btc?.longVol ?? 0.0).toList();
+    final bShort = history.map((e) => e.btc?.shortVol ?? 0.0).toList();
+    final eLong = history.map((e) => e.eth?.longVol ?? 0.0).toList();
+    final eShort = history.map((e) => e.eth?.shortVol ?? 0.0).toList();
 
-    double minVal = dataPoints.reduce((curr, next) => curr < next ? curr : next);
-    double maxVal = dataPoints.reduce((curr, next) => curr > next ? curr : next);
-
-    // Dynamic padding: If the range is very small, use tighter padding to show movement
-    double range = maxVal - minVal;
-    final double padding = range > 0 ? (range * 0.2) : 1000000; 
+    final all = [...pLong, ...pShort, ...bLong, ...bShort, ...eLong, ...eShort].where((v) => v > 0).toList();
+    if (all.isEmpty) return const Center(child: Text("等待數據中...", style: TextStyle(color: Colors.white24)));
     
-    double chartMin = minVal - padding;
-    double chartMax = maxVal + padding;
+    double minV = all.reduce((c, n) => c < n ? c : n);
+    double maxV = all.reduce((c, n) => c > n ? c : n);
+    double range = maxV - minV;
+    double pad = range > 0 ? (range * 0.15) : 1000000;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(4, 16, 12, 8), // Tighter padding for dashboard
+      padding: const EdgeInsets.fromLTRB(4, 12, 12, 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF16171B).withValues(alpha: 0.95),
+        color: const Color(0xFF16171B),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white10),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(title, style: TextStyle(color: lineColor, fontWeight: FontWeight.bold, fontSize: 14)),
-                Text(
-                  "增量監控中",
-                  style: TextStyle(color: lineColor.withValues(alpha: 0.5), fontSize: 10),
+                Text(title, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    _buildLegend("總", const Color(0xFF00C087)),
+                    _buildLegend("BTC", Colors.orange),
+                    _buildLegend("ETH", Colors.blue),
+                  ],
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Expanded(
             child: LineChart(
               LineChartData(
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  horizontalInterval: range > 0 ? range / 3 : null,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: Colors.white.withValues(alpha: 0.03),
-                    strokeWidth: 1,
-                  ),
+                  horizontalInterval: range > 0 ? range / 4 : null,
+                  getDrawingHorizontalLine: (v) => FlLine(color: Colors.white.withValues(alpha: 0.02), strokeWidth: 1),
                 ),
                 titlesData: FlTitlesData(
-                  show: true,
                   rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 24,
-                      interval: (history.length / 3).clamp(1.0, 500.0),
-                      getTitlesWidget: (value, meta) {
-                        int index = value.toInt();
-                        if (index < 0 || index >= history.length) return const SizedBox.shrink();
-                        return Text(
-                          DateFormat('HH:mm').format(history[index].timestamp),
-                          style: const TextStyle(color: Colors.white24, fontSize: 9),
-                        );
+                      reservedSize: 20,
+                      interval: (history.length / 4).clamp(1.0, 500.0),
+                      getTitlesWidget: (v, m) {
+                        int idx = v.toInt();
+                        if (idx < 0 || idx >= history.length) return const SizedBox.shrink();
+                        return Text(DateFormat('HH:mm').format(history[idx].timestamp), style: const TextStyle(color: Colors.white24, fontSize: 8));
                       },
                     ),
                   ),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 55, // Increased for labels like 14.12B
-                      getTitlesWidget: (value, meta) {
-                        if (value == chartMin || value == chartMax) return const SizedBox.shrink();
-                        String text = "";
-                        if (value >= 100000000 || value <= -100000000) {
-                          text = "${(value / 100000000).toStringAsFixed(2)}B";
-                        } else if (value >= 10000 || value <= -10000) {
-                          text = "${(value / 10000).toStringAsFixed(0)}W";
-                        } else {
-                          text = value.toStringAsFixed(0);
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: Text(text, style: const TextStyle(color: Colors.white24, fontSize: 9), textAlign: TextAlign.right),
-                        );
+                      reservedSize: 45,
+                      getTitlesWidget: (v, m) {
+                        if (v == minV - pad || v == maxV + pad) return const SizedBox.shrink();
+                        String t = v >= 1e8 ? "${(v / 1e8).toStringAsFixed(1)}B" : v >= 1e4 ? "${(v / 1e4).toStringAsFixed(0)}W" : v.toStringAsFixed(0);
+                        return Text(t, style: const TextStyle(color: Colors.white24, fontSize: 8), textAlign: TextAlign.right);
                       },
                     ),
                   ),
                 ),
                 borderData: FlBorderData(show: false),
                 lineTouchData: LineTouchData(
-                  enabled: true,
                   touchTooltipData: LineTouchTooltipData(
-                    getTooltipColor: (spot) => const Color(0xFF2E2F33),
-                    getTooltipItems: (List<LineBarSpot> touchedSpots) {
-                      return touchedSpots.map((spot) {
-                        final index = spot.x.toInt();
-                        final data = history[index];
-                        String vol = isBearish ? data.shortVolDisplay : data.longVolDisplay;
-                        
-                        // Calculate Delta from previous point
-                        String deltaText = "";
-                        if (index > 0) {
-                          final prev = history[index - 1];
-                          final currentVal = isBearish ? data.shortVolNum : data.longVolNum;
-                          final prevVal = isBearish ? prev.shortVolNum : prev.longVolNum;
-                          final diff = currentVal - prevVal;
-                          if (diff != 0) {
-                            String sign = diff > 0 ? "+" : "";
-                            String formattedDiff;
-                            double absDiff = diff.abs();
-                            if (absDiff >= 100000000) formattedDiff = "${(diff / 100000000).toStringAsFixed(2)}亿";
-                            else if (absDiff >= 10000) formattedDiff = "${(diff / 10000).toStringAsFixed(1)}万";
-                            else formattedDiff = diff.toStringAsFixed(0);
-                            deltaText = "\n$sign$formattedDiff";
-                          }
-                        }
-
-                        return LineTooltipItem(
-                          "${DateFormat('HH:mm:ss').format(data.timestamp)}\n$vol$deltaText",
-                          TextStyle(
-                            color: lineColor, 
-                            fontSize: 11, 
-                            fontWeight: FontWeight.bold,
-                          ),
-                        );
-                      }).toList();
+                    getTooltipColor: (s) => const Color(0xFF2E2F33),
+                    getTooltipItems: (spots) {
+                      if (spots.isEmpty) return [];
+                      final data = history[spots.first.x.toInt()];
+                      return [
+                        LineTooltipItem(
+                          "${DateFormat('HH:mm:ss').format(data.timestamp)}\n"
+                          "Printer: L:${data.longVolDisplay} S:${data.shortVolDisplay}\n"
+                          "BTC: L:${data.btc?.longDisplay ?? "-"} S:${data.btc?.shortDisplay ?? "-"}\n"
+                          "ETH: L:${data.eth?.longDisplay ?? "-"} S:${data.eth?.shortDisplay ?? "-"}",
+                          const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        )
+                      ];
                     },
                   ),
                 ),
-                minY: chartMin,
-                maxY: chartMax,
+                minY: minV - pad,
+                maxY: maxV + pad,
                 lineBarsData: [
-                  LineChartBarData(
-                    spots: dataPoints.asMap().entries.map((e) {
-                      return FlSpot(e.key.toDouble(), e.value);
-                    }).toList(),
-                    isCurved: true,
-                    curveSmoothness: 0.2,
-                    color: lineColor,
-                    barWidth: 2,
-                    isStrokeCapRound: true,
-                    // Enable dots for each data point
-                    dotData: FlDotData(
-                      show: true,
-                      getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
-                        radius: 2,
-                        color: lineColor,
-                        strokeWidth: 1,
-                        strokeColor: Colors.black,
-                      ),
-                    ),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          lineColor.withValues(alpha: 0.15),
-                          lineColor.withValues(alpha: 0.0),
-                        ],
-                      ),
-                    ),
-                  ),
+                  _chartLine(pLong, const Color(0xFF00C087), false),
+                  _chartLine(pShort, const Color(0xFFFF4949), false),
+                  _chartLine(bLong, Colors.orange.withValues(alpha: 0.5), true),
+                  _chartLine(bShort, Colors.deepOrange.withValues(alpha: 0.5), true),
+                  _chartLine(eLong, Colors.blue.withValues(alpha: 0.5), true),
+                  _chartLine(eShort, Colors.indigo.withValues(alpha: 0.5), true),
                 ],
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLegend(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 8, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  LineChartBarData _chartLine(List<double> spots, Color color, bool isDashed) {
+    return LineChartBarData(
+      spots: spots.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value)).toList(),
+      isCurved: true,
+      curveSmoothness: 0.1,
+      color: color,
+      barWidth: isDashed ? 1.0 : 2.0,
+      dashArray: isDashed ? [4, 4] : null,
+      dotData: const FlDotData(show: false),
+      belowBarData: BarAreaData(show: false),
     );
   }
 
