@@ -63,9 +63,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: Stack(
         children: [
           // Background Scraper
-          Opacity(
-              opacity: 0.0,
-              child: CoinglassScraper(onDataScraped: _handleNewData),
+          // Background Scraper (Visible for Debugging)
+          Positioned(
+              bottom: 0,
+              right: 0,
+              width: 400,
+              height: 300,
+              child: Opacity(
+                opacity: 1.0, // Visible!
+                child: Container(
+                  border: Border.all(color: Colors.red, width: 2), // Red border to spot it
+                  child: CoinglassScraper(onDataScraped: _handleNewData),
+                ),
+              ),
           ),
 
           // Main Content
