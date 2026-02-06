@@ -46,21 +46,46 @@ class TugOfWarBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)), // Increased from 9
+              Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
               Text(
                 "${(leftPct * 100).toStringAsFixed(1)}% (${_formatValue(leftVal)}) : ${(rightPct * 100).toStringAsFixed(1)}% (${_formatValue(rightVal)})",
-                style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold), // Increased from 8.5
+                style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          // ... bar logic ...
-          const SizedBox(height: 4),
+          const SizedBox(height: 10),
+          // THE ACTUAL BAR (RESTORING THIS)
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: SizedBox(
+                  height: 12,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: (leftPct * 1000).round().clamp(1, 999),
+                        child: Container(color: leftColor.withAlpha(200)),
+                      ),
+                      Expanded(
+                        flex: (rightPct * 1000).round().clamp(1, 999),
+                        child: Container(color: rightColor.withAlpha(200)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Center Divider
+              Container(width: 2, height: 16, color: Colors.white.withAlpha(180)),
+            ],
+          ),
+          const SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("$leftLabel: ${_formatValue(leftVal)}", style: TextStyle(color: leftColor, fontSize: 10, fontWeight: FontWeight.bold)), // Increased from 8
-              Text("$rightLabel: ${_formatValue(rightVal)}", style: TextStyle(color: rightColor, fontSize: 10, fontWeight: FontWeight.bold)), // Increased from 8
+              Text("$leftLabel: ${_formatValue(leftVal)}", style: TextStyle(color: leftColor, fontSize: 10, fontWeight: FontWeight.bold)),
+              Text("$rightLabel: ${_formatValue(rightVal)}", style: TextStyle(color: rightColor, fontSize: 10, fontWeight: FontWeight.bold)),
             ],
           ),
         ],

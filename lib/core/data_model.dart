@@ -3,11 +3,11 @@ class CoinPosition {
   final double longVol;
   final double shortVol;
   final double totalVol;
-  final double netVol; // New: Net Position
+  final double netVol; 
   final String longDisplay;
   final String shortDisplay;
   final String totalDisplay;
-  final String netDisplay; // New: Formatted Net
+  final String netDisplay;
 
   CoinPosition({
     required this.symbol,
@@ -34,14 +34,14 @@ class CoinPosition {
   };
 
   factory CoinPosition.fromJson(Map<String, dynamic> j) => CoinPosition(
-    symbol: j['symbol'],
-    longVol: (j['longVol'] as num).toDouble(),
-    shortVol: (j['shortVol'] as num).toDouble(),
-    totalVol: (j['totalVol'] as num).toDouble(),
-    netVol: (j['netVol'] ?? 0.0 as num).toDouble(),
-    longDisplay: j['longDisplay'],
-    shortDisplay: j['shortDisplay'],
-    totalDisplay: j['totalDisplay'],
+    symbol: j['symbol'] ?? "",
+    longVol: (j['longVol'] ?? 0.0).toDouble(),
+    shortVol: (j['shortVol'] ?? 0.0).toDouble(),
+    totalVol: (j['totalVol'] ?? 0.0).toDouble(),
+    netVol: (j['netVol'] ?? 0.0).toDouble(),
+    longDisplay: j['longDisplay'] ?? "",
+    shortDisplay: j['shortDisplay'] ?? "",
+    totalDisplay: j['totalDisplay'] ?? "",
     netDisplay: j['netDisplay'] ?? "",
   );
 }
@@ -101,24 +101,19 @@ class HyperData {
 
   factory HyperData.fromJson(Map<String, dynamic> j) => HyperData(
     timestamp: DateTime.parse(j['timestamp']),
-    walletCount: j['walletCount'],
-    openPositionCount: j['openPositionCount'],
-    openPositionPct: j['openPositionPct'],
-    profitCount: j['profitCount'],
-    lossCount: j['lossCount'],
-    longVolDisplay: j['longVolDisplay'],
-    shortVolDisplay: j['shortVolDisplay'],
-    netVolDisplay: j['netVolDisplay'],
-    sentiment: j['sentiment'],
-    longVolNum: (j['longVolNum'] as num).toDouble(),
-    shortVolNum: (j['shortVolNum'] as num).toDouble(),
-    netVolNum: (j['netVolNum'] as num).toDouble(),
+    walletCount: j['walletCount'] ?? 0,
+    openPositionCount: j['openPositionCount'] ?? 0,
+    openPositionPct: j['openPositionPct'] ?? "",
+    profitCount: j['profitCount'] ?? 0,
+    lossCount: j['lossCount'] ?? 0,
+    longVolDisplay: j['longVolDisplay'] ?? "",
+    shortVolDisplay: j['shortVolDisplay'] ?? "",
+    netVolDisplay: j['netVolDisplay'] ?? "",
+    sentiment: j['sentiment'] ?? "",
+    longVolNum: (j['longVolNum'] ?? 0.0).toDouble(),
+    shortVolNum: (j['shortVolNum'] ?? 0.0).toDouble(),
+    netVolNum: (j['netVolNum'] ?? 0.0).toDouble(),
     btc: j['btc'] != null ? CoinPosition.fromJson(j['btc']) : null,
     eth: j['eth'] != null ? CoinPosition.fromJson(j['eth']) : null,
   );
-
-  @override
-  String toString() {
-    return 'HyperData(open: $openPositionCount ($openPositionPct), profit: $profitCount, loss: $lossCount, sentiment: $sentiment)';
-  }
 }

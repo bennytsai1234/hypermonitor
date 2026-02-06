@@ -71,7 +71,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   void _startScrapingLoop() {
     _scrapeBoth();
     _scrapeTimer?.cancel();
-    _scrapeTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+    _scrapeTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       _scrapeBoth();
     });
   }
@@ -236,16 +236,16 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
     final s = _parseValue(d['short']);
     final net = l - s;
     final String netStr = (net >= 0 ? "+" : "") + 
-        (net.abs() >= 100000000 ? "${(net / 100000000).toStringAsFixed(2)}億" : "${(net / 10000).toStringAsFixed(0)}萬");
+        (net.abs() >= 1e8 ? "${(net / 1e8).toStringAsFixed(2)}億" : "${(net / 1e4).toStringAsFixed(0)}萬");
 
     return CoinPosition(
-      symbol: d['symbol'],
-      longVol: l,
-      shortVol: s,
+      symbol: d['symbol'], 
+      longVol: l, 
+      shortVol: s, 
       totalVol: _parseValue(d['total']),
       netVol: net,
-      longDisplay: d['long'],
-      shortDisplay: d['short'],
+      longDisplay: d['long'], 
+      shortDisplay: d['short'], 
       totalDisplay: d['total'],
       netDisplay: netStr,
     );
