@@ -102,12 +102,39 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
           const rows = document.querySelectorAll('tr');
           for (const row of rows) {
             if (row.innerText.includes('超级印钞机') || row.innerText.includes('Super Money Printer')) {
-              return row.innerText;
+               const cells = row.querySelectorAll('td');
+               // Defensive check for column count (expecting around 10)
+               if (cells.length < 9) return null;
+
+               // Indexes based on observation:
+               // 0: Range
+               // 1: Class (Super Money Printer)
+               // 2: Wallets
+               // 3: Open Interest
+               // 4: Long
+               // 5: Short
+               // 6: Net (Total?)
+               // 7: Profitable
+               // 8: Loss
+               // 9: Sentiment (Text)
+
+               let sentiment = "Unknown";
+               if (cells.length > 9) {
+                 sentiment = cells[9].innerText.trim();
+               }
+
+               return JSON.stringify({
+                 walletCount: cells[2].innerText.trim(),
+                 longVol: cells[4].innerText.trim(),
+                 shortVol: cells[5].innerText.trim(),
+                 netVol: cells[6].innerText.trim(),
+                 sentiment: sentiment
+               });
             }
           }
           return null;
         } catch (e) {
-          return 'Error: ' + e.toString();
+          return JSON.stringify({error: e.toString()});
         }
       })();
     """;
@@ -122,6 +149,8 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         // clean up quotes from mobile result
         if (result != null && (result.startsWith('"') || result.startsWith("'"))) {
            result = result.substring(1, result.length - 1);
+           // Mobile sometimes returns JSON escaped doubly
+           result = result.replaceAll(r'\"', '"');
         }
       }
 
@@ -135,60 +164,54 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
     }
   }
 
-  void _parseAndNotify(String rawText) {
-    // Raw text comes in as tab or newline separated usually depending on browser innerText implementation
-    // formatting: "$100万 到 ∞\t超级印钞机\t579\t298 (51.47%)\t$5.21亿\t$14.14亿\t$19.36亿..."
-    // We need to be robust. using regex or split.
+  void _parseAndNotify(String rawJson) {
+     try {
+       // Manual simple JSON parsing to avoid heavy imports if possible,
+       // but since we are in Flutter, let's use dart:convert if we imported it?
+       // We didn't import dart:convert. Let's add it or do simple regex.
+       // Actually, adding import 'dart:convert'; is cleaner.
+       // For now, let's assume we can add the import to the top of the file in a separate edit
+       // or just do string manipulation if it's simple.
+       // But wait, I can modify the import in this same file using multi_replace or just assume I will do it.
+       // Let's use regex for safety without changing imports yet, or better,
+       // I'll assume valid JSON structure: {"key":"value", ...}
 
-    // Simple split by newline or tab
-    final parts = rawText.split(RegExp(r'[\t\n]'));
-    // Filter empty
-    final cleaned = parts.where((p) => p.trim().isNotEmpty).toList();
+       // Let's replace the whole file content helper to include dart:convert or just use string split if I want to be lazy.
+       // No, I should be professional. I will include 'dart:convert' in a separate edit or use regex.
+       // Given the constraints, I'll use a regex "parser" for this simple flat object to save an import cycle if I can't edit top.
+       // Structure: {"walletCount":"579","longVol":"$5.32亿",...}
 
-    if (cleaned.length < 6) return;
+       String val(String key) {
+         final match = RegExp('"$key":\\s*"([^"]+)"').firstMatch(rawJson);
+         return match?.group(1) ?? "";
+       }
 
-    // Assuming order: Range, Name, Count, Open%, Long, Short, Net...
-    // Let's look for known patterns.
-    // Count is an integer.
-    // Vols start with $.
+       final wCountStr = val("walletCount");
+       final longStr = val("longVol");
+       final shortStr = val("shortVol");
+       final netStr = val("netVol");
+       final sentimentStr = val("sentiment").replaceAll(r'\n', '').trim(); // Clean up newlines if any
 
-    try {
-      int? count;
-      String long = "0";
-      String short = "0";
-      String net = "0";
+       if (wCountStr.isNotEmpty) {
+           final count = int.tryParse(wCountStr.replaceAll(',', '')) ?? 0;
 
-      for (int i = 0; i < cleaned.length; i++) {
-        final p = cleaned[i].trim();
-        if (p == '超级印钞机') {
-             // Index 2: count
-             // Index 4: Long
-             // Index 5: Short
-             // Index 6: Net
-             if (i+1 < cleaned.length) count = int.tryParse(cleaned[i+1].replaceAll(',', ''));
-             if (i+3 < cleaned.length) long = cleaned[i+3];
-             if (i+4 < cleaned.length) short = cleaned[i+4];
-             if (i+5 < cleaned.length) net = cleaned[i+5];
-             break;
-        }
-      }
+           final data = HyperData(
+              timestamp: DateTime.now(),
+              walletCount: count,
+              longVolDisplay: longStr,
+              shortVolDisplay: shortStr,
+              netVolDisplay: netStr,
+              sentiment: sentimentStr,
+              longVolNum: _parseValue(longStr),
+              shortVolNum: _parseValue(shortStr),
+              netVolNum: _parseValue(netStr),
+           );
+           widget.onDataScraped(data);
+       }
 
-      if (count != null) {
-        final data = HyperData(
-          timestamp: DateTime.now(),
-          walletCount: count,
-          longVolDisplay: long,
-          shortVolDisplay: short,
-          netVolDisplay: net,
-          longVolNum: _parseValue(long),
-          shortVolNum: _parseValue(short),
-          netVolNum: _parseValue(net),
-        );
-        widget.onDataScraped(data);
-      }
-    } catch (e) {
-      print("Parse Error: $e");
-    }
+     } catch (e) {
+       print("JSON Parse Error: $e");
+     }
   }
 
   double _parseValue(String raw) {
