@@ -15,10 +15,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   HyperData? _currentData;
   HyperData? _previousData;
   DateTime? _lastUpdate;
+  bool _scraperReady = false; // Delay scraper to allow smooth loading animation
 
   // History for charts
   final List<HyperData> _history = [];
   final int _maxHistoryPoints = 100; // Keep last ~8-10 minutes (5s interval)
+
+  @override
+  void initState() {
+    super.initState();
+    // Delay scraper initialization to allow loading animation to run smoothly
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          _scraperReady = true;
+        });
+      }
+    });
+  }
 
   void _handleNewData(HyperData newData) {
     if (_currentData != null) {
@@ -65,17 +79,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: Stack(
         children: [
-          // Background Scraper (Hidden in production)
-          Positioned(
-              bottom: 0,
-              right: 0,
-              width: 1,
-              height: 1,
-              child: Opacity(
-                opacity: 0.0, // Hidden
-                child: CoinglassScraper(onDataScraped: _handleNewData),
-              ),
-          ),
+          // Background Scraper (Hidden but isolated for performance)
+          // Delayed initialization to allow loading animation to run smoothly
+          if (_scraperReady)
+            Positioned(
+                bottom: 0,
+                right: 0,
+                width: 1,
+                height: 1,
+                child: RepaintBoundary(
+                  child: Opacity(
+                    opacity: 0.0, // Hidden
+                    child: CoinglassScraper(onDataScraped: _handleNewData),
+                  ),
+                ),
+            ),
 
           // Main Content
           Center(
