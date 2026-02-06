@@ -596,31 +596,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildChartCard(String title, List<HyperData> history, {bool isPrinter = false, bool isBTC = false, bool isETH = false}) {
-    if (history.length < 2) return const Center(child: Text("等待數據中...", style: TextStyle(color: Colors.white24, fontSize: 10)));
+    if (history.length < 2) return const Center(child: Text("等待數據累積...", style: TextStyle(color: Colors.white24, fontSize: 10)));
 
-    final List<double> longSeries;
-    final List<double> shortSeries;
-    final Color longColor = const Color(0xFF00C087);
-    final Color shortColor = const Color(0xFFFF4949);
-
+    final List<double> rawLong;
+    final List<double> rawShort;
+    
     if (isPrinter) {
-      longSeries = history.map((e) => e.longVolNum).toList();
-      shortSeries = history.map((e) => e.shortVolNum).toList();
+      rawLong = history.map((e) => e.longVolNum).toList();
+      rawShort = history.map((e) => e.shortVolNum).toList();
     } else if (isBTC) {
-      longSeries = history.map((e) => e.btc?.longVol ?? 0.0).toList();
-      shortSeries = history.map((e) => e.btc?.shortVol ?? 0.0).toList();
+      rawLong = history.map((e) => e.btc?.longVol ?? 0.0).toList();
+      rawShort = history.map((e) => e.btc?.shortVol ?? 0.0).toList();
     } else {
-      longSeries = history.map((e) => e.eth?.longVol ?? 0.0).toList();
-      shortSeries = history.map((e) => e.eth?.shortVol ?? 0.0).toList();
+      rawLong = history.map((e) => e.eth?.longVol ?? 0.0).toList();
+      rawShort = history.map((e) => e.eth?.shortVol ?? 0.0).toList();
     }
 
-    final all = [...longSeries, ...shortSeries].where((v) => v > 0).toList();
-    if (all.isEmpty) return const SizedBox.shrink();
-    
+    // Normalization: Subtract the first point's value to start at zero
+    final double baseLong = rawLong.first;
+    final double baseShort = rawShort.first;
+    final List<double> longSeries = rawLong.map((v) => v - baseLong).toList();
+    final List<double> shortSeries = rawShort.map((v) => v - baseShort).toList();
+
+    final all = [...longSeries, ...shortSeries];
     double minV = all.reduce((c, n) => c < n ? c : n);
     double maxV = all.reduce((c, n) => c > n ? c : n);
+    
+    // Ensure symmetric zero or at least include zero
+    if (minV > 0) minV = -1000000;
+    if (maxV < 0) maxV = 1000000;
+    
     double range = maxV - minV;
-    double pad = range > 0 ? (range * 0.1) : 1000000;
+    double pad = range > 0 ? (range * 0.15) : 1000000;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 8, 12, 4),
@@ -636,12 +643,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+                Text(title, style: const TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.bold)),
                 Wrap(
                   spacing: 6,
                   children: [
-                    _buildLegend("多", longColor),
-                    _buildLegend("空", shortColor),
+                    _buildLegend("多", const Color(0xFF00C087)),
+                    _buildLegend("空", const Color(0xFFFF4949)),
                   ],
                 ),
               ],
@@ -654,8 +661,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  horizontalInterval: range > 0 ? range / 3 : null,
-                  getDrawingHorizontalLine: (v) => FlLine(color: Colors.white.withAlpha(5), strokeWidth: 1),
+                  horizontalInterval: range > 0 ? range / 4 : null,
+                  getDrawingHorizontalLine: (v) {
+                    return FlLine(
+                      color: v.abs() < 1.0 ? Colors.white24 : Colors.white.withAlpha(5),
+                      strokeWidth: v.abs() < 1.0 ? 1 : 0.5,
+                    );
+                  },
                 ),
                 titlesData: FlTitlesData(
                   rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -664,10 +676,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 16,
-                      interval: 10, 
+                      interval: (history.length / 4).clamp(1.0, 100.0),
                       getTitlesWidget: (v, m) {
                         int idx = v.toInt();
-                        if (idx < 0 || idx >= history.length || idx % 10 != 0) return const SizedBox.shrink();
+                        if (idx < 0 || idx >= history.length || idx % 20 != 0) return const SizedBox.shrink();
                         return Text(DateFormat('HH:mm').format(history[idx].timestamp), style: const TextStyle(color: Colors.white24, fontSize: 7));
                       },
                     ),
@@ -678,8 +690,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       reservedSize: 40,
                       getTitlesWidget: (v, m) {
                         if (v == minV - pad || v == maxV + pad) return const SizedBox.shrink();
-                        String t = v >= 1e8 ? "${(v / 1e8).toStringAsFixed(1)}B" : v >= 1e4 ? "${(v / 1e4).toStringAsFixed(0)}W" : v.toStringAsFixed(0);
-                        return Text(t, style: const TextStyle(color: Colors.white24, fontSize: 7), textAlign: TextAlign.right);
+                        String sign = v > 0 ? "+" : "";
+                        double absV = v.abs();
+                        String t = absV >= 1e8 ? "$sign${(v / 1e8).toStringAsFixed(1)}B" : absV >= 1e4 ? "$sign${(v / 1e4).toStringAsFixed(0)}W" : v.toStringAsFixed(0);
+                        return Text(t, style: TextStyle(color: v >= 0 ? const Color(0xFF00C087).withAlpha(100) : const Color(0xFFFF4949).withAlpha(100), fontSize: 7), textAlign: TextAlign.right);
                       },
                     ),
                   ),
@@ -693,13 +707,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       final idx = spots.first.x.toInt();
                       final data = history[idx];
                       String l = "", s = "";
-                      if (isPrinter) { l = data.longVolDisplay; s = data.shortVolDisplay; }
-                      else if (isBTC) { l = data.btc?.longDisplay ?? "-"; s = data.btc?.shortDisplay ?? "-"; }
-                      else { l = data.eth?.longDisplay ?? "-"; s = data.eth?.shortDisplay ?? "-"; }
+                      double curL = 0, curS = 0;
+                      if (isPrinter) { 
+                        l = data.longVolDisplay; s = data.shortVolDisplay; 
+                        curL = data.longVolNum - baseLong; curS = data.shortVolNum - baseShort;
+                      } else if (isBTC) { 
+                        l = data.btc?.longDisplay ?? "-"; s = data.btc?.shortDisplay ?? "-"; 
+                        curL = (data.btc?.longVol ?? 0) - baseLong; curS = (data.btc?.shortVol ?? 0) - baseShort;
+                      } else { 
+                        l = data.eth?.longDisplay ?? "-"; s = data.eth?.shortDisplay ?? "-"; 
+                        curL = (data.eth?.longVol ?? 0) - baseLong; curS = (data.eth?.shortVol ?? 0) - baseShort;
+                      }
                       
+                      String fmt(double v) => (v >= 0 ? "+" : "") + (v.abs() >= 1e8 ? "${(v / 1e8).toStringAsFixed(2)}億" : "${(v / 1e4).toStringAsFixed(0)}萬");
+
                       return [
                         LineTooltipItem(
-                          "${DateFormat('HH:mm:ss').format(data.timestamp)}\n多: $l\n空: $s",
+                          "${DateFormat('HH:mm:ss').format(data.timestamp)}\n"
+                          "多: $l (${fmt(curL)})\n"
+                          "空: $s (${fmt(curS)})",
                           const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                         )
                       ];
@@ -709,8 +735,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 minY: minV - pad,
                 maxY: maxV + pad,
                 lineBarsData: [
-                  _chartLine(longSeries, longColor),
-                  _chartLine(shortSeries, shortColor),
+                  _chartLine(longSeries, const Color(0xFF00C087)),
+                  _chartLine(shortSeries, const Color(0xFFFF4949)),
                 ],
               ),
             ),
