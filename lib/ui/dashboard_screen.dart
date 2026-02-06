@@ -58,12 +58,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Coinglass Theme Colors
     final bgDark = const Color(0xFF0D0E12);
     final cardBg = const Color(0xFF16171B);
     final textGreen = const Color(0xFF00C087);
     final textRed = const Color(0xFFFF4949);
-    final textWhite = Colors.white;
     final textGrey = Colors.white54;
 
     // Dynamic focus based on sentiment
@@ -228,14 +226,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-          ),
-        ],
-      ),
-    );
-  }
                     ],
                   ),
                 ),
@@ -617,9 +607,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(title, style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
-                Text(
-                  "10m 增量: ${isPrinter ? history.last.netVolDisplay : (isBTC ? history.last.btc?.totalDisplay ?? "" : history.last.eth?.totalDisplay ?? "")}",
-                  style: const TextStyle(color: Colors.white24, fontSize: 8),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    _buildLegend("多", longColor),
+                    _buildLegend("空", shortColor),
+                  ],
                 ),
               ],
             ),
