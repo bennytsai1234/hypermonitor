@@ -10,6 +10,9 @@ set(BINARY_NAME "hyper_monitor")
 # versions of CMake.
 cmake_policy(VERSION 3.14...3.25)
 
+# Suppress developer warnings from third-party plugins (e.g. webview_windows)
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS 1 CACHE INTERNAL "CV")
+
 # Define build configuration option.
 get_property(IS_MULTICONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(IS_MULTICONFIG)
