@@ -90,6 +90,40 @@ class TrendChart extends StatelessWidget {
           Expanded(
             child: LineChart(
               LineChartData(
+                lineTouchData: LineTouchData(
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipColor: (spot) => const Color(0xFF1A1A1A).withAlpha(230),
+                    getTooltipItems: (touchedSpots) {
+                      return touchedSpots.map((spot) {
+                        final double val = spot.y;
+                        String sign = val >= 0 ? "+" : "-";
+                        double absV = val.abs();
+                        String formatted = absV >= 1e8 
+                          ? "$sign${(absV / 1e8).toStringAsFixed(2)}億" 
+                          : absV >= 1e4 
+                            ? "$sign${(absV / 1e4).toStringAsFixed(0)}萬" 
+                            : "$sign${absV.toStringAsFixed(0)}";
+                        
+                        final time = DateFormat('HH:mm:ss').format(displayHistory[spot.x.toInt()].timestamp);
+                        
+                        return LineTooltipItem(
+                          "$time\n",
+                          const TextStyle(color: Colors.white38, fontSize: 10),
+                          children: [
+                            TextSpan(
+                              text: formatted,
+                              style: TextStyle(
+                                color: val >= 0 ? const Color(0xFF00FF9D) : const Color(0xFFFF2E2E),
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList();
+                    },
+                  ),
+                ),
                 gridData: FlGridData(
                   show: true, 
                   drawVerticalLine: false,

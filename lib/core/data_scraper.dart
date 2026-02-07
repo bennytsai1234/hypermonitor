@@ -90,12 +90,10 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       if (defaultTargetPlatform == TargetPlatform.windows) {
         if (winCtrl == null) return null;
         await winCtrl.reload();
-        await Future.delayed(const Duration(seconds: 5));
         return await winCtrl.executeScript(js);
       } else {
         if (mobCtrl == null) return null;
         await mobCtrl.reload();
-        await Future.delayed(const Duration(seconds: 5));
         final res = await mobCtrl.runJavaScriptReturningResult(js);
         String s = res.toString();
         if (s.startsWith('"') && s.endsWith('"')) s = s.substring(1, s.length - 1);

@@ -40,71 +40,65 @@ class MetricCard extends StatelessWidget {
     }
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: isSmall ? 10 : 14),
+      padding: EdgeInsets.symmetric(horizontal: 14, vertical: isSmall ? 10 : 16),
       decoration: BoxDecoration(
         color: oledBlack,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: useColorBorder ? color.withAlpha(200) : Colors.white.withAlpha(40), // 調亮邊框
-          width: useColorBorder ? 2.0 : 1.0,
+          color: useColorBorder ? color.withAlpha(220) : Colors.white.withAlpha(30),
+          width: useColorBorder ? 1.5 : 1.0,
         ),
         boxShadow: useColorBorder ? [
-          BoxShadow(color: color.withAlpha(30), blurRadius: 10, spreadRadius: 0)
+          BoxShadow(color: color.withAlpha(40), blurRadius: 12, spreadRadius: 0)
         ] : [],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: FittedBox(
-                  alignment: Alignment.centerLeft,
-                  fit: BoxFit.scaleDown,
-                  child: Text(label, 
-                    style: const TextStyle(
-                      color: Colors.white70, // 調亮標籤文字 (原本 white38)
-                      fontSize: 11, 
-                      fontWeight: FontWeight.bold, 
-                      letterSpacing: 0.5
-                    )
-                  ),
-                ),
+              Text(label, 
+                style: const TextStyle(
+                  color: Colors.white60, 
+                  fontSize: 11, 
+                  fontWeight: FontWeight.bold, 
+                  letterSpacing: 0.8
+                )
               ),
               if (delta != null && deltaColor != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: deltaColor.withAlpha(150), width: 0.5),
-                    ),
-                    child: Text(
-                      delta!,
-                      style: TextStyle(
-                        color: deltaColor,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                      ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: deltaColor.withAlpha(20),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: deltaColor.withAlpha(100), width: 0.5),
+                  ),
+                  child: Text(
+                    delta!,
+                    style: TextStyle(
+                      color: deltaColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'monospace',
                     ),
                   ),
                 ),
             ],
           ),
-          SizedBox(height: highlightValue ? 8 : 4),
+          SizedBox(height: highlightValue ? 10 : 4),
           FittedBox(
+            alignment: Alignment.centerLeft,
             fit: BoxFit.scaleDown,
             child: Text(
               value, 
               style: TextStyle(
                 color: color, 
-                fontSize: highlightValue ? 30 : (isSmall ? 16 : 20), 
+                fontSize: highlightValue ? 32 : (isSmall ? 18 : 22), 
                 fontWeight: highlightValue ? FontWeight.w900 : FontWeight.bold, 
                 letterSpacing: -0.5,
-                height: 1.0,
+                height: 1.1,
               )
             ),
           ),

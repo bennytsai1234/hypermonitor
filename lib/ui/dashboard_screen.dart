@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -76,7 +75,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     bool changed = false;
     final bool isBearish = newData.sentiment.contains("跌");
 
-    String? check(double o, double n) => (n - o).abs() > 50000 ? _calculateRawDelta(o, n) : null;
+    String? check(double o, double n) => (n - o) != 0 ? _calculateRawDelta(o, n) : null;
 
     final lDelta = check(old.longVolNum, newData.longVolNum);
     final sDelta = check(old.shortVolNum, newData.shortVolNum);
@@ -117,7 +116,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     bool changed = false;
     final bool isBearish = old.sentiment.contains("跌");
 
-    String? check(double o, double n) => (n - o).abs() > 50000 ? _calculateRawDelta(o, n) : null;
+    String? check(double o, double n) => (n - o) != 0 ? _calculateRawDelta(o, n) : null;
 
     // BTC
     final blD = check(old.btc?.longVol ?? 0, newData.btc?.longVol ?? 0);
