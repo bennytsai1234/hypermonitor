@@ -54,12 +54,15 @@ class TrendChart extends StatelessWidget {
     double minV = netSeries.reduce((c, n) => c < n ? c : n);
     double maxV = netSeries.reduce((c, n) => c > n ? c : n);
 
-    if ((maxV - minV).abs() < 1000000) {
-      minV -= 5000000;
-      maxV += 5000000;
+    // 優化縮放：如果變動極小，給予最小 10 萬的範圍，否則按比例給予 15% 緩衝
+    double range = (maxV - minV).abs();
+    if (range < 100000) {
+      double center = (maxV + minV) / 2;
+      minV = center - 50000;
+      maxV = center + 50000;
+      range = 100000;
     }
-
-    double range = maxV - minV;
+    
     double pad = range * 0.15;
 
     final Color themeColor = isBearish ? const Color(0xFFFF2E2E) : const Color(0xFF00FF9D);

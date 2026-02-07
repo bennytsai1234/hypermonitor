@@ -90,16 +90,27 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       if (defaultTargetPlatform == TargetPlatform.windows) {
         if (winCtrl == null) return null;
         await winCtrl.reload();
-        return await winCtrl.executeScript(js);
+        // 雖然用戶說不需要載入延遲，但網頁加載需要時間。
+        // 我們縮短延遲並加入重試，或者至少給予 2 秒讓 DOM 初始渲染
+        await Future.delayed(const Duration(seconds: 2)); 
+        final result = await winCtrl.executeScript(js);
+        if (kDebugMode && (result == null || result == "null")) {
+          print("DEBUG: Scrape returned null. DOM might not be ready.");
+        }
+        return result;
       } else {
         if (mobCtrl == null) return null;
         await mobCtrl.reload();
+        await Future.delayed(const Duration(seconds: 2));
         final res = await mobCtrl.runJavaScriptReturningResult(js);
         String s = res.toString();
         if (s.startsWith('"') && s.endsWith('"')) s = s.substring(1, s.length - 1);
         return s.replaceAll(r'\"', '"');
       }
-    } catch (e) { return null; }
+    } catch (e) {
+      if (kDebugMode) print("DEBUG: Scrape Error: $e");
+      return null;
+    }
   }
 
   static const _printerJs = r"""

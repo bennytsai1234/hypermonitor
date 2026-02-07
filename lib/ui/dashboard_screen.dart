@@ -306,9 +306,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   );
 
   String _formatVolume(double v) {
-    String s = v >= 0 ? "+" : ""; double a = v.abs();
+    String s = v >= 0 ? "+" : ""; 
+    double a = v.abs();
     if (a >= 1e8) return "$s\$${(v / 1e8).toStringAsFixed(2)}億";
-    if (a >= 1e4) return "$s\$${(v / 1e4).toStringAsFixed(0)}萬";
+    if (a >= 1e4) return "$s\$${(v / 1e4).toStringAsFixed(2)}萬";
     return "$s\$${v.toStringAsFixed(0)}";
   }
 
@@ -316,7 +317,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     if (prev == null) return null;
     double diff = curr - prev; if (diff == 0) return null;
     double absD = diff.abs();
-    String f = absD >= 1e8 ? "${(absD / 1e8).toStringAsFixed(2)}億" : absD >= 1e4 ? "${(absD / 1e4).toStringAsFixed(0)}萬" : absD.toStringAsFixed(0);
+    String f;
+    if (absD >= 1e8) {
+      f = "${(absD / 1e8).toStringAsFixed(2)}億";
+    } else if (absD >= 1e4) {
+      f = "${(absD / 1e4).toStringAsFixed(2)}萬";
+    } else {
+      f = absD.toStringAsFixed(0);
+    }
     return "${diff > 0 ? "+" : "-"}\$$f";
   }
 }
