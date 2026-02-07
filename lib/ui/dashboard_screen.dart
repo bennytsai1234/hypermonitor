@@ -30,7 +30,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   bool _showRainbow = false;
   Timer? _rainbowTimer;
 
-  // Sticky Deltas
+  // 持久化 Delta 緩衝區
   String? _lastBtcLongDelta; String? _lastBtcShortDelta; String? _lastBtcNetDelta;
   String? _lastEthLongDelta; String? _lastEthShortDelta; String? _lastEthNetDelta;
   String? _lastCombinedLongDelta; String? _lastCombinedShortDelta; String? _lastCombinedNetDelta;
@@ -69,7 +69,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     _rainbowTimer = Timer(const Duration(seconds: 3), () => setState(() => _showRainbow = false));
   }
 
-  // --- 數據更新邏輯：全體數據 ---
+  // --- 數據更新：全體印鈔機 ---
   void _onPrinterData(HyperData newData) {
     if (_currentData == null) { setState(() => _currentData = newData); return; }
     final old = _currentData!;
@@ -90,7 +90,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     }
 
     setState(() {
-      // 合併：只更新 Printer 欄位，保留舊的 BTC/ETH
       _currentData = HyperData(
         timestamp: newData.timestamp,
         walletCount: newData.walletCount,
@@ -105,13 +104,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         longVolNum: newData.longVolNum,
         shortVolNum: newData.shortVolNum,
         netVolNum: newData.netVolNum,
-        btc: old.btc, eth: old.eth, // 保留
+        btc: old.btc, eth: old.eth, // 保留舊的詳細數據
       );
       if (changed) { _lastDataChange = DateTime.now(); _triggerRainbow(); }
     });
   }
 
-  // --- 數據更新邏輯：BTC/ETH 數據 ---
+  // --- 數據更新：BTC/ETH 與核心對沖 ---
   void _onRangeData(HyperData newData) {
     if (_currentData == null) { setState(() => _currentData = newData); return; }
     final old = _currentData!;
@@ -120,27 +119,39 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
     String? check(double o, double n) => (n - o).abs() > 50000 ? _calculateRawDelta(o, n) : null;
 
-    // BTC/ETH
+    // BTC
     final blD = check(old.btc?.longVol ?? 0, newData.btc?.longVol ?? 0);
     final bsD = check(old.btc?.shortVol ?? 0, newData.btc?.shortVol ?? 0);
     final double oldBNet = isBearish ? ((old.btc?.shortVol ?? 0) - (old.btc?.longVol ?? 0)) : ((old.btc?.longVol ?? 0) - (old.btc?.shortVol ?? 0));
     final double newBNet = isBearish ? ((newData.btc?.shortVol ?? 0) - (newData.btc?.longVol ?? 0)) : ((newData.btc?.longVol ?? 0) - (newData.btc?.shortVol ?? 0));
     final bnD = check(oldBNet, newBNet);
 
+    // ETH
     final elD = check(old.eth?.longVol ?? 0, newData.eth?.longVol ?? 0);
     final esD = check(old.eth?.shortVol ?? 0, newData.eth?.shortVol ?? 0);
     final double oldENet = isBearish ? ((old.eth?.shortVol ?? 0) - (old.eth?.longVol ?? 0)) : ((old.eth?.longVol ?? 0) - (old.eth?.shortVol ?? 0));
     final double newENet = isBearish ? ((newData.eth?.shortVol ?? 0) - (newData.eth?.longVol ?? 0)) : ((newData.eth?.longVol ?? 0) - (newData.eth?.shortVol ?? 0));
     final enD = check(oldENet, newENet);
 
-    if (blD != null || bsD != null || bnD != null || elD != null || esD != null || enD != null) {
+    // 核心對沖 (BTC+ETH)
+    final double oldCL = (old.btc?.longVol ?? 0) + (old.eth?.longVol ?? 0);
+    final double newCL = (newData.btc?.longVol ?? 0) + (newData.eth?.longVol ?? 0);
+    final clDelta = check(oldCL, newCL);
+    final double oldCS = (old.btc?.shortVol ?? 0) + (old.eth?.shortVol ?? 0);
+    final double newCS = (newData.btc?.shortVol ?? 0) + (newData.eth?.shortVol ?? 0);
+    final csDelta = check(oldCS, newCS);
+    final double oldCNet = isBearish ? (oldCS - oldCL) : (oldCL - oldCS);
+    final double newCNet = isBearish ? (newCS - newCL) : (newCL - newCS);
+    final cnDelta = check(oldCNet, newCNet);
+
+    if (blD != null || bsD != null || bnD != null || elD != null || esD != null || enD != null || clDelta != null || csDelta != null || cnDelta != null) {
       changed = true;
       _lastBtcLongDelta = blD; _lastBtcShortDelta = bsD; _lastBtcNetDelta = bnD;
       _lastEthLongDelta = elD; _lastEthShortDelta = esD; _lastEthNetDelta = enD;
+      _lastCombinedLongDelta = clDelta; _lastCombinedShortDelta = csDelta; _lastCombinedNetDelta = cnDelta;
     }
 
     setState(() {
-      // 合併：只更新 BTC/ETH 欄位，保留舊的 Printer 數據
       _currentData = HyperData(
         timestamp: old.timestamp,
         walletCount: old.walletCount,
@@ -155,7 +166,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         longVolNum: old.longVolNum,
         shortVolNum: old.shortVolNum,
         netVolNum: old.netVolNum,
-        btc: newData.btc, eth: newData.eth, // 更新
+        btc: newData.btc, eth: newData.eth, // 更新資產數據
       );
       if (changed) { _lastDataChange = DateTime.now(); _triggerRainbow(); }
       _history.add(_currentData!);
@@ -184,7 +195,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
     final bool isBearish = _currentData!.sentiment.contains("跌");
     final Color sColor = isBearish ? textRed : textGreen;
-    final printerNet = isBearish ? (_currentData!.shortVolNum - _currentData!.longVolNum) : (_currentData!.longVolNum - _currentData!.shortVolNum);
+    final bLong = _currentData!.btc?.longVol ?? 0; final bShort = _currentData!.btc?.shortVol ?? 0;
+    final eLong = _currentData!.eth?.longVol ?? 0; final eShort = _currentData!.eth?.shortVol ?? 0;
+    final cLong = bLong + eLong; final cShort = bShort + eShort;
+    final cNet = isBearish ? (cShort - cLong) : (cLong - cShort);
+    final pNet = isBearish ? (_currentData!.shortVolNum - _currentData!.longVolNum) : (_currentData!.longVolNum - _currentData!.shortVolNum);
 
     return KeyboardListener(
       focusNode: FocusNode(), autofocus: true,
@@ -211,22 +226,37 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               _buildHeader(cardBg),
               const SizedBox(height: 12),
               Expanded(child: Row(children: [
+                // 左欄：全體印鈔機
                 Expanded(child: _buildColumn(title: "全體印鈔機", icon: Icons.public, accent: Colors.white, bg: cardBg, children: [
-                  MetricCard(label: isBearish ? "全體淨空壓" : "全體淨多壓", value: _formatVolume(printerNet), delta: _lastPrinterNetDelta, color: sColor, cardBg: Colors.white.withAlpha(5), highlightValue: true, useColorBorder: true),
+                  MetricCard(label: isBearish ? "全體淨空壓" : "全體淨多壓", value: _formatVolume(pNet), delta: _lastPrinterNetDelta, color: sColor, cardBg: Colors.white.withAlpha(5), highlightValue: true, useColorBorder: true),
                   const SizedBox(height: 8),
                   MetricCard(label: "全體總多單", value: _currentData!.longVolDisplay, delta: _lastPrinterLongDelta, color: textGreen, cardBg: Colors.white.withAlpha(2), isSmall: true),
                   const SizedBox(height: 6),
                   MetricCard(label: "全體總空單", value: _currentData!.shortVolDisplay, delta: _lastPrinterShortDelta, color: textRed, cardBg: Colors.white.withAlpha(2), isSmall: true),
                   const SizedBox(height: 10),
-                  TugOfWarBar(label: "全體比例", leftVal: _currentData!.longVolNum, rightVal: _currentData!.shortVolNum, leftColor: textGreen, rightColor: textRed, leftLabel: "多", rightLabel: "空", cardBg: Colors.transparent),
+                  TugOfWarBar(label: "全體持倉比例", leftVal: _currentData!.longVolNum, rightVal: _currentData!.shortVolNum, leftColor: textGreen, rightColor: textRed, leftLabel: "多", rightLabel: "空", cardBg: Colors.transparent),
                   const SizedBox(height: 10),
                   Expanded(child: TrendChart(title: "全體資金流向", fullHistory: _history, displayHistory: _history, isPrinter: true)),
                 ])),
                 const SizedBox(width: 10),
-                Expanded(flex: 3, child: Row(children: [
-                  Expanded(child: _buildAssetSub("BTC", const Color(0xFFF7931A), _currentData!.btc?.longVol ?? 0, _currentData!.btc?.shortVol ?? 0, _currentData!.btc?.longDisplay ?? "-", _currentData!.btc?.shortDisplay ?? "-", _lastBtcLongDelta, _lastBtcShortDelta, _lastBtcNetDelta, isBearish, cardBg, textGreen, textRed)),
+                // 中欄：核心對沖
+                Expanded(child: _buildColumn(title: "核心對沖", icon: Icons.layers, accent: Colors.blueAccent, bg: cardBg, children: [
+                  MetricCard(label: isBearish ? "對沖淨空壓" : "對沖淨多壓", value: _formatVolume(cNet), delta: _lastCombinedNetDelta, color: sColor, cardBg: Colors.white.withAlpha(5), highlightValue: true, useColorBorder: true),
+                  const SizedBox(height: 8),
+                  MetricCard(label: "核心總多單", value: _formatVolume(cLong), delta: _lastCombinedLongDelta, color: textGreen, cardBg: Colors.white.withAlpha(2), isSmall: true),
+                  const SizedBox(height: 6),
+                  MetricCard(label: "核心總空單", value: _formatVolume(cShort), delta: _lastCombinedShortDelta, color: textRed, cardBg: Colors.white.withAlpha(2), isSmall: true),
+                  const SizedBox(height: 10),
+                  TugOfWarBar(label: "核心對沖比例", leftVal: cLong, rightVal: cShort, leftColor: textGreen, rightColor: textRed, leftLabel: "多", rightLabel: "空", cardBg: Colors.transparent),
+                  const SizedBox(height: 10),
+                  Expanded(child: TrendChart(title: "對沖淨值趨勢", fullHistory: _history, displayHistory: _history, isCombined: true)),
+                ])),
+                const SizedBox(width: 10),
+                // 右欄：BTC & ETH 詳情
+                Expanded(flex: 2, child: Row(children: [
+                  Expanded(child: _buildAssetSub("BTC", const Color(0xFFF7931A), bLong, bShort, _currentData!.btc?.longDisplay ?? "-", _currentData!.btc?.shortDisplay ?? "-", _lastBtcLongDelta, _lastBtcShortDelta, _lastBtcNetDelta, isBearish, cardBg, textGreen, textRed)),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildAssetSub("ETH", const Color(0xFF627EEA), _currentData!.eth?.longVol ?? 0, _currentData!.eth?.shortVol ?? 0, _currentData!.eth?.longDisplay ?? "-", _currentData!.eth?.shortDisplay ?? "-", _lastEthLongDelta, _lastEthShortDelta, _lastEthNetDelta, isBearish, cardBg, textGreen, textRed)),
+                  Expanded(child: _buildAssetSub("ETH", const Color(0xFF627EEA), eLong, eShort, _currentData!.eth?.longDisplay ?? "-", _currentData!.eth?.shortDisplay ?? "-", _lastEthLongDelta, _lastEthShortDelta, _lastEthNetDelta, isBearish, cardBg, textGreen, textRed)),
                 ])),
               ])),
             ])),
@@ -262,7 +292,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       const SizedBox(height: 10),
       TugOfWarBar(label: "持倉比例", leftVal: long, rightVal: short, leftColor: green, rightColor: red, leftLabel: "多", rightLabel: "空", cardBg: Colors.transparent),
       const SizedBox(height: 10),
-      Expanded(child: TrendChart(title: "$name 趨勢", fullHistory: _history, displayHistory: _history, isBTC: name == "BTC", isETH: name == "ETH")),
+      Expanded(child: TrendChart(title: "$name 資金趨勢", fullHistory: _history, displayHistory: _history, isBTC: name == "BTC", isETH: name == "ETH")),
     ]);
   }
 

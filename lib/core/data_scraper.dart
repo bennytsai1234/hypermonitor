@@ -50,9 +50,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   }
 
   WebViewController _createMobileController(String url) {
-    return WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..loadRequest(Uri.parse(url));
+    return WebViewController()..setJavaScriptMode(JavaScriptMode.unrestricted)..loadRequest(Uri.parse(url));
   }
 
   Future<void> _initWindowsWebview(win.WebviewController ctrl, String url, Function(bool) onInit) async {
@@ -73,14 +71,14 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
   Future<void> _doScrapes() async {
     final printerResult = await _executeScrape(_winA, _mobileA, _printerJs);
-    if (kDebugMode) print("DEBUG PRINTER RAW: $printerResult");
+    if (kDebugMode) print("RAW PRINTER: $printerResult");
     if (printerResult != null && printerResult != "null") {
       final data = _parsePrinterJson(printerResult);
       if (data != null) widget.onPrinterData(data);
     }
 
     final rangeResult = await _executeScrape(_winB, _mobileB, _rangeJs);
-    if (kDebugMode) print("DEBUG RANGE RAW: $rangeResult");
+    if (kDebugMode) print("RAW RANGE: $rangeResult");
     if (rangeResult != null && rangeResult != "null") {
       final data = _parseRangeJson(rangeResult);
       if (data != null) widget.onRangeData(data);
@@ -111,13 +109,14 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       const rows = document.querySelectorAll('tr');
       for (const row of rows) {
         const text = row.innerText;
-        if (text.includes('超级印钞机') || text.includes('超級印鈔機')) {
+        if (text.includes('超级印钞機') || text.includes('超級印鈔機') || text.includes('超级印钞机')) {
           const cells = row.querySelectorAll('td');
           if (cells.length < 8) continue;
-          // 針對用戶提供的 HTML：
-          // td[4] 有兩個子 div，$6.01億 和 $12.67億
+          
+          // 針對用戶提供的新 HTML 結構精確定位
           const volDivs = cells[4].querySelectorAll('div.cg-style-3a6fvj, div.cg-style-zuy5by');
           const plDivs = cells[7].querySelectorAll('div.cg-style-3a6fvj, div.cg-style-zuy5by');
+          const sentimentBtn = row.querySelector('button.tag-but'); // 直接找情緒按鈕
           
           return JSON.stringify({
             found: true,
@@ -127,7 +126,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
             netVol: cells[5].innerText.trim(),
             profitCount: plDivs[0] ? plDivs[0].innerText.trim() : "0",
             lossCount: plDivs[1] ? plDivs[1].innerText.trim() : "0",
-            sentiment: cells[8] ? cells[8].innerText.trim() : "" 
+            sentiment: sentimentBtn ? sentimentBtn.innerText.trim() : ""
           });
         }
       }
@@ -228,16 +227,16 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
     try {
       String clean = raw.replaceAll(RegExp(r'[\$¥,]'), '').trim();
       double multiplier = 1.0;
-      if (clean.contains('億') || clean.contains('億') || clean.contains('B') || clean.contains('亿')) { multiplier = 1e8; clean = clean.replaceAll(RegExp(r'[億億B亿]'), ''); }
-      else if (clean.contains('萬') || clean.contains('萬') || clean.contains('M') || clean.contains('万')) { multiplier = 1e4; clean = clean.replaceAll(RegExp(r'[萬萬M万]'), ''); }
+      if (clean.contains('億') || clean.contains('B') || clean.contains('亿')) { multiplier = 1e8; clean = clean.replaceAll(RegExp(r'[億B亿]'), ''); }
+      else if (clean.contains('萬') || clean.contains('M') || clean.contains('万')) { multiplier = 1e4; clean = clean.replaceAll(RegExp(r'[萬M万]'), ''); }
       return (double.tryParse(clean) ?? 0.0) * multiplier;
     } catch (e) { return 0.0; }
   }
 
   @override
   Widget build(BuildContext context) => Stack(children: [
-    SizedBox(width: 1, height: 1, child: defaultTargetPlatform == TargetPlatform.windows ? (_isWinAInit ? win.Webview(_winA) : Container()) : (_mobileA != null ? WebViewWidget(controller: _mobileA!) : Container())),
-    SizedBox(width: 1, height: 1, child: defaultTargetPlatform == TargetPlatform.windows ? (_isWinBInit ? win.Webview(_winB) : Container()) : (_mobileB != null ? WebViewWidget(controller: _mobileB!) : Container())),
+    SizedBox(width: 1, height: 1, child: defaultTargetPlatform == TargetPlatform.windows ? (_isWinAInit ? win.Webview(_winA) : Container()) : (Container())),
+    SizedBox(width: 1, height: 1, child: defaultTargetPlatform == TargetPlatform.windows ? (_isWinBInit ? win.Webview(_winB) : Container()) : (Container())),
   ]);
 
   @override
