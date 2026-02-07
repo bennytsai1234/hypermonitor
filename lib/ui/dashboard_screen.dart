@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -82,6 +83,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   // --- 獨立更新邏輯：全體數據 ---
   void _onPrinterScraped(HyperData newData) {
+    if (kDebugMode) {
+      print(">>> PRINTER UPDATE: 多[${newData.longVolDisplay}] 空[${newData.shortVolDisplay}] 情緒[${newData.sentiment}]");
+    }
     if (_currentData == null) {
       setState(() => _currentData = newData);
       return;
@@ -120,6 +124,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   // --- 獨立更新邏輯：BTC/ETH 數據 ---
   void _onRangeScraped(HyperData newData) {
+    if (kDebugMode) {
+      print(">>> RANGE UPDATE: BTC[${newData.btc?.longDisplay}/${newData.btc?.shortDisplay}] ETH[${newData.eth?.longDisplay}/${newData.eth?.shortDisplay}]");
+    }
     if (_currentData == null) {
       setState(() => _currentData = newData);
       return;

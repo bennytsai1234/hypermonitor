@@ -7,8 +7,8 @@ import 'package:webview_windows/webview_windows.dart' as win;
 import 'data_model.dart';
 
 class CoinglassScraper extends StatefulWidget {
-  final Function(HyperData) onPrinterData; // 專門通知全體數據
-  final Function(HyperData) onRangeData;   // 專門通知資產數據
+  final Function(HyperData) onPrinterData; 
+  final Function(HyperData) onRangeData;   
 
   const CoinglassScraper({
     super.key, 
@@ -65,9 +65,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       await ctrl.setPopupWindowPolicy(win.WebviewPopupWindowPolicy.deny);
       await ctrl.loadUrl(url);
       onInit(true);
-    } catch (e) {
-      if (kDebugMode) print("Webview Init Error: $e");
-    }
+    } catch (e) { }
   }
 
   void _startScrapingLoop() {
@@ -79,15 +77,17 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   }
 
   Future<void> _doScrapes() async {
-    // 1. 抓取印鈔機全體數據
+    // 1. 全體數據抓取
     final printerResult = await _executeScrape(_winA, _mobileA, _printerJs);
+    if (kDebugMode && printerResult != null) print("RAW PRINTER: $printerResult");
     if (printerResult != null && printerResult != "null") {
       _parsePrinter(printerResult);
       if (_lastHyperData != null) widget.onPrinterData(_lastHyperData!);
     }
 
-    // 2. 抓取 BTC/ETH 詳細數據
+    // 2. 詳細數據抓取 (使用新版精確邏輯)
     final rangeResult = await _executeScrape(_winB, _mobileB, _rangeJs);
+    if (kDebugMode && rangeResult != null) print("RAW RANGE: $rangeResult");
     if (rangeResult != null && rangeResult != "null") {
       _parseRange(rangeResult);
       if (_lastHyperData != null) widget.onRangeData(_lastHyperData!);
@@ -110,9 +110,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         if (s.startsWith('"') || s.startsWith("'")) s = s.substring(1, s.length - 1);
         return s.replaceAll(r'\"', '"');
       }
-    } catch (e) {
-      return null;
-    }
+    } catch (e) { return null; }
   }
 
   static const _printerJs = r"""
@@ -142,26 +140,34 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
     })();
   """;
 
+  // --- 改進版 Range JS：精確定位表格單元格，避開價格干擾 ---
   static const _rangeJs = r"""
     (function() {
-      const rows = document.querySelectorAll('div[class*="cg-style-g99dwx"]');
-      if (rows.length === 0) return JSON.stringify({error: "No rows found"});
+      const rows = document.querySelectorAll('tr');
       let data = { btc: null, eth: null };
+      
       for (const row of rows) {
-        const text = row.innerText;
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 6) continue;
+        
+        const name = cells[0].innerText.toUpperCase();
         let symbol = "";
-        if (text.includes('BTC') && !text.includes('WBTC')) symbol = "BTC";
-        else if (text.includes('ETH') && !text.includes('WETH')) symbol = "ETH";
+        if (name.includes('BTC') && !name.includes('WBTC')) symbol = "BTC";
+        else if (name.includes('ETH') && !name.includes('WETH')) symbol = "ETH";
+        
         if (symbol && !data[symbol.toLowerCase()]) {
-          const matches = text.match(/\$[\d,.]+[亿万]/g);
-          if (matches && matches.length >= 2) {
-            data[symbol.toLowerCase()] = {
-              symbol: symbol,
-              long: matches[0],
-              short: matches[1],
-              total: matches[2] || matches[1] || "0"
-            };
-          }
+          // 在策略詳情頁中：
+          // cells[1] = 價格
+          // cells[2] = 24h漲跌
+          // cells[3] = 多單持倉 (Long OI)
+          // cells[4] = 空單持倉 (Short OI)
+          // cells[5] = 淨持倉
+          data[symbol.toLowerCase()] = {
+            symbol: symbol,
+            long: cells[3].innerText.trim(),
+            short: cells[4].innerText.trim(),
+            total: cells[5].innerText.trim()
+          };
         }
       }
       return JSON.stringify(data);
@@ -188,9 +194,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         btc: _lastHyperData?.btc,
         eth: _lastHyperData?.eth,
       );
-    } catch (e) {
-      if (kDebugMode) print("Printer parsing error: $e");
-    }
+    } catch (e) { }
   }
 
   void _parseRange(String raw) {
@@ -216,9 +220,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         btc: btc,
         eth: eth,
       );
-    } catch (e) {
-      if (kDebugMode) print("Range parsing error: $e");
-    }
+    } catch (e) { }
   }
 
   CoinPosition _toCoinPos(Map<String, dynamic> d) {
@@ -259,14 +261,16 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
     try {
       String clean = raw.replaceAll(RegExp(r'[\$¥,]'), '').trim();
       double multiplier = 1.0;
-      if (clean.contains('亿') || clean.contains('億') || clean.contains('B')) { 
+      if (clean.contains('億') || clean.contains('億') || clean.contains('B')) { 
         multiplier = 100000000.0; 
-        clean = clean.replaceAll(RegExp(r'[亿億B]'), ''); 
+        clean = clean.replaceAll(RegExp(r'[億億B]'), ''); 
       }
-      else if (clean.contains('万') || clean.contains('萬') || clean.contains('M')) { 
+      else if (clean.contains('萬') || clean.contains('萬') || clean.contains('M')) { 
         multiplier = 10000.0; 
-        clean = clean.replaceAll(RegExp(r'[万萬M]'), ''); 
+        clean = clean.replaceAll(RegExp(r'[萬萬M]'), ''); 
       }
+      // 處理可能的簡體字備份
+      clean = clean.replaceAll('亿', '').replaceAll('万', '');
       return (double.tryParse(clean) ?? 0.0) * multiplier;
     } catch (e) { return 0.0; }
   }
