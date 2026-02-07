@@ -81,10 +81,10 @@ class TrendChart extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)), // 調亮
+                Text(title, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900)), 
                 Text(
                   netSeries.last >= 0 ? "勢能增強" : "勢能減弱",
-                  style: TextStyle(color: themeColor, fontSize: 9, fontWeight: FontWeight.w900) // 強化顯示
+                  style: TextStyle(color: themeColor, fontSize: 10, fontWeight: FontWeight.w900) 
                 ),
               ],
             ),
@@ -99,26 +99,29 @@ class TrendChart extends StatelessWidget {
                     getTooltipItems: (touchedSpots) {
                       return touchedSpots.map((spot) {
                         final double val = spot.y;
-                        String sign = val >= 0 ? "+" : "-";
+                        String sign = val > 0 ? "+" : (val < 0 ? "-" : "");
                         double absV = val.abs();
-                        String formatted = absV >= 1e8 
-                          ? "$sign${(absV / 1e8).toStringAsFixed(2)}億" 
-                          : absV >= 1e4 
-                            ? "$sign${(absV / 1e4).toStringAsFixed(0)}萬" 
-                            : "$sign${absV.toStringAsFixed(0)}";
+                        String formatted;
+                        if (absV >= 1e8) {
+                          formatted = "$sign${(absV / 1e8).toStringAsFixed(2)}億";
+                        } else if (absV >= 1e4) {
+                          formatted = "$sign${(absV / 1e4).toStringAsFixed(2)}萬";
+                        } else {
+                          formatted = "$sign${absV.toStringAsFixed(0)}";
+                        }
                         
                         final time = DateFormat('HH:mm:ss').format(displayHistory[spot.x.toInt()].timestamp);
                         
                         return LineTooltipItem(
                           "$time\n",
-                          const TextStyle(color: Colors.white38, fontSize: 10),
+                          const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold),
                           children: [
                             TextSpan(
                               text: formatted,
                               style: TextStyle(
                                 color: val >= 0 ? const Color(0xFF00FF9D) : const Color(0xFFFF2E2E),
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
                           ],
@@ -139,24 +142,35 @@ class TrendChart extends StatelessWidget {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 14,
+                      reservedSize: 18,
+                      interval: (displayHistory.length / 5).clamp(1, double.infinity),
                       getTitlesWidget: (v, m) {
                         int idx = v.toInt();
-                        if (idx < 0 || idx >= displayHistory.length || idx % 180 != 0) return const SizedBox.shrink();
-                        return Text(DateFormat('HH:mm').format(displayHistory[idx].timestamp), style: const TextStyle(color: Colors.white38, fontSize: 7)); // 調亮
+                        if (idx < 0 || idx >= displayHistory.length) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(DateFormat('HH:mm').format(displayHistory[idx].timestamp), style: const TextStyle(color: Colors.white38, fontSize: 8)),
+                        ); 
                       },
                     ),
                   ),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 35,
+                      reservedSize: 42,
                       getTitlesWidget: (v, m) {
                         if (v == minV - pad || v == maxV + pad) return const SizedBox.shrink();
-                        String sign = v >= 0 ? "+" : "-";
+                        String sign = v > 0 ? "+" : (v < 0 ? "-" : "");
                         double absV = v.abs();
-                        String t = absV >= 1e8 ? "$sign${(v / 1e8).toStringAsFixed(1)}B" : absV >= 1e4 ? "$sign${(v / 1e4).toStringAsFixed(0)}W" : v.toStringAsFixed(0);
-                        return Text(t, style: const TextStyle(color: Colors.white54, fontSize: 7, fontWeight: FontWeight.bold), textAlign: TextAlign.right); // 調亮至 white54
+                        String t;
+                        if (absV >= 1e8) {
+                          t = "$sign${(absV / 1e8).toStringAsFixed(1)}億";
+                        } else if (absV >= 1e4) {
+                          t = "$sign${(absV / 1e4).toStringAsFixed(0)}萬";
+                        } else {
+                          t = "$sign${absV.toStringAsFixed(0)}";
+                        }
+                        return Text(t, style: const TextStyle(color: Colors.white60, fontSize: 8, fontWeight: FontWeight.bold), textAlign: TextAlign.right);
                       },
                     ),
                   ),

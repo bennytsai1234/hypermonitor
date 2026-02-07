@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 import '../core/data_model.dart';
 import '../core/data_scraper.dart';
@@ -28,6 +31,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   late AnimationController _rainbowController;
   bool _showRainbow = false;
   Timer? _rainbowTimer;
+  late FocusNode _mainFocusNode;
 
   // 持久化 Delta 緩衝區
   String? _lastBtcLongDelta; String? _lastBtcShortDelta; String? _lastBtcNetDelta;
@@ -39,8 +43,54 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    _mainFocusNode = FocusNode();
     _rainbowController = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
-    Future.delayed(const Duration(milliseconds: 300), () => setState(() => _scraperReady = true));
+    _loadHistoryFromDisk();
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() => _scraperReady = true);
+        _mainFocusNode.requestFocus();
+      }
+    });
+  }
+
+  // --- 本地數據持久化 ---
+  Future<void> _loadHistoryFromDisk() async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final file = File('${dir.path}/history_v2.json');
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final List<dynamic> jsonList = jsonDecode(content);
+        final loaded = jsonList.map((e) => HyperData.fromJson(e)).toList();
+        
+        // 僅保留最近 24 小時的數據
+        final now = DateTime.now();
+        final filtered = loaded.where((e) => now.difference(e.timestamp).inHours < 24).toList();
+        
+        setState(() {
+          _history.clear();
+          _history.addAll(filtered);
+          if (_history.isNotEmpty) {
+            _currentData = _history.last;
+            _lastDataChange = _currentData!.timestamp;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Load History Error: $e");
+    }
+  }
+
+  Future<void> _saveHistoryToDisk() async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final file = File('${dir.path}/history_v2.json');
+      final content = jsonEncode(_history.map((e) => e.toJson()).toList());
+      await file.writeAsString(content);
+    } catch (e) {
+      debugPrint("Save History Error: $e");
+    }
   }
 
   @override
@@ -51,14 +101,21 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     super.dispose();
   }
 
+  @override
+  void onWindowFocus() {
+    setState(() {}); // 確保焦點回到視窗時 UI 刷新
+  }
+
   void _toggleFullscreen() async {
     bool isFullScreen = await windowManager.isFullScreen();
     if (isFullScreen) {
       await windowManager.setFullScreen(false);
       await windowManager.setHasShadow(true);
+      await windowManager.setTitleBarStyle(TitleBarStyle.normal);
     } else {
-      if (await windowManager.isMaximized()) await windowManager.unmaximize();
       await windowManager.setFullScreen(true);
+      await windowManager.setHasShadow(false);
+      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
     }
   }
 
@@ -103,7 +160,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         longVolNum: newData.longVolNum,
         shortVolNum: newData.shortVolNum,
         netVolNum: newData.netVolNum,
-        btc: old.btc, eth: old.eth, // 保留舊的詳細數據
+        btc: old.btc, eth: old.eth, 
       );
       if (changed) { _lastDataChange = DateTime.now(); _triggerRainbow(); }
     });
@@ -165,11 +222,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         longVolNum: old.longVolNum,
         shortVolNum: old.shortVolNum,
         netVolNum: old.netVolNum,
-        btc: newData.btc, eth: newData.eth, // 更新資產數據
+        btc: newData.btc, eth: newData.eth, 
       );
-      if (changed) { _lastDataChange = DateTime.now(); _triggerRainbow(); }
+      if (changed) { 
+        _lastDataChange = DateTime.now(); 
+        _triggerRainbow(); 
+      }
+      
       _history.add(_currentData!);
       if (_history.length > _maxHistoryPoints) _history.removeAt(0);
+      _saveHistoryToDisk(); // 每次更新後存檔
     });
   }
 
@@ -201,7 +263,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final pNet = isBearish ? (_currentData!.shortVolNum - _currentData!.longVolNum) : (_currentData!.longVolNum - _currentData!.shortVolNum);
 
     return KeyboardListener(
-      focusNode: FocusNode(), autofocus: true,
+      focusNode: _mainFocusNode, 
+      autofocus: true,
       onKeyEvent: (event) { if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.f11) _toggleFullscreen(); },
       child: Scaffold(
         backgroundColor: bgDark,
@@ -283,7 +346,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Widget _buildAssetSub(String name, Color accent, double long, double short, String lDisp, String sDisp, String? lDelta, String? sDelta, String? nDelta, bool isBearish, Color bg, Color green, Color red) {
     final double netRaw = isBearish ? (short - long) : (long - short);
     return _buildColumn(title: "$name 監控", icon: Icons.analytics, accent: accent, bg: bg, children: [
-      MetricCard(label: isBearish ? "$name 淨空壓" : "$name 淨多壓", value: _formatVolume(netRaw), delta: nDelta, color: isBearish ? red : green, cardBg: Colors.white.withAlpha(5), useColorBorder: true),
+      MetricCard(label: isBearish ? "$name 淨空壓" : "$name 淨多壓", value: _formatVolume(netRaw), delta: nDelta, color: isBearish ? red : green, cardBg: Colors.white.withAlpha(5), highlightValue: true, useColorBorder: true),
       const SizedBox(height: 8),
       MetricCard(label: "多單持倉", value: lDisp, delta: lDelta, color: green, cardBg: Colors.white.withAlpha(2), isSmall: true),
       const SizedBox(height: 6),
@@ -299,7 +362,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white10)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(children: [Icon(icon, color: accent, size: 12), const SizedBox(width: 6), Text(title, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold))]),
+      Row(children: [Icon(icon, color: accent, size: 14), const SizedBox(width: 8), Text(title, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900))]),
       const Divider(height: 16, color: Colors.white10),
       ...children,
     ]),

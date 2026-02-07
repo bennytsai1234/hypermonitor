@@ -56,50 +56,58 @@ class MetricCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(label, 
-                style: const TextStyle(
-                  color: Colors.white60, 
-                  fontSize: 11, 
-                  fontWeight: FontWeight.bold, 
-                  letterSpacing: 0.8
+          // 標題列：使用 ConstrainedBox 強制固定高度，解決 Delta 消失導致的高度跳動
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 22), 
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                              Text(label, 
+                                style: const TextStyle(
+                                  color: Colors.white70, 
+                                  fontSize: 11, 
+                                  fontWeight: FontWeight.bold, 
+                                  letterSpacing: 0.8
+                                )
+                              ),                if (delta != null && deltaColor != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: deltaColor.withAlpha(20),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: deltaColor.withAlpha(100), width: 0.5),
+                    ),
+                    child: Text(
+                      delta!,
+                      style: TextStyle(
+                        color: deltaColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox(height: 18), // 佔位，保持高度穩定
+              ],
+            ),
+          ),
+          SizedBox(height: highlightValue ? 12 : 6),
+          SizedBox(
+            height: highlightValue ? 36 : 24, // 強制數值區域高度一致
+            child: FittedBox(
+              alignment: Alignment.centerLeft,
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value, 
+                style: TextStyle(
+                  color: color, 
+                  fontSize: highlightValue ? 32 : (isSmall ? 18 : 22), 
+                  fontWeight: highlightValue ? FontWeight.w900 : FontWeight.bold, 
+                  letterSpacing: -0.5,
+                  height: 1.0,
                 )
               ),
-              if (delta != null && deltaColor != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: deltaColor.withAlpha(20),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: deltaColor.withAlpha(100), width: 0.5),
-                  ),
-                  child: Text(
-                    delta!,
-                    style: TextStyle(
-                      color: deltaColor,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          SizedBox(height: highlightValue ? 10 : 4),
-          FittedBox(
-            alignment: Alignment.centerLeft,
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value, 
-              style: TextStyle(
-                color: color, 
-                fontSize: highlightValue ? 32 : (isSmall ? 18 : 22), 
-                fontWeight: highlightValue ? FontWeight.w900 : FontWeight.bold, 
-                letterSpacing: -0.5,
-                height: 1.1,
-              )
             ),
           ),
         ],
