@@ -77,7 +77,6 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   }
 
   Future<void> _doScrapes() async {
-    // 1. 全體數據抓取
     final printerResult = await _executeScrape(_winA, _mobileA, _printerJs);
     if (kDebugMode && printerResult != null) print("RAW PRINTER: $printerResult");
     if (printerResult != null && printerResult != "null") {
@@ -85,7 +84,6 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       if (_lastHyperData != null) widget.onPrinterData(_lastHyperData!);
     }
 
-    // 2. 詳細數據抓取 (使用新版精確邏輯)
     final rangeResult = await _executeScrape(_winB, _mobileB, _rangeJs);
     if (kDebugMode && rangeResult != null) print("RAW RANGE: $rangeResult");
     if (rangeResult != null && rangeResult != "null") {
@@ -107,7 +105,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         await Future.delayed(const Duration(seconds: 5));
         final res = await mobCtrl.runJavaScriptReturningResult(js);
         String s = res.toString();
-        if (s.startsWith('"') || s.startsWith("'")) s = s.substring(1, s.length - 1);
+        if (s.startsWith('"') && s.endsWith('"')) s = s.substring(1, s.length - 1);
         return s.replaceAll(r'\"', '"');
       }
     } catch (e) { return null; }
@@ -124,6 +122,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
           const volParts = cells[4].innerText.trim().split('\n');
           const plParts = cells[6].innerText.trim().split('\n');
           return JSON.stringify({
+            found: true,
             walletCount: cells[2].innerText.trim(),
             openPositionCount: cells[3].innerText.trim().replace(/\(.*\)/, '').trim(),
             openPositionPct: (cells[3].innerText.match(/\((\d+\.?\d*%)\)/) || [])[1] || "",
@@ -140,34 +139,32 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
     })();
   """;
 
-  // --- 改進版 Range JS：精確定位表格單元格，避開價格干擾 ---
+  // --- 針對 MuiBox 結構設計的超級健壯版 Range JS ---
   static const _rangeJs = r"""
     (function() {
-      const rows = document.querySelectorAll('tr');
-      let data = { btc: null, eth: null };
+      // 尋找所有可能的「行」容器
+      const candidates = document.querySelectorAll('div[class*="cg-style-g99dwx"], tr');
+      let data = { found: true, btc: null, eth: null };
       
-      for (const row of rows) {
-        const cells = row.querySelectorAll('td');
-        if (cells.length < 6) continue;
-        
-        const name = cells[0].innerText.toUpperCase();
+      for (const row of candidates) {
+        const text = row.innerText;
         let symbol = "";
-        if (name.includes('BTC') && !name.includes('WBTC')) symbol = "BTC";
-        else if (name.includes('ETH') && !name.includes('WETH')) symbol = "ETH";
+        if (text.includes('BTC') && !text.includes('WBTC')) symbol = "BTC";
+        else if (text.includes('ETH') && !text.includes('WETH')) symbol = "ETH";
         
         if (symbol && !data[symbol.toLowerCase()]) {
-          // 在策略詳情頁中：
-          // cells[1] = 價格
-          // cells[2] = 24h漲跌
-          // cells[3] = 多單持倉 (Long OI)
-          // cells[4] = 空單持倉 (Short OI)
-          // cells[5] = 淨持倉
-          data[symbol.toLowerCase()] = {
-            symbol: symbol,
-            long: cells[3].innerText.trim(),
-            short: cells[4].innerText.trim(),
-            total: cells[5].innerText.trim()
-          };
+          // 抓取該行內所有帶有單位（億、萬、B、M）的金額字串
+          const matches = text.match(/\$[\d,.]+[亿万BM]/g);
+          
+          if (matches && matches.length >= 2) {
+            // 根據觀察：第一個是多單，第二個是空單，最後一個通常是總額
+            data[symbol.toLowerCase()] = {
+              symbol: symbol,
+              long: matches[0],
+              short: matches[1],
+              total: matches[matches.length - 1] || "0"
+            };
+          }
         }
       }
       return JSON.stringify(data);
@@ -269,7 +266,6 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         multiplier = 10000.0; 
         clean = clean.replaceAll(RegExp(r'[萬萬M]'), ''); 
       }
-      // 處理可能的簡體字備份
       clean = clean.replaceAll('亿', '').replaceAll('万', '');
       return (double.tryParse(clean) ?? 0.0) * multiplier;
     } catch (e) { return 0.0; }
