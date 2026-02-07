@@ -21,7 +21,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   bool _scraperReady = false;
 
   final List<HyperData> _history = [];
-  final int _maxHistoryPoints = 360; // 60 minutes internal storage
+  final int _maxHistoryPoints = 8640; // 24 hours (8640 * 10s)
 
   // Rainbow animation
   late AnimationController _rainbowController;
@@ -67,7 +67,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       final old = _currentData!;
       final bool isBearish = newData.sentiment.contains("跌");
       
-      // BTC Deltas: Update ONLY if the raw value has changed from the previous scrape
+      // 1. BTC Deltas: Update ONLY if the raw value has changed from the previous scrape
       if ((old.btc?.longVol ?? 0) != (newData.btc?.longVol ?? 0)) {
         _lastBtcLongDelta = _calculateVolumeDelta(old.btc?.longVol, newData.btc?.longVol ?? 0);
         hasChanged = true;
@@ -77,14 +77,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         hasChanged = true;
       }
       
-      final double oldBNet = isBearish ? ((old.btc?.shortVol ?? 0) - (old.btc?.longVol ?? 0)) : ((old.btc?.longVol ?? 0) - (old.btc?.shortVol ?? 0));
-      final double newBNet = isBearish ? ((newData.btc?.shortVol ?? 0) - (newData.btc?.longVol ?? 0)) : ((newData.btc?.longVol ?? 0) - (newData.btc?.shortVol ?? 0));
-      if (oldBNet != newBNet) {
-        _lastBtcNetDelta = _calculateVolumeDelta(oldBNet, newBNet, isShortDelta: isBearish);
+      // Fixed: Always use (Long - Short) for internal delta comparison to avoid sentiment-switch jumps
+      final double oldBNetRaw = (old.btc?.longVol ?? 0) - (old.btc?.shortVol ?? 0);
+      final double newBNetRaw = (newData.btc?.longVol ?? 0) - (newData.btc?.shortVol ?? 0);
+      if (oldBNetRaw != newBNetRaw) {
+        // Delta is the change in net position (always same direction)
+        _lastBtcNetDelta = _calculateVolumeDelta(oldBNetRaw, newBNetRaw, isShortDelta: isBearish);
         hasChanged = true;
       }
 
-      // ETH Deltas
+      // 2. ETH Deltas
       if ((old.eth?.longVol ?? 0) != (newData.eth?.longVol ?? 0)) {
         _lastEthLongDelta = _calculateVolumeDelta(old.eth?.longVol, newData.eth?.longVol ?? 0);
         hasChanged = true;
@@ -93,18 +95,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         _lastEthShortDelta = _calculateVolumeDelta(old.eth?.shortVol, newData.eth?.shortVol ?? 0);
         hasChanged = true;
       }
-      final double oldENet = isBearish ? ((old.eth?.shortVol ?? 0) - (old.eth?.longVol ?? 0)) : ((old.eth?.longVol ?? 0) - (old.eth?.shortVol ?? 0));
-      final double newENet = isBearish ? ((newData.eth?.shortVol ?? 0) - (newData.eth?.longVol ?? 0)) : ((newData.eth?.longVol ?? 0) - (newData.eth?.shortVol ?? 0));
-      if (oldENet != newENet) {
-        _lastEthNetDelta = _calculateVolumeDelta(oldENet, newENet, isShortDelta: isBearish);
+      final double oldENetRaw = (old.eth?.longVol ?? 0) - (old.eth?.shortVol ?? 0);
+      final double newENetRaw = (newData.eth?.longVol ?? 0) - (newData.eth?.shortVol ?? 0);
+      if (oldENetRaw != newENetRaw) {
+        _lastEthNetDelta = _calculateVolumeDelta(oldENetRaw, newENetRaw, isShortDelta: isBearish);
         hasChanged = true;
       }
 
-      // Combined (Hedge) Delta
-      final double oldCombined = oldBNet + oldENet;
-      final double newCombined = newBNet + newENet;
-      if (oldCombined != newCombined) {
-        _lastCombinedNetDelta = _calculateVolumeDelta(oldCombined, newCombined, isShortDelta: isBearish);
+      // 3. Combined (Hedge) Delta
+      final double oldCombinedRaw = oldBNetRaw + oldENetRaw;
+      final double newCombinedRaw = newBNetRaw + newENetRaw;
+      if (oldCombinedRaw != newCombinedRaw) {
+        _lastCombinedNetDelta = _calculateVolumeDelta(oldCombinedRaw, newCombinedRaw, isShortDelta: isBearish);
         hasChanged = true;
       }
     } else {
@@ -117,13 +119,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         _lastDataChange = DateTime.now();
         _triggerRainbow();
       }
+      
       _history.add(newData);
       if (_history.length > _maxHistoryPoints) _history.removeAt(0);
     });
-  }
-
-  List<HyperData> _getHourHistory() {
-    return _history;
   }
 
   @override
@@ -269,30 +268,31 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white10)),
-                        child: Text("動態點: ${_getHourHistory().length}", style: const TextStyle(color: Colors.white24, fontSize: 10)),
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text("※ 對沖總淨壓 = (BTC多-空) + (ETH多-空)。正值為淨多頭暴露，負值為淨空頭。平衡時趨近 0。", style: TextStyle(color: Colors.white12, fontSize: 9)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Expanded(child: TrendChart(title: "BTC 趨勢", fullHistory: _history, displayHistory: _getHourHistory(), isBTC: true)),
-                        const SizedBox(width: 8),
-                        Expanded(child: TrendChart(title: "ETH 趨勢", fullHistory: _history, displayHistory: _getHourHistory(), isETH: true)),
-                        const SizedBox(width: 8),
-                        Expanded(child: TrendChart(title: "對沖趨勢", fullHistory: _history, displayHistory: _getHourHistory(), isCombined: true)),
-                      ],
-                    ),
-                  ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                              decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white10)),
+                                              child: Text("動態點: ${_history.length} / 8640", style: const TextStyle(color: Colors.white24, fontSize: 10)),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            const Expanded(
+                                              child: Text("※ 對沖總淨壓 = (BTC多-空) + (ETH多-空)。趨勢圖支援最高 24 小時回溯。", style: TextStyle(color: Colors.white12, fontSize: 9)),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                      
+                                        Expanded(
+                                          child: Row(
+                                            children: [
+                                              Expanded(child: TrendChart(title: "BTC 趨 勢 (24h)", fullHistory: _history, displayHistory: _history, isBTC: true)),
+                                              const SizedBox(width: 8),
+                                              Expanded(child: TrendChart(title: "ETH 趨 勢 (24h)", fullHistory: _history, displayHistory: _history, isETH: true)),
+                                              const SizedBox(width: 8),
+                                              Expanded(child: TrendChart(title: "對沖趨 勢 (24h)", fullHistory: _history, displayHistory: _history, isCombined: true)),
+                                            ],
+                                          ),
+                                        ),
+                      
                 ],
               ),
             ),
@@ -344,7 +344,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   String? _calculateVolumeDelta(double? prev, double curr, {bool isShortDelta = false}) {
     if (prev == null) return null;
-    final diff = curr - prev;
+    double diff = curr - prev;
+    if (isShortDelta) diff = -diff; // Flip for Short Pressure display
+    
     if (diff == 0) return null;
     final double absDiff = diff.abs();
     String formatted = absDiff >= 1e8 ? "${(absDiff / 1e8).toStringAsFixed(2)}億" : absDiff >= 1e4 ? "${(absDiff / 1e4).toStringAsFixed(0)}萬" : absDiff.toStringAsFixed(0);

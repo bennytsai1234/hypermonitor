@@ -71,7 +71,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   void _startScrapingLoop() {
     _scrapeBoth();
     _scrapeTimer?.cancel();
-    _scrapeTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+    _scrapeTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       _scrapeBoth();
     });
   }
@@ -118,7 +118,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       for (const row of rows) {
         const text = row.innerText;
         // Check for both Simplified and Traditional Chinese
-        if (text.includes('超级印钞机') || text.includes('超级印鈔機') || text.includes('Super Money Printer')) {
+        if (text.includes('超级印钞机') || text.includes('超級印鈔機') || text.includes('Super Money Printer')) {
           const cells = row.querySelectorAll('td');
           if (cells.length < 8) return null;
           const volParts = cells[4].innerText.trim().split('\n');
@@ -157,7 +157,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         
         if (symbol && !data[symbol.toLowerCase()]) {
           // Robust regex: Match $ followed by numbers/dots and ending with unit
-          const matches = text.match(/\$[\d,.]+[亿万]/g);
+          const matches = text.match(/\$[\d,.]+[亿万B M]/g);
           
           if (matches && matches.length >= 2) {
             data[symbol.toLowerCase()] = {
@@ -201,7 +201,9 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         btc: _lastHyperData?.btc,
         eth: _lastHyperData?.eth,
       );
-    } catch (e) { }
+    } catch (e) {
+      if (kDebugMode) print("Printer parsing error: $e");
+    }
   }
 
   void _parseRange(String? raw) {
@@ -228,13 +230,15 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         btc: btc,
         eth: eth,
       );
-    } catch (e) { }
+    } catch (e) {
+      if (kDebugMode) print("Range parsing error: $e");
+    }
   }
 
   CoinPosition _toCoinPos(Map<String, dynamic> d) {
     final l = _parseValue(d['long']);
     final s = _parseValue(d['short']);
-    final net = l - s;
+    final net = l - s; // Always L - S internally
     final String netStr = (net >= 0 ? "+" : "") + 
         (net.abs() >= 1e8 ? "${(net / 1e8).toStringAsFixed(2)}億" : "${(net / 1e4).toStringAsFixed(0)}萬");
 
@@ -262,16 +266,18 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
   double _parseValue(String raw) {
     try {
-      String clean = raw.replaceAll(r'$', '').replaceAll(',', '').trim();
+      String clean = raw.replaceAll(RegExp(r'[\$¥,]'), '').trim();
       double multiplier = 1.0;
-      if (clean.contains('亿') || clean.contains('億')) { 
+      
+      if (clean.contains('亿') || clean.contains('億') || clean.toUpperCase().contains('B')) { 
         multiplier = 100000000.0; 
-        clean = clean.replaceAll('亿', '').replaceAll('億', ''); 
+        clean = clean.replaceAll(RegExp(r'[亿億B]', caseSensitive: false), ''); 
       }
-      else if (clean.contains('万') || clean.contains('萬')) { 
+      else if (clean.contains('万') || clean.contains('萬') || clean.toUpperCase().contains('M')) { 
         multiplier = 10000.0; 
-        clean = clean.replaceAll('万', '').replaceAll('萬', ''); 
+        clean = clean.replaceAll(RegExp(r'[万萬M]', caseSensitive: false), ''); 
       }
+      
       return (double.tryParse(clean) ?? 0.0) * multiplier;
     } catch (e) { return 0.0; }
   }
