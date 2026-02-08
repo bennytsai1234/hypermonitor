@@ -71,14 +71,12 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
   Future<void> _doScrapes() async {
     final printerResult = await _executeScrape(_winA, _mobileA, _printerJs);
-    if (kDebugMode) print("RAW PRINTER: $printerResult");
     if (printerResult != null && printerResult != "null") {
       final data = _parsePrinterJson(printerResult);
       if (data != null) widget.onPrinterData(data);
     }
 
     final rangeResult = await _executeScrape(_winB, _mobileB, _rangeJs);
-    if (kDebugMode) print("RAW RANGE: $rangeResult");
     if (rangeResult != null && rangeResult != "null") {
       final data = _parseRangeJson(rangeResult);
       if (data != null) widget.onRangeData(data);
@@ -90,14 +88,8 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       if (defaultTargetPlatform == TargetPlatform.windows) {
         if (winCtrl == null) return null;
         await winCtrl.reload();
-        // 雖然用戶說不需要載入延遲，但網頁加載需要時間。
-        // 我們縮短延遲並加入重試，或者至少給予 2 秒讓 DOM 初始渲染
         await Future.delayed(const Duration(seconds: 2)); 
-        final result = await winCtrl.executeScript(js);
-        if (kDebugMode && (result == null || result == "null")) {
-          print("DEBUG: Scrape returned null. DOM might not be ready.");
-        }
-        return result;
+        return await winCtrl.executeScript(js);
       } else {
         if (mobCtrl == null) return null;
         await mobCtrl.reload();
@@ -107,10 +99,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         if (s.startsWith('"') && s.endsWith('"')) s = s.substring(1, s.length - 1);
         return s.replaceAll(r'\"', '"');
       }
-    } catch (e) {
-      if (kDebugMode) print("DEBUG: Scrape Error: $e");
-      return null;
-    }
+    } catch (e) { return null; }
   }
 
   static const _printerJs = r"""
@@ -121,12 +110,9 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         if (text.includes('超级印钞機') || text.includes('超級印鈔機') || text.includes('超级印钞机')) {
           const cells = row.querySelectorAll('td');
           if (cells.length < 8) continue;
-          
-          // 針對用戶提供的新 HTML 結構精確定位
           const volDivs = cells[4].querySelectorAll('div.cg-style-3a6fvj, div.cg-style-zuy5by');
           const plDivs = cells[7].querySelectorAll('div.cg-style-3a6fvj, div.cg-style-zuy5by');
-          const sentimentBtn = row.querySelector('button.tag-but'); // 直接找情緒按鈕
-          
+          const sentimentBtn = row.querySelector('button.tag-but');
           return JSON.stringify({
             found: true,
             walletCount: cells[2].innerText.trim(),
@@ -150,14 +136,13 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       for (const row of allDivs) {
         const text = row.innerText;
         let symbol = "";
-        if (text.includes('BTC') && !text.includes('WBTC')) symbol = "BTC";
-        else if (text.includes('ETH') && !text.includes('WETH')) symbol = "ETH";
-        
+        if (text.includes('BTC') && !text.includes('WBTC')) symbol = "btc";
+        else if (text.includes('ETH') && !text.includes('WETH')) symbol = "eth";
         if (symbol) {
           const amounts = row.querySelectorAll('div.cg-style-3a6fvj, div.cg-style-zuy5by, div.Number');
           if (amounts.length >= 2) {
-            data[symbol.toLowerCase()] = {
-              symbol: symbol,
+            data[symbol] = {
+              symbol: symbol.toUpperCase(),
               long: amounts[0].innerText.trim(),
               short: amounts[1].innerText.trim(),
               total: amounts[amounts.length - 1].innerText.trim()
@@ -172,46 +157,41 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   HyperData? _parsePrinterJson(String raw) {
     try {
       final d = jsonDecode(_cleanJson(raw));
-      _lastHyperData = HyperData(
-        timestamp: DateTime.now(),
+      return HyperData(
+        timestamp: DateTime.now().toTaiwanTime(),
         walletCount: _toInt(d['walletCount']),
-        openPositionCount: 0, openPositionPct: "", 
         profitCount: _toInt(d['profitCount']),
         lossCount: _toInt(d['lossCount']),
-        longVolDisplay: _toTC(d['longVol']),
-        shortVolDisplay: _toTC(d['shortVol']),
-        netVolDisplay: _toTC(d['netVol']),
         sentiment: _toTC(d['sentiment']),
         longVolNum: _parseValue(d['longVol']),
         shortVolNum: _parseValue(d['shortVol']),
         netVolNum: _parseValue(d['netVol']),
+        longVolDisplay: _toTC(d['longVol']),
+        shortVolDisplay: _toTC(d['shortVol']),
+        netVolDisplay: _toTC(d['netVol']),
         btc: _lastHyperData?.btc,
         eth: _lastHyperData?.eth,
       );
-      return _lastHyperData;
     } catch (e) { return null; }
   }
 
   HyperData? _parseRangeJson(String raw) {
     try {
       final d = jsonDecode(_cleanJson(raw));
-      final btc = d['btc'] != null ? _toCoinPos(d['btc']) : _lastHyperData?.btc;
-      final eth = d['eth'] != null ? _toCoinPos(d['eth']) : _lastHyperData?.eth;
-      
       _lastHyperData = HyperData(
-        timestamp: _lastHyperData?.timestamp ?? DateTime.now(),
+        timestamp: DateTime.now().toTaiwanTime(),
         walletCount: _lastHyperData?.walletCount ?? 0,
-        openPositionCount: 0, openPositionPct: "", 
         profitCount: _lastHyperData?.profitCount ?? 0,
         lossCount: _lastHyperData?.lossCount ?? 0,
-        longVolDisplay: _lastHyperData?.longVolDisplay ?? "",
-        shortVolDisplay: _lastHyperData?.shortVolDisplay ?? "",
-        netVolDisplay: _lastHyperData?.netVolDisplay ?? "",
         sentiment: _lastHyperData?.sentiment ?? "",
         longVolNum: _lastHyperData?.longVolNum ?? 0,
         shortVolNum: _lastHyperData?.shortVolNum ?? 0,
         netVolNum: _lastHyperData?.netVolNum ?? 0,
-        btc: btc, eth: eth,
+        longVolDisplay: _lastHyperData?.longVolDisplay ?? "",
+        shortVolDisplay: _lastHyperData?.shortVolDisplay ?? "",
+        netVolDisplay: _lastHyperData?.netVolDisplay ?? "",
+        btc: d['btc'] != null ? _toCoinPos(d['btc']) : _lastHyperData?.btc,
+        eth: d['eth'] != null ? _toCoinPos(d['eth']) : _lastHyperData?.eth,
       );
       return _lastHyperData;
     } catch (e) { return null; }
@@ -220,17 +200,18 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   CoinPosition _toCoinPos(Map<String, dynamic> d) {
     final l = _parseValue(d['long']);
     final s = _parseValue(d['short']);
-    final net = l - s;
+    final t = _parseValue(d['total']);
     return CoinPosition(
-      symbol: d['symbol'], longVol: l, shortVol: s, totalVol: _parseValue(d['total']), netVol: net,
+      symbol: d['symbol'], longVol: l, shortVol: s, totalVol: t, netVol: l - s,
       longDisplay: _toTC(d['long']), shortDisplay: _toTC(d['short']), totalDisplay: _toTC(d['total']),
-      netDisplay: (net >= 0 ? "+" : "") + (net.abs() >= 1e8 ? "${(net / 1e8).toStringAsFixed(2)}億" : "${(net / 1e4).toStringAsFixed(0)}萬"),
+      netDisplay: _formatNet(l - s),
     );
   }
 
-  String _toTC(String s) => s.replaceAll('超级', '超級').replaceAll('印钞机', '印鈔機').replaceAll('亿', '億').replaceAll('万', '萬').replaceAll('涨', '漲').replaceAll('强', '強').replaceAll('势', '勢').replaceAll('态', '態').replaceAll('观', '觀').replaceAll('亏', '虧');
+  String _toTC(String s) => s.replaceAll('超级', '超級').replaceAll('印钞机', '印鈔機').replaceAll('亿', '億').replaceAll('万', '萬').replaceAll('涨', '漲').replaceAll('强', '強').replaceAll('势', '勢').replaceAll('态', '態');
   int _toInt(dynamic v) => int.tryParse(v.toString().replaceAll(',', '').replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
   String _cleanJson(String s) => (s.startsWith('"') && s.endsWith('"')) ? s.substring(1, s.length - 1).replaceAll(r'\"', '"') : s;
+  String _formatNet(double v) => (v >= 0 ? "+" : "") + (v.abs() >= 1e8 ? "${(v / 1e8).toStringAsFixed(2)}億" : "${(v / 1e4).toStringAsFixed(0)}萬");
   
   double _parseValue(String raw) {
     try {

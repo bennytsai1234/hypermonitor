@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 import '../core/data_model.dart';
 import '../core/data_scraper.dart';
+import '../core/api_service.dart';
 import 'widgets/sentiment_badge.dart';
 import 'widgets/metric_card.dart';
 import 'widgets/tug_of_war_bar.dart';
@@ -21,19 +20,21 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin, WindowListener {
+  final ApiService _apiService = ApiService();
   HyperData? _currentData;
   DateTime? _lastDataChange;
-  bool _scraperReady = false;
+  
+  Map<String, List<HyperData>> _historyMap = {'printer': [], 'btc': [], 'eth': [], 'combined': []};
+  String _selectedRange = "1h"; 
+  bool _isLoadingHistory = false;
 
-  final List<HyperData> _history = [];
-  final int _maxHistoryPoints = 8640; 
-
+  Timer? _pollingTimer;
   late AnimationController _rainbowController;
   bool _showRainbow = false;
   Timer? _rainbowTimer;
   late FocusNode _mainFocusNode;
 
-  // 持久化 Delta 緩衝區
+  // Delta 緩衝區
   String? _lastBtcLongDelta; String? _lastBtcShortDelta; String? _lastBtcNetDelta;
   String? _lastEthLongDelta; String? _lastEthShortDelta; String? _lastEthNetDelta;
   String? _lastCombinedLongDelta; String? _lastCombinedShortDelta; String? _lastCombinedNetDelta;
@@ -45,78 +46,124 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     windowManager.addListener(this);
     _mainFocusNode = FocusNode();
     _rainbowController = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
-    _loadHistoryFromDisk();
+    
+    _refreshAll();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollLatest());
+
     Future.delayed(const Duration(milliseconds: 300), () {
-      if (mounted) {
-        setState(() => _scraperReady = true);
-        _mainFocusNode.requestFocus();
-      }
+      if (mounted) _mainFocusNode.requestFocus();
     });
   }
 
-  // --- 本地數據持久化 ---
-  Future<void> _loadHistoryFromDisk() async {
-    try {
-      final dir = await getApplicationSupportDirectory();
-      final file = File('${dir.path}/history_v2.json');
-      if (await file.exists()) {
-        final content = await file.readAsString();
-        final List<dynamic> jsonList = jsonDecode(content);
-        final loaded = jsonList.map((e) => HyperData.fromJson(e)).toList();
-        
-        // 僅保留最近 24 小時的數據
-        final now = DateTime.now();
-        final filtered = loaded.where((e) => now.difference(e.timestamp).inHours < 24).toList();
-        
-        setState(() {
-          _history.clear();
-          _history.addAll(filtered);
-          if (_history.isNotEmpty) {
-            _currentData = _history.last;
-            _lastDataChange = _currentData!.timestamp;
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint("Load History Error: $e");
+  Future<void> _refreshAll() async {
+    await _pollLatest();
+    await _loadHistory();
+  }
+
+  Future<void> _pollLatest() async {
+    final newData = await _apiService.fetchLatest();
+    if (newData == null) return;
+    if (_currentData != null) _calculateDeltas(_currentData!, newData);
+    if (mounted) {
+      setState(() {
+        _currentData = newData;
+        _lastDataChange = DateTime.now().toTaiwanTime();
+      });
     }
   }
 
-  Future<void> _saveHistoryToDisk() async {
-    try {
-      final dir = await getApplicationSupportDirectory();
-      final file = File('${dir.path}/history_v2.json');
-      final content = jsonEncode(_history.map((e) => e.toJson()).toList());
-      await file.writeAsString(content);
-    } catch (e) {
-      debugPrint("Save History Error: $e");
+  Future<void> _loadHistory() async {
+    setState(() => _isLoadingHistory = true);
+    final history = await _apiService.fetchHistory(_selectedRange);
+    
+    // --- 關鍵修正：對齊並合併 BTC 與 ETH 的歷史數據 ---
+    List<HyperData> combinedHistory = [];
+    final btcList = history['btc'] ?? [];
+    final ethList = history['eth'] ?? [];
+    
+    // 取較短的那一邊進行對齊合併
+    int count = btcList.length < ethList.length ? btcList.length : ethList.length;
+    for (int i = 0; i < count; i++) {
+      combinedHistory.add(HyperData(
+        timestamp: btcList[i].timestamp,
+        walletCount: 0, profitCount: 0, lossCount: 0,
+        longVolDisplay: "", shortVolDisplay: "", netVolDisplay: "",
+        sentiment: _currentData?.sentiment ?? "中性",
+        longVolNum: 0, shortVolNum: 0, netVolNum: 0,
+        btc: btcList[i].btc,
+        eth: ethList[i].eth,
+      ));
+    }
+
+    if (mounted) {
+      setState(() {
+        _historyMap = {
+          ...history,
+          'combined': combinedHistory,
+        };
+        _isLoadingHistory = false;
+      });
     }
   }
 
-  @override
-  void dispose() {
-    windowManager.removeListener(this);
-    _rainbowController.dispose();
-    _rainbowTimer?.cancel();
-    super.dispose();
+  void _onPrinterScraped(HyperData data) {
+    _apiService.updatePrinter(data);
   }
 
-  @override
-  void onWindowFocus() {
-    setState(() {}); // 確保焦點回到視窗時 UI 刷新
+  void _onRangeScraped(HyperData data) {
+    _apiService.updateRange(data);
   }
 
-  void _toggleFullscreen() async {
-    bool isFullScreen = await windowManager.isFullScreen();
-    if (isFullScreen) {
-      await windowManager.setFullScreen(false);
-      await windowManager.setHasShadow(true);
-      await windowManager.setTitleBarStyle(TitleBarStyle.normal);
-    } else {
-      await windowManager.setFullScreen(true);
-      await windowManager.setHasShadow(false);
-      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+  void _calculateDeltas(HyperData old, HyperData newData) {
+    bool changed = false;
+    final bool isBearish = newData.sentiment.contains("跌");
+    String? check(double o, double n) => (n - o) != 0 ? _formatDelta(o, n) : null;
+
+    final lD = check(old.longVolNum, newData.longVolNum);
+    final sD = check(old.shortVolNum, newData.shortVolNum);
+    final double oldPN = isBearish ? (old.shortVolNum - old.longVolNum) : (old.longVolNum - old.shortVolNum);
+    final double newPN = isBearish ? (newData.shortVolNum - newData.longVolNum) : (newData.longVolNum - newData.shortVolNum);
+    final nD = check(oldPN, newPN);
+    if (lD != null || sD != null || nD != null) {
+      _lastPrinterLongDelta = lD; _lastPrinterShortDelta = sD; _lastPrinterNetDelta = nD;
+      changed = true;
     }
+
+    final blD = check(old.btc?.longVol ?? 0, newData.btc?.longVol ?? 0);
+    final bsD = check(old.btc?.shortVol ?? 0, newData.btc?.shortVol ?? 0);
+    final double oldBNet = isBearish ? ((old.btc?.shortVol ?? 0) - (old.btc?.longVol ?? 0)) : ((old.btc?.longVol ?? 0) - (old.btc?.shortVol ?? 0));
+    final double newBNet = isBearish ? ((newData.btc?.shortVol ?? 0) - (newData.btc?.longVol ?? 0)) : ((newData.btc?.longVol ?? 0) - (newData.btc?.shortVol ?? 0));
+    final bnD = check(oldBNet, newBNet);
+    if (blD != null || bsD != null || bnD != null) {
+      _lastBtcLongDelta = blD; _lastBtcShortDelta = bsD; _lastBtcNetDelta = bnD;
+      changed = true;
+    }
+
+    final elD = check(old.eth?.longVol ?? 0, newData.eth?.longVol ?? 0);
+    final esD = check(old.eth?.shortVol ?? 0, newData.eth?.shortVol ?? 0);
+    final double oldENet = isBearish ? ((old.eth?.shortVol ?? 0) - (old.eth?.longVol ?? 0)) : ((old.eth?.longVol ?? 0) - (old.eth?.shortVol ?? 0));
+    final double newENet = isBearish ? ((newData.eth?.shortVol ?? 0) - (newData.eth?.longVol ?? 0)) : ((newData.eth?.longVol ?? 0) - (newData.eth?.shortVol ?? 0));
+    final enD = check(oldENet, newENet);
+    if (elD != null || esD != null || enD != null) {
+      _lastEthLongDelta = elD; _lastEthShortDelta = esD; _lastEthNetDelta = enD;
+      changed = true;
+    }
+
+    final double oldCL = (old.btc?.longVol ?? 0) + (old.eth?.longVol ?? 0);
+    final double newCL = (newData.btc?.longVol ?? 0) + (newData.eth?.longVol ?? 0);
+    final double oldCS = (old.btc?.shortVol ?? 0) + (old.eth?.shortVol ?? 0);
+    final double newCS = (newData.btc?.shortVol ?? 0) + (newData.eth?.shortVol ?? 0);
+    final clDelta = check(oldCL, newCL);
+    final csDelta = check(oldCS, newCS);
+    final double oldCNet = isBearish ? (oldCS - oldCL) : (oldCL - oldCS);
+    final double newCNet = isBearish ? (newCS - newCL) : (newCL - newCS);
+    final cnDelta = check(oldCNet, newCNet);
+    if (clDelta != null || csDelta != null || cnDelta != null) {
+      _lastCombinedLongDelta = clDelta; _lastCombinedShortDelta = csDelta; _lastCombinedNetDelta = cnDelta;
+      changed = true;
+    }
+
+    if (changed) _triggerRainbow();
   }
 
   void _triggerRainbow() {
@@ -125,114 +172,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     _rainbowTimer = Timer(const Duration(seconds: 3), () => setState(() => _showRainbow = false));
   }
 
-  // --- 數據更新：全體印鈔機 ---
-  void _onPrinterData(HyperData newData) {
-    if (_currentData == null) { setState(() => _currentData = newData); return; }
-    final old = _currentData!;
-    bool changed = false;
-    final bool isBearish = newData.sentiment.contains("跌");
-
-    String? check(double o, double n) => (n - o) != 0 ? _calculateRawDelta(o, n) : null;
-
-    final lDelta = check(old.longVolNum, newData.longVolNum);
-    final sDelta = check(old.shortVolNum, newData.shortVolNum);
-    final double oldPN = isBearish ? (old.shortVolNum - old.longVolNum) : (old.longVolNum - old.shortVolNum);
-    final double newPN = isBearish ? (newData.shortVolNum - newData.longVolNum) : (newData.longVolNum - newData.shortVolNum);
-    final nDelta = check(oldPN, newPN);
-
-    if (lDelta != null || sDelta != null || nDelta != null) {
-      changed = true;
-      _lastPrinterLongDelta = lDelta; _lastPrinterShortDelta = sDelta; _lastPrinterNetDelta = nDelta;
-    }
-
-    setState(() {
-      _currentData = HyperData(
-        timestamp: newData.timestamp,
-        walletCount: newData.walletCount,
-        openPositionCount: newData.openPositionCount,
-        openPositionPct: newData.openPositionPct,
-        profitCount: newData.profitCount,
-        lossCount: newData.lossCount,
-        longVolDisplay: newData.longVolDisplay,
-        shortVolDisplay: newData.shortVolDisplay,
-        netVolDisplay: newData.netVolDisplay,
-        sentiment: newData.sentiment,
-        longVolNum: newData.longVolNum,
-        shortVolNum: newData.shortVolNum,
-        netVolNum: newData.netVolNum,
-        btc: old.btc, eth: old.eth, 
-      );
-      if (changed) { _lastDataChange = DateTime.now(); _triggerRainbow(); }
-    });
-  }
-
-  // --- 數據更新：BTC/ETH 與核心對沖 ---
-  void _onRangeData(HyperData newData) {
-    if (_currentData == null) { setState(() => _currentData = newData); return; }
-    final old = _currentData!;
-    bool changed = false;
-    final bool isBearish = old.sentiment.contains("跌");
-
-    String? check(double o, double n) => (n - o) != 0 ? _calculateRawDelta(o, n) : null;
-
-    // BTC
-    final blD = check(old.btc?.longVol ?? 0, newData.btc?.longVol ?? 0);
-    final bsD = check(old.btc?.shortVol ?? 0, newData.btc?.shortVol ?? 0);
-    final double oldBNet = isBearish ? ((old.btc?.shortVol ?? 0) - (old.btc?.longVol ?? 0)) : ((old.btc?.longVol ?? 0) - (old.btc?.shortVol ?? 0));
-    final double newBNet = isBearish ? ((newData.btc?.shortVol ?? 0) - (newData.btc?.longVol ?? 0)) : ((newData.btc?.longVol ?? 0) - (newData.btc?.shortVol ?? 0));
-    final bnD = check(oldBNet, newBNet);
-
-    // ETH
-    final elD = check(old.eth?.longVol ?? 0, newData.eth?.longVol ?? 0);
-    final esD = check(old.eth?.shortVol ?? 0, newData.eth?.shortVol ?? 0);
-    final double oldENet = isBearish ? ((old.eth?.shortVol ?? 0) - (old.eth?.longVol ?? 0)) : ((old.eth?.longVol ?? 0) - (old.eth?.shortVol ?? 0));
-    final double newENet = isBearish ? ((newData.eth?.shortVol ?? 0) - (newData.eth?.longVol ?? 0)) : ((newData.eth?.longVol ?? 0) - (newData.eth?.shortVol ?? 0));
-    final enD = check(oldENet, newENet);
-
-    // 核心對沖 (BTC+ETH)
-    final double oldCL = (old.btc?.longVol ?? 0) + (old.eth?.longVol ?? 0);
-    final double newCL = (newData.btc?.longVol ?? 0) + (newData.eth?.longVol ?? 0);
-    final clDelta = check(oldCL, newCL);
-    final double oldCS = (old.btc?.shortVol ?? 0) + (old.eth?.shortVol ?? 0);
-    final double newCS = (newData.btc?.shortVol ?? 0) + (newData.eth?.shortVol ?? 0);
-    final csDelta = check(oldCS, newCS);
-    final double oldCNet = isBearish ? (oldCS - oldCL) : (oldCL - oldCS);
-    final double newCNet = isBearish ? (newCS - newCL) : (newCL - newCS);
-    final cnDelta = check(oldCNet, newCNet);
-
-    if (blD != null || bsD != null || bnD != null || elD != null || esD != null || enD != null || clDelta != null || csDelta != null || cnDelta != null) {
-      changed = true;
-      _lastBtcLongDelta = blD; _lastBtcShortDelta = bsD; _lastBtcNetDelta = bnD;
-      _lastEthLongDelta = elD; _lastEthShortDelta = esD; _lastEthNetDelta = enD;
-      _lastCombinedLongDelta = clDelta; _lastCombinedShortDelta = csDelta; _lastCombinedNetDelta = cnDelta;
-    }
-
-    setState(() {
-      _currentData = HyperData(
-        timestamp: old.timestamp,
-        walletCount: old.walletCount,
-        openPositionCount: old.openPositionCount,
-        openPositionPct: old.openPositionPct,
-        profitCount: old.profitCount,
-        lossCount: old.lossCount,
-        longVolDisplay: old.longVolDisplay,
-        shortVolDisplay: old.shortVolDisplay,
-        netVolDisplay: old.netVolDisplay,
-        sentiment: old.sentiment,
-        longVolNum: old.longVolNum,
-        shortVolNum: old.shortVolNum,
-        netVolNum: old.netVolNum,
-        btc: newData.btc, eth: newData.eth, 
-      );
-      if (changed) { 
-        _lastDataChange = DateTime.now(); 
-        _triggerRainbow(); 
-      }
-      
-      _history.add(_currentData!);
-      if (_history.length > _maxHistoryPoints) _history.removeAt(0);
-      _saveHistoryToDisk(); // 每次更新後存檔
-    });
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    _pollingTimer?.cancel();
+    _rainbowController.dispose();
+    _rainbowTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -245,20 +191,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     if (_currentData == null) {
       return Scaffold(
         backgroundColor: bgDark,
-        body: Stack(children: [
-          if (_scraperReady)
-            Positioned(bottom: 0, right: 0, width: 1, height: 1,
-              child: Opacity(opacity: 0.0, child: CoinglassScraper(onPrinterData: _onPrinterData, onRangeData: _onRangeData))),
-          const Center(child: CircularProgressIndicator(color: textGreen, strokeWidth: 3)),
-        ]),
+        body: Center(child: CircularProgressIndicator(color: textGreen, strokeWidth: 3)),
       );
     }
 
     final bool isBearish = _currentData!.sentiment.contains("跌");
     final Color sColor = isBearish ? textRed : textGreen;
-    final bLong = _currentData!.btc?.longVol ?? 0; final bShort = _currentData!.btc?.shortVol ?? 0;
-    final eLong = _currentData!.eth?.longVol ?? 0; final eShort = _currentData!.eth?.shortVol ?? 0;
-    final cLong = bLong + eLong; final cShort = bShort + eShort;
+    final cLong = (_currentData!.btc?.longVol ?? 0) + (_currentData!.eth?.longVol ?? 0);
+    final cShort = (_currentData!.btc?.shortVol ?? 0) + (_currentData!.eth?.shortVol ?? 0);
     final cNet = isBearish ? (cShort - cLong) : (cLong - cShort);
     final pNet = isBearish ? (_currentData!.shortVolNum - _currentData!.longVolNum) : (_currentData!.longVolNum - _currentData!.shortVolNum);
 
@@ -269,16 +209,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Scaffold(
         backgroundColor: bgDark,
         body: Stack(children: [
-          if (_scraperReady)
-            Positioned(bottom: 0, right: 0, width: 1, height: 1,
-              child: Opacity(opacity: 0.0, child: CoinglassScraper(onPrinterData: _onPrinterData, onRangeData: _onRangeData))),
+          if (defaultTargetPlatform == TargetPlatform.windows)
+            Positioned(width: 1, height: 1, child: Opacity(opacity: 0.0, child: CoinglassScraper(onPrinterData: _onPrinterScraped, onRangeData: _onRangeScraped))),
 
           if (_showRainbow)
             IgnorePointer(child: AnimatedBuilder(
               animation: _rainbowController,
               builder: (c, w) {
                 final color = HSVColor.fromAHSV(0.4, (_rainbowController.value * 360), 0.8, 1.0).toColor();
-                return Container(decoration: BoxDecoration(border: Border.all(color: color, width: 20), color: color.withAlpha(60)));
+                return Container(decoration: BoxDecoration(border: Border.all(color: color, width: 20)));
               },
             )),
 
@@ -288,7 +227,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               _buildHeader(cardBg),
               const SizedBox(height: 12),
               Expanded(child: Row(children: [
-                // 左欄：全體印鈔機
                 Expanded(child: _buildColumn(title: "全體印鈔機", icon: Icons.public, accent: Colors.white, bg: cardBg, children: [
                   MetricCard(label: isBearish ? "全體淨空壓" : "全體淨多壓", value: _formatVolume(pNet), delta: _lastPrinterNetDelta, color: sColor, cardBg: Colors.white.withAlpha(5), highlightValue: true, useColorBorder: true),
                   const SizedBox(height: 8),
@@ -296,12 +234,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   const SizedBox(height: 6),
                   MetricCard(label: "全體總空單", value: _currentData!.shortVolDisplay, delta: _lastPrinterShortDelta, color: textRed, cardBg: Colors.white.withAlpha(2), isSmall: true),
                   const SizedBox(height: 10),
-                  TugOfWarBar(label: "全體持倉比例", leftVal: _currentData!.longVolNum, rightVal: _currentData!.shortVolNum, leftColor: textGreen, rightColor: textRed, leftLabel: "多", rightLabel: "空", cardBg: Colors.transparent),
+                  TugOfWarBar(label: "持倉比例", leftVal: _currentData!.longVolNum, rightVal: _currentData!.shortVolNum, leftColor: textGreen, rightColor: textRed, leftLabel: "多", rightLabel: "空", cardBg: Colors.transparent),
                   const SizedBox(height: 10),
-                  Expanded(child: TrendChart(title: "全體資金流向", fullHistory: _history, displayHistory: _history, isPrinter: true)),
+                  Expanded(child: _buildChart("全體資金流向", _historyMap['printer']!, isPrinter: true)),
                 ])),
                 const SizedBox(width: 10),
-                // 中欄：核心對沖
                 Expanded(child: _buildColumn(title: "核心對沖", icon: Icons.layers, accent: Colors.blueAccent, bg: cardBg, children: [
                   MetricCard(label: isBearish ? "對沖淨空壓" : "對沖淨多壓", value: _formatVolume(cNet), delta: _lastCombinedNetDelta, color: sColor, cardBg: Colors.white.withAlpha(5), highlightValue: true, useColorBorder: true),
                   const SizedBox(height: 8),
@@ -309,16 +246,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   const SizedBox(height: 6),
                   MetricCard(label: "核心總空單", value: _formatVolume(cShort), delta: _lastCombinedShortDelta, color: textRed, cardBg: Colors.white.withAlpha(2), isSmall: true),
                   const SizedBox(height: 10),
-                  TugOfWarBar(label: "核心對沖比例", leftVal: cLong, rightVal: cShort, leftColor: textGreen, rightColor: textRed, leftLabel: "多", rightLabel: "空", cardBg: Colors.transparent),
+                  TugOfWarBar(label: "對沖比例", leftVal: cLong, rightVal: cShort, leftColor: textGreen, rightColor: textRed, leftLabel: "多", rightLabel: "空", cardBg: Colors.transparent),
                   const SizedBox(height: 10),
-                  Expanded(child: TrendChart(title: "對沖淨值趨勢", fullHistory: _history, displayHistory: _history, isCombined: true)),
+                  Expanded(child: _buildChart("對沖淨值趨勢", _historyMap['combined']!, isCombined: true)),
                 ])),
                 const SizedBox(width: 10),
-                // 右欄：BTC & ETH 詳情
                 Expanded(flex: 2, child: Row(children: [
-                  Expanded(child: _buildAssetSub("BTC", const Color(0xFFF7931A), bLong, bShort, _currentData!.btc?.longDisplay ?? "-", _currentData!.btc?.shortDisplay ?? "-", _lastBtcLongDelta, _lastBtcShortDelta, _lastBtcNetDelta, isBearish, cardBg, textGreen, textRed)),
+                  Expanded(child: _buildAssetSub("BTC", const Color(0xFFF7931A), _currentData!.btc, _lastBtcLongDelta, _lastBtcShortDelta, _lastBtcNetDelta, isBearish, cardBg, textGreen, textRed)),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildAssetSub("ETH", const Color(0xFF627EEA), eLong, eShort, _currentData!.eth?.longDisplay ?? "-", _currentData!.eth?.shortDisplay ?? "-", _lastEthLongDelta, _lastEthShortDelta, _lastEthNetDelta, isBearish, cardBg, textGreen, textRed)),
+                  Expanded(child: _buildAssetSub("ETH", const Color(0xFF627EEA), _currentData!.eth, _lastEthLongDelta, _lastEthShortDelta, _lastEthNetDelta, isBearish, cardBg, textGreen, textRed)),
                 ])),
               ])),
             ])),
@@ -331,30 +267,85 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Widget _buildHeader(Color bg) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
     decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white10)),
-    child: Row(children: [
-      const Icon(Icons.bolt_rounded, color: Colors.white, size: 20),
-      const SizedBox(width: 12),
-      const Text("超級印鈔機", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 2)),
-      const SizedBox(width: 12),
-      SentimentBadge(sentiment: _currentData!.sentiment),
-      const Spacer(),
-      if (_lastDataChange != null)
-        Text("最後更新: ${DateFormat('HH:mm:ss').format(_lastDataChange!)}", style: const TextStyle(color: Color(0xFFFFD700), fontSize: 11, fontWeight: FontWeight.bold)),
-    ]),
+    child: Row(
+      children: [
+        const Icon(Icons.bolt_rounded, color: Colors.white, size: 20),
+        const SizedBox(width: 8),
+        const Text("HYPER MONITOR", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1)),
+        const SizedBox(width: 8),
+        SentimentBadge(sentiment: _currentData!.sentiment),
+        const SizedBox(width: 12),
+        Expanded(child: Center(child: _buildRangeSelector())),
+        const SizedBox(width: 12),
+        if (_lastDataChange != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFD700).withAlpha(20),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: const Color(0xFFFFD700).withAlpha(40)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.access_time_rounded, color: Color(0xFFFFD700), size: 10),
+                const SizedBox(width: 4),
+                Text("TPE ${DateFormat('HH:mm').format(_lastDataChange!)}", 
+                  style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+      ],
+    ),
   );
 
-  Widget _buildAssetSub(String name, Color accent, double long, double short, String lDisp, String sDisp, String? lDelta, String? sDelta, String? nDelta, bool isBearish, Color bg, Color green, Color red) {
+  Widget _buildRangeSelector() {
+    final ranges = ["1h", "2h", "3h", "4h", "5h", "1d", "2d", "3d", "4d", "5d", "1w", "1m", "3m", "1y"];
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(color: Colors.white.withAlpha(5), borderRadius: BorderRadius.circular(6)),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: ranges.map((r) => GestureDetector(
+            onTap: () { setState(() => _selectedRange = r); _loadHistory(); },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: _selectedRange == r ? Colors.blueAccent : Colors.transparent, borderRadius: BorderRadius.circular(4)),
+              child: Text(r.toUpperCase(), style: TextStyle(color: _selectedRange == r ? Colors.white : Colors.white54, fontSize: 9, fontWeight: FontWeight.bold)),
+            ),
+          )).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChart(String title, List<HyperData> data, {bool isPrinter = false, bool isCombined = false, bool isBTC = false, bool isETH = false}) {
+    if (_isLoadingHistory) return const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)));
+    return TrendChart(
+      title: title, 
+      displayHistory: data, 
+      overrideSentiment: _currentData?.sentiment, // 關鍵修正：傳遞全局情緒
+      isPrinter: isPrinter, 
+      isCombined: isCombined, 
+      isBTC: isBTC, 
+      isETH: isETH
+    );
+  }
+
+  Widget _buildAssetSub(String name, Color accent, CoinPosition? pos, String? lDelta, String? sDelta, String? nDelta, bool isBearish, Color bg, Color green, Color red) {
+    final double long = pos?.longVol ?? 0;
+    final double short = pos?.shortVol ?? 0;
     final double netRaw = isBearish ? (short - long) : (long - short);
     return _buildColumn(title: "$name 監控", icon: Icons.analytics, accent: accent, bg: bg, children: [
       MetricCard(label: isBearish ? "$name 淨空壓" : "$name 淨多壓", value: _formatVolume(netRaw), delta: nDelta, color: isBearish ? red : green, cardBg: Colors.white.withAlpha(5), highlightValue: true, useColorBorder: true),
       const SizedBox(height: 8),
-      MetricCard(label: "多單持倉", value: lDisp, delta: lDelta, color: green, cardBg: Colors.white.withAlpha(2), isSmall: true),
+      MetricCard(label: "多單持倉", value: pos?.longDisplay ?? "-", delta: lDelta, color: green, cardBg: Colors.white.withAlpha(2), isSmall: true),
       const SizedBox(height: 6),
-      MetricCard(label: "空單持倉", value: sDisp, delta: sDelta, color: red, cardBg: Colors.white.withAlpha(2), isSmall: true),
+      MetricCard(label: "空單持倉", value: pos?.shortDisplay ?? "-", delta: sDelta, color: red, cardBg: Colors.white.withAlpha(2), isSmall: true),
       const SizedBox(height: 10),
       TugOfWarBar(label: "持倉比例", leftVal: long, rightVal: short, leftColor: green, rightColor: red, leftLabel: "多", rightLabel: "空", cardBg: Colors.transparent),
       const SizedBox(height: 10),
-      Expanded(child: TrendChart(title: "$name 資金趨勢", fullHistory: _history, displayHistory: _history, isBTC: name == "BTC", isETH: name == "ETH")),
+      Expanded(child: _buildChart("$name 資金趨勢", _historyMap[name.toLowerCase()]!, isBTC: name == "BTC", isETH: name == "ETH")),
     ]);
   }
 
@@ -369,25 +360,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   );
 
   String _formatVolume(double v) {
-    String s = v >= 0 ? "+" : ""; 
-    double a = v.abs();
+    String s = v >= 0 ? "+" : ""; double a = v.abs();
     if (a >= 1e8) return "$s\$${(v / 1e8).toStringAsFixed(2)}億";
     if (a >= 1e4) return "$s\$${(v / 1e4).toStringAsFixed(2)}萬";
     return "$s\$${v.toStringAsFixed(0)}";
   }
 
-  String? _calculateRawDelta(double? prev, double curr) {
-    if (prev == null) return null;
-    double diff = curr - prev; if (diff == 0) return null;
-    double absD = diff.abs();
-    String f;
-    if (absD >= 1e8) {
-      f = "${(absD / 1e8).toStringAsFixed(2)}億";
-    } else if (absD >= 1e4) {
-      f = "${(absD / 1e4).toStringAsFixed(2)}萬";
-    } else {
-      f = absD.toStringAsFixed(0);
-    }
-    return "${diff > 0 ? "+" : "-"}\$$f";
+  String _formatDelta(double o, double n) {
+    double d = n - o; double a = d.abs();
+    String f = a >= 1e8 ? "${(a/1e8).toStringAsFixed(2)}億" : a >= 1e4 ? "${(a/1e4).toStringAsFixed(0)}萬" : a.toStringAsFixed(0);
+    return "${d > 0 ? "+" : "-"}\$$f";
+  }
+
+  void _toggleFullscreen() async {
+    bool fs = await windowManager.isFullScreen();
+    await windowManager.setFullScreen(!fs);
   }
 }
