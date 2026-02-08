@@ -48,7 +48,21 @@ class CoinPosition {
 
 extension TaiwanTime on DateTime {
   DateTime toTaiwanTime() {
-    return toUtc().add(const Duration(hours: 8));
+    // 1. 先取得該時間點的 UTC 物件
+    final utcTime = toUtc();
+    // 2. 加上 8 小時得到臺灣數值
+    final twValue = utcTime.add(const Duration(hours: 8));
+    // 3. 關鍵：回傳一個「數值與臺灣同步」但「標記為本地」的時間物件
+    // 這樣 UI 格式化工具就不會再根據系統時區去做額外轉換
+    return DateTime(
+      twValue.year,
+      twValue.month,
+      twValue.day,
+      twValue.hour,
+      twValue.minute,
+      twValue.second,
+      twValue.millisecond,
+    );
   }
 }
 
@@ -86,6 +100,11 @@ class HyperData {
   factory HyperData.fromJson(Map<String, dynamic> j) {
     String ts = j['timestamp'] ?? DateTime.now().toIso8601String();
     if (!ts.contains('T')) ts = ts.replaceFirst(' ', 'T');
+    
+    // 如果伺服器傳回的字串沒有時區資訊，強制加上 Z (UTC)，避免被誤判為本地時間
+    if (!ts.endsWith('Z') && !ts.contains(RegExp(r'[+-]\d{2}:?\d{2}'))) {
+      ts += 'Z';
+    }
 
     return HyperData(
       timestamp: DateTime.parse(ts).toTaiwanTime(),
