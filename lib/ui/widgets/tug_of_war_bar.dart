@@ -35,9 +35,6 @@ class TugOfWarBar extends StatelessWidget {
     final leftPct = total > 0 ? (leftVal / total) : 0.5;
     final rightPct = total > 0 ? (rightVal / total) : 0.5;
 
-    String displayLeft = leftLabel.replaceAll('L', '多').replaceAll(':', '');
-    String displayRight = rightLabel.replaceAll('S', '空').replaceAll(':', '');
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: Column(
@@ -67,23 +64,15 @@ class TugOfWarBar extends StatelessWidget {
                   ),
                 ),
               ),
-              Container(
-                width: 1.5,
-                height: 10,
-                color: Colors.white,
-              ),
+              Container(width: 1.5, height: 10, color: Colors.white),
             ],
           ),
           const SizedBox(height: 4),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // 顯示「多 $數值」
-              Text("$displayLeft \$${_formatCompact(leftVal)}", 
-                style: TextStyle(color: leftColor, fontSize: 9, fontWeight: FontWeight.w900)),
-              // 顯示「$數值 空」
-              Text("\$${_formatCompact(rightVal)} $displayRight", 
-                style: TextStyle(color: rightColor, fontSize: 9, fontWeight: FontWeight.w900)),
+              Text("多 \$${_formatCompact(leftVal)}", style: TextStyle(color: leftColor, fontSize: 9, fontWeight: FontWeight.w900)),
+              Text("\$${_formatCompact(rightVal)} 空", style: TextStyle(color: rightColor, fontSize: 9, fontWeight: FontWeight.w900)),
             ],
           ),
         ],

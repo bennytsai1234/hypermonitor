@@ -60,7 +60,9 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       await ctrl.setPopupWindowPolicy(win.WebviewPopupWindowPolicy.deny);
       await ctrl.loadUrl(url);
       onInit(true);
-    } catch (e) { }
+    } catch (e) {
+      debugPrint('Error initializing Windows Webview: $e');
+    }
   }
 
   void _startScrapingLoop() {
@@ -99,7 +101,10 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         if (s.startsWith('"') && s.endsWith('"')) s = s.substring(1, s.length - 1);
         return s.replaceAll(r'\"', '"');
       }
-    } catch (e) { return null; }
+    } catch (e) {
+      debugPrint('Error executing scrape: $e');
+      return null;
+    }
   }
 
   static const _printerJs = r"""

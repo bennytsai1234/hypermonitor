@@ -26,6 +26,7 @@ class MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const textGreen = Color(0xFF00FF9D); 
     const textRed = Color(0xFFFF2E2E);
+    // 1:1 還原：背景色使用純黑 (OLED Black)
     const oledBlack = Color(0xFF000000);
 
     Color? deltaColor;
@@ -56,20 +57,13 @@ class MetricCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 標題列：使用 ConstrainedBox 強制固定高度，解決 Delta 消失導致的高度跳動
           ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 22), 
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                              Text(label, 
-                                style: const TextStyle(
-                                  color: Colors.white70, 
-                                  fontSize: 11, 
-                                  fontWeight: FontWeight.bold, 
-                                  letterSpacing: 0.8
-                                )
-                              ),                if (delta != null && deltaColor != null)
+                Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
+                if (delta != null && deltaColor != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
@@ -77,37 +71,20 @@ class MetricCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(color: deltaColor.withAlpha(100), width: 0.5),
                     ),
-                    child: Text(
-                      delta!,
-                      style: TextStyle(
-                        color: deltaColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
+                    child: Text(delta!, style: TextStyle(color: deltaColor, fontSize: 10, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
                   )
                 else
-                  const SizedBox(height: 18), // 佔位，保持高度穩定
+                  const SizedBox(height: 18),
               ],
             ),
           ),
           SizedBox(height: highlightValue ? 12 : 6),
           SizedBox(
-            height: highlightValue ? 36 : 24, // 強制數值區域高度一致
+            height: highlightValue ? 36 : 24,
             child: FittedBox(
               alignment: Alignment.centerLeft,
               fit: BoxFit.scaleDown,
-              child: Text(
-                value, 
-                style: TextStyle(
-                  color: color, 
-                  fontSize: highlightValue ? 32 : (isSmall ? 18 : 22), 
-                  fontWeight: highlightValue ? FontWeight.w900 : FontWeight.bold, 
-                  letterSpacing: -0.5,
-                  height: 1.0,
-                )
-              ),
+              child: Text(value, style: TextStyle(color: color, fontSize: highlightValue ? 32 : (isSmall ? 18 : 22), fontWeight: highlightValue ? FontWeight.w900 : FontWeight.bold, letterSpacing: -0.5, height: 1.0)),
             ),
           ),
         ],
