@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 為了震動功能
 import 'package:intl/intl.dart';
 import '../core/data_model.dart';
 import '../core/api_service.dart';
@@ -15,13 +16,18 @@ class MobileDashboardScreen extends StatefulWidget {
   State<MobileDashboardScreen> createState() => _MobileDashboardScreenState();
 }
 
-class _MobileDashboardScreenState extends State<MobileDashboardScreen> {
+class _MobileDashboardScreenState extends State<MobileDashboardScreen> with SingleTickerProviderStateMixin {
   final ApiService _apiService = ApiService();
   HyperData? _currentData;
   List<HyperData> _printerHistory = [];
   String _selectedRange = "1h";
   bool _isLoading = false;
   Timer? _refreshTimer;
+
+  // 警報相關
+  late AnimationController _flashController;
+  bool _showFlash = false;
+  Timer? _flashTimer;
 
   // Delta 緩衝
   String? _lastNetDelta;
@@ -31,6 +37,7 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _flashController = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
     _refreshAll();
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollLatest());
   }
@@ -67,10 +74,13 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> {
   }
 
   void _calculateDeltas(HyperData old, HyperData newData) {
+    bool hasSignificantChange = false;
     final bool isBearish = newData.sentiment.contains("跌");
+    
     String? check(double o, double n) {
       double d = n - o;
       if (d.abs() < 50000) return null; // 噪點過濾
+      hasSignificantChange = true;
       String s = d > 0 ? "+" : "-";
       double a = d.abs();
       String f = a >= 1e8 ? "${(a/1e8).toStringAsFixed(2)}億" : "${(a/1e4).toStringAsFixed(0)}萬";
@@ -80,16 +90,38 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> {
     final double oldNet = isBearish ? (old.shortVolNum - old.longVolNum) : (old.longVolNum - old.shortVolNum);
     final double newNet = isBearish ? (newData.shortVolNum - newData.longVolNum) : (newData.longVolNum - newData.shortVolNum);
 
+    final nD = check(oldNet, newNet);
+    final lD = check(old.longVolNum, newData.longVolNum);
+    final sD = check(old.shortVolNum, newData.shortVolNum);
+
     setState(() {
-      _lastNetDelta = check(oldNet, newNet);
-      _lastLongDelta = check(old.longVolNum, newData.longVolNum);
-      _lastShortDelta = check(old.shortVolNum, newData.shortVolNum);
+      _lastNetDelta = nD;
+      _lastLongDelta = lD;
+      _lastShortDelta = sD;
+    });
+
+    if (hasSignificantChange) {
+      _triggerAlert();
+    }
+  }
+
+  void _triggerAlert() {
+    // 觸發震動
+    HapticFeedback.heavyImpact();
+    
+    // 觸發視覺閃爍
+    _flashTimer?.cancel();
+    setState(() => _showFlash = true);
+    _flashTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showFlash = false);
     });
   }
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _flashController.dispose();
+    _flashTimer?.cancel();
     super.dispose();
   }
 
@@ -112,107 +144,134 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> {
 
     return Scaffold(
       backgroundColor: bgDark,
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF080808),
-        title: Row(
-          children: [
-            const Icon(Icons.bolt_rounded, color: Colors.white, size: 20),
-            const SizedBox(width: 8),
-            const Text("HYPER MOBILE", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-            const Spacer(),
-            SentimentBadge(sentiment: _currentData!.sentiment),
-          ],
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(40),
-          child: _buildRangeSelector(),
-        ),
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refreshAll,
-        color: textGreen,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 核心淨壓卡片
-              MetricCard(
-                label: isBearish ? "全體淨空壓" : "全體淨多壓",
-                value: _formatVolume(netVal),
-                delta: _lastNetDelta,
-                color: sColor,
-                cardBg: Colors.white.withAlpha(10),
-                highlightValue: true,
-                useColorBorder: true,
-              ),
-              const SizedBox(height: 16),
-              
-              // 多空詳細
-              Row(
+      body: Stack(
+        children: [
+          // 背景主要內容
+          Scaffold(
+            backgroundColor: Colors.transparent,
+            appBar: AppBar(
+              backgroundColor: const Color(0xFF080808),
+              elevation: 0,
+              title: Row(
                 children: [
-                  Expanded(
-                    child: MetricCard(
-                      label: "總多單",
-                      value: _currentData!.longVolDisplay,
-                      delta: _lastLongDelta,
-                      color: textGreen,
-                      cardBg: Colors.white.withAlpha(5),
-                      isSmall: true,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: MetricCard(
-                      label: "總空單",
-                      value: _currentData!.shortVolDisplay,
-                      delta: _lastShortDelta,
-                      color: textRed,
-                      cardBg: Colors.white.withAlpha(5),
-                      isSmall: true,
-                    ),
-                  ),
+                  const Icon(Icons.bolt_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  const Text("HYPER MOBILE", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                  const Spacer(),
+                  SentimentBadge(sentiment: _currentData!.sentiment),
                 ],
               ),
-              const SizedBox(height: 20),
-
-              // 持倉比例
-              TugOfWarBar(
-                label: "市場持倉比例",
-                leftVal: _currentData!.longVolNum,
-                rightVal: _currentData!.shortVolNum,
-                leftColor: textGreen,
-                rightColor: textRed,
-                leftLabel: "多",
-                rightLabel: "空",
-                cardBg: Colors.white.withAlpha(5),
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(40),
+                child: _buildRangeSelector(),
               ),
-              const SizedBox(height: 24),
+            ),
+            body: RefreshIndicator(
+              onRefresh: _refreshAll,
+              color: textGreen,
+              backgroundColor: const Color(0xFF1A1A1A),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // 核心淨壓卡片
+                    MetricCard(
+                      label: isBearish ? "全體淨空壓" : "全體淨多壓",
+                      value: _formatVolume(netVal),
+                      delta: _lastNetDelta,
+                      color: sColor,
+                      cardBg: Colors.white.withAlpha(10),
+                      highlightValue: true,
+                      useColorBorder: true,
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // 多空詳細
+                    Row(
+                      children: [
+                        Expanded(
+                          child: MetricCard(
+                            label: "總多單",
+                            value: _currentData!.longVolDisplay,
+                            delta: _lastLongDelta,
+                            color: textGreen,
+                            cardBg: Colors.white.withAlpha(5),
+                            isSmall: true,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: MetricCard(
+                            label: "總空單",
+                            value: _currentData!.shortVolDisplay,
+                            delta: _lastShortDelta,
+                            color: textRed,
+                            cardBg: Colors.white.withAlpha(5),
+                            isSmall: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
 
-              // 趨勢圖
-              const Text("全體資金流向趨勢", style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 300,
-                child: TrendChart(
-                  title: "",
-                  displayHistory: _printerHistory,
-                  overrideSentiment: _currentData?.sentiment,
-                  isPrinter: true,
+                    // 持倉比例
+                    TugOfWarBar(
+                      label: "市場持倉比例",
+                      leftVal: _currentData!.longVolNum,
+                      rightVal: _currentData!.shortVolNum,
+                      leftColor: textGreen,
+                      rightColor: textRed,
+                      leftLabel: "多",
+                      rightLabel: "空",
+                      cardBg: Colors.white.withAlpha(5),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 趨勢圖
+                    const Text("全體資金流向趨勢", style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 280,
+                      child: TrendChart(
+                        title: "",
+                        displayHistory: _printerHistory,
+                        overrideSentiment: _currentData?.sentiment,
+                        isPrinter: true,
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    Center(
+                      child: Text(
+                        "最後更新: ${DateFormat('HH:mm:ss').format(_currentData!.timestamp)}",
+                        style: const TextStyle(color: Colors.white24, fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                  ],
                 ),
               ),
-              
-              const SizedBox(height: 20),
-              Center(
-                child: Text(
-                  "最後更新: ${DateFormat('HH:mm:ss').format(_currentData!.timestamp)}",
-                  style: const TextStyle(color: Colors.white24, fontSize: 12),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+
+          // 警報閃爍層
+          if (_showFlash)
+            IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _flashController,
+                builder: (context, child) {
+                  final color = HSVColor.fromAHSV(0.3, (_flashController.value * 360), 0.8, 1.0).toColor();
+                  return Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: color, width: 12),
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
