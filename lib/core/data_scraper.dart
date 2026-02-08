@@ -72,16 +72,24 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   }
 
   Future<void> _doScrapes() async {
-    final printerResult = await _executeScrape(_winA, _mobileA, _printerJs);
-    if (printerResult != null && printerResult != "null") {
-      final data = _parsePrinterJson(printerResult);
-      if (data != null) widget.onPrinterData(data);
+    // 只有在 Windows 平台且初始化完成後才執行，或在行動端執行
+    bool canScrapeA = (defaultTargetPlatform == TargetPlatform.windows) ? _isWinAInit : true;
+    bool canScrapeB = (defaultTargetPlatform == TargetPlatform.windows) ? _isWinBInit : true;
+
+    if (canScrapeA) {
+      final printerResult = await _executeScrape(_winA, _mobileA, _printerJs);
+      if (printerResult != null && printerResult != "null") {
+        final data = _parsePrinterJson(printerResult);
+        if (data != null) widget.onPrinterData(data);
+      }
     }
 
-    final rangeResult = await _executeScrape(_winB, _mobileB, _rangeJs);
-    if (rangeResult != null && rangeResult != "null") {
-      final data = _parseRangeJson(rangeResult);
-      if (data != null) widget.onRangeData(data);
+    if (canScrapeB) {
+      final rangeResult = await _executeScrape(_winB, _mobileB, _rangeJs);
+      if (rangeResult != null && rangeResult != "null") {
+        final data = _parseRangeJson(rangeResult);
+        if (data != null) widget.onRangeData(data);
+      }
     }
   }
 
