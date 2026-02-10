@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Hyperliquid Monitor</title>
+  <meta name="description" content="Hyperliquid 超級印鈔機即時監控面板">
+  <meta name="theme-color" content="#000000">
+
+  <!-- iOS PWA Support -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HyperMon">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <div class="loader-pulse"></div>
+    <p class="loader-text">正在連接雲端...</p>
+  </div>
+
+  <!-- Main App -->
+  <div id="app" class="hidden">
+    <!-- Header -->
+    <header id="app-header">
+      <div class="header-left">
+        <span class="header-icon">⚡</span>
+        <span class="header-title">HYPER MONITOR</span>
+      </div>
+      <div id="sentiment-badge"></div>
+    </header>
+
+    <!-- Alert Flash Overlay -->
+    <div id="alert-flash" class="hidden"></div>
+
+    <!-- Content -->
+    <main id="content">
+
+      <!-- Asset Selector -->
+      <div id="asset-selector">
+        <button class="asset-btn active" data-asset="all">全體</button>
+        <button class="asset-btn" data-asset="hedge">核心</button>
+        <button class="asset-btn" data-asset="btc">BTC</button>
+        <button class="asset-btn" data-asset="eth">ETH</button>
+      </div>
+
+      <!-- Net Pressure Card (Hero) -->
+      <div id="net-card" class="metric-card hero-card">
+        <div class="metric-header">
+          <span class="metric-label" id="net-label">全體淨多壓</span>
+          <span class="metric-delta" id="net-delta"></span>
+        </div>
+        <div class="metric-value" id="net-value">--</div>
+      </div>
+
+      <!-- Trend Chart -->
+      <section id="chart-section">
+        <div class="chart-header">
+          <h2 class="section-title">資金流向趨勢</h2>
+          <div class="select-wrapper">
+            <select id="range-select">
+              <optgroup label="短期">
+                <option value="1h" selected>1小時</option>
+                <option value="2h">2小時</option>
+                <option value="4h">4小時</option>
+                <option value="6h">6小時</option>
+                <option value="8h">8小時</option>
+                <option value="12h">12小時</option>
+              </optgroup>
+              <optgroup label="中期">
+                <option value="1d">1天</option>
+                <option value="2d">2天</option>
+                <option value="3d">3天</option>
+                <option value="1w">1週</option>
+              </optgroup>
+              <optgroup label="長期">
+                <option value="1m">1月</option>
+                <option value="3m">3月</option>
+                <option value="6m">6月</option>
+                <option value="1y">1年</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="trend-chart"></canvas>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer id="app-footer">
+        <span id="last-update">等待數據中...</span>
+      </footer>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
