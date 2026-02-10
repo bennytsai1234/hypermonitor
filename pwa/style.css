@@ -489,8 +489,8 @@ body {
 
 .asset-btn.active {
   background: rgba(0, 255, 157, 0.15);
-  border: 1px solid var(--color-green);
-  color: var(--color-green);
+  border: 1px solid var(--green);
+  color: var(--green);
   box-shadow: 0 0 15px rgba(0, 255, 157, 0.2);
 }
 

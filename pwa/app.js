@@ -105,9 +105,9 @@ function parseTimestamp(ts) {
   let s = ts;
   if (!s.includes('T')) s = s.replace(' ', 'T');
   if (!s.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
-  const d = new Date(s);
-  return new Date(d.getTime() + 8 * 60 * 60 * 1000); // UTC+8
+  return new Date(s);
 }
+
 
 function toNum(v) { return typeof v === 'number' ? v : parseFloat(v) || 0; }
 
@@ -275,7 +275,7 @@ function renderUI() {
 
     // 4. Timestamp
     const ts = parseTimestamp(data.timestamp);
-    dom.lastUpdate.textContent = `最後更新: ${padTime(ts.getUTCHours())}:${padTime(ts.getUTCMinutes())}:${padTime(ts.getUTCSeconds())}`;
+    dom.lastUpdate.textContent = `最後更新: ${padTime(ts.getHours())}:${padTime(ts.getMinutes())}:${padTime(ts.getSeconds())}`;
 
     // 5. Chart
     renderChart();
@@ -311,14 +311,12 @@ function renderChart() {
 
   // Determine sentiment from current data to color the chart
   const bearish = allData ? isBearish(allData.sentiment) : false;
-
-  const labels = [];
-  const netData = [];
+  const chartPoints = [];
 
   history.forEach((item) => {
     // Determine timestamp source
     const rawTs = item.timestamp || item.time_bucket;
-    labels.push(parseTimestamp(rawTs));
+    const ts = parseTimestamp(rawTs);
 
     let l = 0, s = 0;
 
@@ -327,14 +325,15 @@ function renderChart() {
         l = toNum(item.long_vol_num ?? item.longVolNum);
         s = toNum(item.short_vol_num ?? item.shortVolNum);
     } else if (currentAsset === 'hedge') {
-        l = item.long_vol_num;
-        s = item.short_vol_num;
+        l = toNum(item.long_vol_num);
+        s = toNum(item.short_vol_num);
     } else if (currentAsset === 'btc' || currentAsset === 'eth') {
         l = toNum(item.long_vol);
         s = toNum(item.short_vol);
     }
 
-    netData.push(bearish ? (s - l) : (l - s));
+    const val = bearish ? (s - l) : (l - s);
+    chartPoints.push({ x: ts, y: val });
   });
 
   const ctx = dom.chartCanvas.getContext('2d');
@@ -343,11 +342,10 @@ function renderChart() {
   trendChart = new Chart(ctx, {
     type: 'line',
     data: {
-      labels,
       datasets: [
         {
           label: bearish ? '淨空壓' : '淨多壓',
-          data: netData,
+          data: chartPoints, // {x: Date, y: Number}
           borderColor: bearish ? '#FF2E2E' : '#00FF9D',
           backgroundColor: bearish ? 'rgba(255,46,46,0.08)' : 'rgba(0,255,157,0.08)',
           borderWidth: 2,
@@ -364,28 +362,43 @@ function renderChart() {
       animation: { duration: 600 },
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: false }, // Hide legend to save space
+        legend: { display: false },
         tooltip: {
             backgroundColor: 'rgba(0,0,0,0.85)',
             titleColor: '#fff',
             callbacks: {
                 title: (items) => {
-                    const d = items[0].label ? new Date(items[0].label) : new Date();
-                    return `${padTime(d.getUTCHours())}:${padTime(d.getUTCMinutes())}`;
+                    const idx = items[0].dataIndex;
+                    // Safely retrieve the Date object from raw data
+                    const d = chartPoints[idx].x;
+                    if (!d || isNaN(d.getTime())) return '時間未知';
+                    return `${padTime(d.getMonth()+1)}/${padTime(d.getDate())} ${padTime(d.getHours())}:${padTime(d.getMinutes())}`;
                 },
-                label: (ctx) => `淨壓: ${formatVolume(ctx.parsed.y)}`
+                label: (ctx) => {
+                    const v = ctx.parsed.y;
+                    return isNaN(v) ? '無數據' : `淨壓: ${formatVolume(v)}`;
+                }
             }
         }
       },
       scales: {
         x: {
           type: 'time',
-          time: { displayFormats: { minute: 'HH:mm', hour: 'HH:mm', day: 'MM/dd' } },
-          ticks: { color: 'rgba(255,255,255,0.25)', maxTicksLimit: 6 },
+          time: {
+              displayFormats: { minute: 'HH:mm', hour: 'HH:mm', day: 'MM/dd' }
+          },
+          ticks: {
+              color: 'rgba(255,255,255,0.25)',
+              maxTicksLimit: 5, // Reduce density
+              autoSkip: true,
+              maxRotation: 0,
+              includeBounds: true
+          },
           grid: { color: 'rgba(255,255,255,0.04)' },
           border: { display: false },
         },
         y: {
+          position: 'right', // Move Y-axis to right for better mobile view
           ticks: { color: 'rgba(255,255,255,0.25)', callback: (v) => formatVolume(v) },
           grid: { color: 'rgba(255,255,255,0.04)' },
           border: { display: false },
@@ -440,12 +453,54 @@ function initListeners() {
 }
 
 // ============================================
-// Boot
+// Boot & Debug
 // ============================================
 async function boot() {
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(console.warn);
+  if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+          // Force update check
+          reg.update();
+      }).catch(console.warn);
+  }
 
   initListeners();
+
+  // Debug: Click timestamp 5 times
+  let clicks = 0;
+  const footer = document.getElementById('last-update');
+  if (footer) {
+      footer.addEventListener('click', () => {
+          clicks++;
+          if (clicks >= 5) {
+              const debugInfo = ['App Ver: v7-force'];
+
+              // 1. API Data
+              const k = currentAsset === 'all' ? 'printer' : currentAsset;
+              const h = historyData[k] || [];
+              if (h.length > 0) debugInfo.push(`API[0]: ${JSON.stringify(h[0]).slice(0, 100)}`);
+              else debugInfo.push('API: Empty');
+
+              // 2. Chart Data
+              if (trendChart && trendChart.data?.datasets[0]?.data?.length) {
+                  const p = trendChart.data.datasets[0].data[0];
+                  debugInfo.push(`Chart[0]: x=${p.x}, y=${p.y}`);
+                  if (p.x instanceof Date) debugInfo.push(`Date Valid: ${!isNaN(p.x.getTime())}`);
+                  else debugInfo.push(`Date Type: ${typeof p.x}`);
+              } else {
+                  debugInfo.push('Chart: No Data');
+              }
+
+              alert(debugInfo.join('\n'));
+
+              if (confirm('清除緩存並重整?')) {
+                  caches.keys().then(names => Promise.all(names.map(n => caches.delete(n))))
+                  .then(() => window.location.reload(true));
+              }
+              clicks = 0;
+          }
+          setTimeout(() => clicks = 0, 3000);
+      });
+  }
 
   // Initial load
   await refreshAll();
@@ -454,6 +509,7 @@ async function boot() {
   dom.app.classList.remove('hidden');
 
   pollTimer = setInterval(pollLatest, POLL_INTERVAL);
+
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) clearInterval(pollTimer);
