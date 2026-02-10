@@ -515,3 +515,39 @@ body {
   background: rgba(0, 210, 255, 0.15);
   box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
 }
+
+/* Secondary Stats (Long/Short) */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.secondary-card {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border-radius: var(--radius-md);
+}
+
+.secondary-card .metric-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 600;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.secondary-card .metric-value {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.metric-value.small.green { color: var(--green); }
+.metric-value.small.red { color: var(--red); }

@@ -45,6 +45,8 @@ const dom = {
   chartCanvas: $('trend-chart'),
   assetBtns: document.querySelectorAll('.asset-btn'),
   rangeSelect: $('range-select'),
+  longVal: $('long-val'),
+  shortVal: $('short-val'),
 };
 
 // ============================================
@@ -149,24 +151,33 @@ function extractData(rawData, assetType) {
     const sentiment = rawData.sentiment;
     const timestamp = rawData.timestamp;
 
-    let long, short;
+    let long = 0, short = 0;
+
+    // Helper to safely get volume (handles camelCase and snake_case)
+    const getVol = (obj, type) => {
+        if (!obj) return 0;
+        return toNum(obj[`${type}Vol`] ?? obj[`${type}_vol`] ?? 0);
+    };
 
     if (assetType === 'all') {
-        long = toNum(rawData.long_vol_num ?? rawData.longVolNum);
-        short = toNum(rawData.short_vol_num ?? rawData.shortVolNum);
+        long = getVol(rawData, 'long');
+        short = getVol(rawData, 'short');
+        // Legacy fallback if root object uses _num suffix
+        if (long === 0) long = toNum(rawData.long_vol_num ?? rawData.longVolNum);
+        if (short === 0) short = toNum(rawData.short_vol_num ?? rawData.shortVolNum);
     } else if (assetType === 'hedge') {
-        const bLong = rawData.btc ? toNum(rawData.btc.long_vol) : 0;
-        const bShort = rawData.btc ? toNum(rawData.btc.short_vol) : 0;
-        const eLong = rawData.eth ? toNum(rawData.eth.long_vol) : 0;
-        const eShort = rawData.eth ? toNum(rawData.eth.short_vol) : 0;
+        const bLong = getVol(rawData.btc, 'long');
+        const bShort = getVol(rawData.btc, 'short');
+        const eLong = getVol(rawData.eth, 'long');
+        const eShort = getVol(rawData.eth, 'short');
         long = bLong + eLong;
         short = bShort + eShort;
     } else if (assetType === 'btc') {
-        long = rawData.btc ? toNum(rawData.btc.long_vol) : 0;
-        short = rawData.btc ? toNum(rawData.btc.short_vol) : 0;
+        long = getVol(rawData.btc, 'long');
+        short = getVol(rawData.btc, 'short');
     } else if (assetType === 'eth') {
-        long = rawData.eth ? toNum(rawData.eth.long_vol) : 0;
-        short = rawData.eth ? toNum(rawData.eth.short_vol) : 0;
+        long = getVol(rawData.eth, 'long');
+        short = getVol(rawData.eth, 'short');
     }
 
     return { sentiment, timestamp, long, short };
@@ -247,6 +258,8 @@ function renderUI() {
 
     dom.netLabel.textContent = `${name}${typeLabel}`;
     dom.netValue.textContent = formatVolume(netVal);
+    dom.longVal.textContent = formatVolume(data.long);
+    dom.shortVal.textContent = formatVolume(data.short);
 
     // Color logic: Red for Bearish, Green for Bullish
     const sColor = bearish ? 'red' : 'green';
@@ -286,7 +299,9 @@ function setDelta(el, value, inverted) {
 // Chart
 // ============================================
 function renderChart() {
-  const history = historyData[currentAsset] || [];
+  // Map currentAsset ('all') to historyData key ('printer')
+  const key = currentAsset === 'all' ? 'printer' : currentAsset;
+  const history = historyData[key] || [];
 
   if (!history || history.length === 0) {
     if (trendChart) trendChart.destroy();

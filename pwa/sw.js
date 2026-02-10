@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hyper-monitor-v1';
+const CACHE_NAME = 'hyper-monitor-v6-data-fix';
 const ASSETS = [
   '/',
   '/index.html',
@@ -12,7 +12,7 @@ self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
-  self.skipWaiting();
+  self.skipWaiting(); // Force new SW to active
 });
 
 // Activate: clean old caches
@@ -22,7 +22,7 @@ self.addEventListener('activate', (e) => {
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
     )
   );
-  self.clients.claim();
+  self.clients.claim(); // Take control of all clients immediately
 });
 
 // Fetch: network-first for API, cache-first for assets
