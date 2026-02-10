@@ -43,3 +43,17 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Node.js / Cloudflare Worker
+node_modules/
+.wrangler/
+worker/node_modules/
+worker/.wrangler/
+pwa/node_modules/
+
+# Windows
+windows/flutter/ephemeral/
+*.exe
+*.dll
+*.msix
+

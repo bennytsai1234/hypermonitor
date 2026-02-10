@@ -45,7 +45,6 @@ const dom = {
   alertFlash: $('alert-flash'),
   chartCanvas: $('trend-chart'),
   assetBtns: document.querySelectorAll('.asset-btn'),
-  rangeSelect: $('range-select'),
   longVal: $('long-val'),
   shortVal: $('short-val'),
 };
@@ -462,19 +461,58 @@ function initListeners() {
       });
   });
 
-  // Range Switcher (Dropdown)
-  if (dom.rangeSelect) {
+  // Range Switcher (Custom Dropdown)
+  const dd = document.getElementById('range-dropdown');
+  if (dd) {
+      const trigger = dd.querySelector('.dropdown-trigger');
+      const selectedText = dd.querySelector('.selected-text');
+      const items = dd.querySelectorAll('.dropdown-item');
+
       // Restore from storage
-      const saved = localStorage.getItem('hyper_range');
-      if (saved) {
-          selectedRange = saved;
-          dom.rangeSelect.value = saved;
+      const saved = localStorage.getItem('hyper_range') || '1h';
+      selectedRange = saved;
+
+      // Update UI to match saved state
+      const savedItem = Array.from(items).find(i => i.dataset.value === saved);
+      if (savedItem) {
+          selectedText.textContent = savedItem.textContent;
+          items.forEach(i => i.classList.remove('active'));
+          savedItem.classList.add('active');
       }
 
-      dom.rangeSelect.addEventListener('change', (e) => {
-          selectedRange = e.target.value;
-          localStorage.setItem('hyper_range', selectedRange);
-          loadHistory();
+      // Toggle Menu
+      trigger.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dd.classList.toggle('open');
+      });
+
+      // Handle Selection
+      items.forEach(item => {
+          item.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const val = item.dataset.value;
+
+              if (val === selectedRange) {
+                  dd.classList.remove('open');
+                  return;
+              }
+
+              selectedRange = val;
+              localStorage.setItem('hyper_range', val);
+
+              // UI Update
+              selectedText.textContent = item.textContent;
+              items.forEach(i => i.classList.remove('active'));
+              item.classList.add('active');
+
+              dd.classList.remove('open');
+              loadHistory();
+          });
+      });
+
+      // Close when clicking outside
+      document.addEventListener('click', () => {
+          dd.classList.remove('open');
       });
   }
 }

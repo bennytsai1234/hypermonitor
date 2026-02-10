@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hyper-monitor-v11-ui';
+const CACHE_NAME = 'hyper-monitor-v12-dropdown';
 const ASSETS = [
   '/',
   '/index.html',
