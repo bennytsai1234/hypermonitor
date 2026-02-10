@@ -29,9 +29,8 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
-  // API calls: always go to network
-  if (url.pathname.startsWith('/latest') || url.pathname.startsWith('/history')) {
-    e.respondWith(fetch(e.request));
+  // Cross-origin requests (API calls to worker): don't intercept
+  if (url.origin !== self.location.origin) {
     return;
   }
 
