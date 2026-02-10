@@ -1,5 +1,6 @@
 export interface Env {
 	DB: D1Database;
+	API_KEY?: string;
 }
 
 export default {
@@ -14,8 +15,16 @@ export default {
 
 		if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
-		// --- 上傳接口 (保持不變) ---
+		// --- 上傳接口 (含 API Key 認證) ---
 		if (request.method === 'POST') {
+			// API Key 認證：若已設定 API_KEY 環境變數，則驗證請求
+			if (env.API_KEY) {
+				const authHeader = request.headers.get('X-API-Key') || '';
+				if (authHeader !== env.API_KEY) {
+					return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+				}
+			}
+
 			const d: any = await request.json();
 			if (url.pathname === '/update-printer') {
 				await env.DB.prepare(`INSERT INTO printer_metrics (wallet_count, profit_count, loss_count, long_vol_num, short_vol_num, net_vol_num, sentiment, long_display, short_display, net_display) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(d.walletCount, d.profitCount, d.lossCount, d.longVolNum, d.shortVolNum, d.netVolNum, d.sentiment, d.longDisplay, d.shortDisplay, d.netDisplay).run();
@@ -26,7 +35,7 @@ export default {
 			return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
 		}
 
-		// --- [修正點]：歷史圖表接口，解決時區與數據量顯示問題 ---
+		// --- 歷史圖表接口 ---
 		if (url.pathname === '/history') {
 			const range = url.searchParams.get('range') || '1h';
 			let interval = 1;
@@ -53,20 +62,39 @@ export default {
 				case '1y': filter = "-1 year"; interval = 1440; break;
 			}
 
-			// 關鍵修正：改用 (SELECT MAX(timestamp) FROM printer_metrics) 作為基準，避免時區誤差
-			const baseQuery = (table: string, symbolCondition: string) => `
+			// 修正：使用明確的聚合函式，避免 SELECT * GROUP BY 的不確定性
+			const timeBucket = `datetime((strftime('%s', timestamp) / (60 * ${interval})) * (60 * ${interval}), 'unixepoch')`;
+
+			const printerQuery = `
 				SELECT
-					datetime((strftime('%s', timestamp) / (60 * ${interval})) * (60 * ${interval}), 'unixepoch') as time_bucket,
-					*
-				FROM ${table}
-				WHERE timestamp > datetime((SELECT MAX(timestamp) FROM ${table}), ?)
-				${symbolCondition}
+					${timeBucket} as time_bucket,
+					AVG(long_vol_num) as long_vol_num,
+					AVG(short_vol_num) as short_vol_num,
+					AVG(net_vol_num) as net_vol_num,
+					MAX(wallet_count) as wallet_count,
+					MAX(sentiment) as sentiment
+				FROM printer_metrics
+				WHERE timestamp > datetime((SELECT MAX(timestamp) FROM printer_metrics), ?)
 				GROUP BY time_bucket ORDER BY time_bucket ASC
 			`;
 
-			const p = await env.DB.prepare(baseQuery('printer_metrics', '')).bind(filter).all();
-			const b = await env.DB.prepare(baseQuery('range_metrics', "AND symbol='btc'")).bind(filter).all();
-			const e = await env.DB.prepare(baseQuery('range_metrics', "AND symbol='eth'")).bind(filter).all();
+			const rangeQuery = (symbol: string) => `
+				SELECT
+					${timeBucket} as time_bucket,
+					'${symbol}' as symbol,
+					AVG(long_vol) as long_vol,
+					AVG(short_vol) as short_vol,
+					AVG(total_vol) as total_vol,
+					AVG(net_vol) as net_vol
+				FROM range_metrics
+				WHERE timestamp > datetime((SELECT MAX(timestamp) FROM range_metrics), ?)
+				AND symbol='${symbol}'
+				GROUP BY time_bucket ORDER BY time_bucket ASC
+			`;
+
+			const p = await env.DB.prepare(printerQuery).bind(filter).all();
+			const b = await env.DB.prepare(rangeQuery('btc')).bind(filter).all();
+			const e = await env.DB.prepare(rangeQuery('eth')).bind(filter).all();
 
 			return new Response(JSON.stringify({
 				printer: p.results.map((i:any) => ({ ...i, timestamp: i.time_bucket })),
