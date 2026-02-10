@@ -119,6 +119,13 @@ function formatVolume(v) {
   return `${sign}$${v.toFixed(0)}`;
 }
 
+function formatAbsVolume(v) {
+  const abs = Math.abs(v);
+  if (abs >= 1e8) return `$${(abs / 1e8).toFixed(2)}億`;
+  if (abs >= 1e4) return `$${(abs / 1e4).toFixed(2)}萬`;
+  return `$${abs.toFixed(0)}`;
+}
+
 function formatCompact(v) {
   const abs = Math.abs(v);
   if (abs >= 1e8) return `${(v / 1e8).toFixed(2)}億`;
@@ -258,8 +265,8 @@ function renderUI() {
 
     dom.netLabel.textContent = `${name}${typeLabel}`;
     dom.netValue.textContent = formatVolume(netVal);
-    dom.longVal.textContent = formatVolume(data.long);
-    dom.shortVal.textContent = formatVolume(data.short);
+    dom.longVal.textContent = formatAbsVolume(data.long);
+    dom.shortVal.textContent = formatAbsVolume(data.short);
 
     // Color logic: Red for Bearish, Green for Bullish
     const sColor = bearish ? 'red' : 'green';
@@ -512,8 +519,10 @@ async function boot() {
 
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) clearInterval(pollTimer);
-    else {
+    if (document.hidden) {
+      clearInterval(pollTimer);
+    } else {
+      clearInterval(pollTimer);
       refreshAll();
       pollTimer = setInterval(pollLatest, POLL_INTERVAL);
     }
