@@ -2,16 +2,8 @@ name = "hyper-monitor-worker"
 main = "src/index.ts"
 compatibility_date = "2024-02-08"
 
-# D1 資料庫雙重綁定，確保代碼無論用哪個名稱都能存取
+# D1 資料庫綁定
 [[d1_databases]]
 binding = "DB"
 database_name = "hyper_db"
 database_id = "a9219271-4051-4433-9db0-8fec5d522a9c"
-
-[[d1_databases]]
-binding = "hyper_db"
-database_name = "hyper_db"
-database_id = "a9219271-4051-4433-9db0-8fec5d522a9c"
-
-[triggers]
-crons = ["* * * * *"]
