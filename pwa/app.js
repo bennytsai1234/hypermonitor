@@ -19,6 +19,7 @@ let selectedRange = '1h';
 let historyData = { printer: [], btc: [], eth: [], hedge: [] };
 let trendChart = null;
 let pollTimer = null;
+let lastChartUpdate = null; // Timestamp of data used for last render
 
 // Delta cache (keyed by asset type to persist independently)
 const lastDeltas = {
@@ -316,6 +317,17 @@ function renderChart() {
     return;
   }
 
+  // Optimization: Skip re-render if data hasn't changed
+  // We check the latest timestamp in history
+  const latestTs = history[history.length - 1]?.timestamp || history[history.length - 1]?.time_bucket;
+  const signature = `${key}-${selectedRange}-${latestTs}`;
+
+  if (lastChartUpdate === signature && trendChart) {
+      // Data is same, just ensure resizing happens if needed (Chart.js handles this)
+      return;
+  }
+  lastChartUpdate = signature;
+
   // Determine sentiment from current data to color the chart
   const bearish = allData ? isBearish(allData.sentiment) : false;
   const chartPoints = [];
@@ -452,8 +464,16 @@ function initListeners() {
 
   // Range Switcher (Dropdown)
   if (dom.rangeSelect) {
+      // Restore from storage
+      const saved = localStorage.getItem('hyper_range');
+      if (saved) {
+          selectedRange = saved;
+          dom.rangeSelect.value = saved;
+      }
+
       dom.rangeSelect.addEventListener('change', (e) => {
           selectedRange = e.target.value;
+          localStorage.setItem('hyper_range', selectedRange);
           loadHistory();
       });
   }

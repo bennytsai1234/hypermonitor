@@ -196,46 +196,65 @@ body {
 /* --- Select Dropdown (Range) --- */
 .select-wrapper {
   position: relative;
-  min-width: 80px;
+  min-width: 90px;
 }
 
 .select-wrapper::after {
-  content: '▼';
-  font-size: 8px;
-  color: var(--text-tertiary);
+  content: '';
   position: absolute;
-  right: 12px;
+  right: 14px;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(-65%) rotate(45deg);
+  width: 5px;
+  height: 5px;
+  border-right: 2px solid var(--text-tertiary);
+  border-bottom: 2px solid var(--text-tertiary);
   pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.select-wrapper:hover::after {
+  border-color: var(--green);
+  transform: translateY(-50%) rotate(45deg) scale(1.1);
 }
 
 #range-select {
   appearance: none;
   -webkit-appearance: none;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-secondary);
-  font-family: var(--font-main);
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
-  padding: 6px 28px 6px 12px;
-  border-radius: var(--radius-sm);
+  padding: 8px 32px 8px 14px;
+  border-radius: 20px;
   outline: none;
   cursor: pointer;
   width: 100%;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+#range-select:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 #range-select:focus {
-  border-color: var(--text-tertiary);
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(0, 255, 157, 0.15);
 }
 
 #range-select option {
-  background: #1a1a1a;
-  color: #fff;
+  background: #121212;
+  color: #eee;
+  padding: 8px;
 }
 
 /* --- Alert Flash --- */
