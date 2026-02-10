@@ -29,7 +29,7 @@ export default {
 		// --- [修正點]：歷史圖表接口，解決時區與數據量顯示問題 ---
 		if (url.pathname === '/history') {
 			const range = url.searchParams.get('range') || '1h';
-			let interval = 1; 
+			let interval = 1;
 			let filter = "-1 hour";
 
 			switch(range) {
@@ -38,17 +38,24 @@ export default {
 				case '3h': filter = "-3 hours"; interval = 1; break;
 				case '4h': filter = "-4 hours"; interval = 2; break;
 				case '5h': filter = "-5 hours"; interval = 2; break;
+				case '6h': filter = "-6 hours"; interval = 3; break;
+				case '8h': filter = "-8 hours"; interval = 4; break;
+				case '12h': filter = "-12 hours"; interval = 5; break;
 				case '1d': filter = "-1 day"; interval = 5; break;
 				case '2d': filter = "-2 days"; interval = 10; break;
 				case '3d': filter = "-3 days"; interval = 15; break;
+				case '4d': filter = "-4 days"; interval = 20; break;
+				case '5d': filter = "-5 days"; interval = 30; break;
 				case '1w': filter = "-7 days"; interval = 60; break;
 				case '1m': filter = "-1 month"; interval = 240; break;
+				case '3m': filter = "-3 months"; interval = 720; break;
+				case '6m': filter = "-6 months"; interval = 1440; break;
 				case '1y': filter = "-1 year"; interval = 1440; break;
 			}
 
 			// 關鍵修正：改用 (SELECT MAX(timestamp) FROM printer_metrics) 作為基準，避免時區誤差
 			const baseQuery = (table: string, symbolCondition: string) => `
-				SELECT 
+				SELECT
 					datetime((strftime('%s', timestamp) / (60 * ${interval})) * (60 * ${interval}), 'unixepoch') as time_bucket,
 					*
 				FROM ${table}
@@ -60,7 +67,7 @@ export default {
 			const p = await env.DB.prepare(baseQuery('printer_metrics', '')).bind(filter).all();
 			const b = await env.DB.prepare(baseQuery('range_metrics', "AND symbol='btc'")).bind(filter).all();
 			const e = await env.DB.prepare(baseQuery('range_metrics', "AND symbol='eth'")).bind(filter).all();
-			
+
 			return new Response(JSON.stringify({
 				printer: p.results.map((i:any) => ({ ...i, timestamp: i.time_bucket })),
 				btc: b.results.map((i:any) => ({ ...i, timestamp: i.time_bucket, symbol: 'BTC' })),
