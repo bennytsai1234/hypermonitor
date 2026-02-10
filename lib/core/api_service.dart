@@ -5,13 +5,17 @@ import 'data_model.dart';
 
 class ApiService {
   static const String baseUrl = 'https://hyper-monitor-worker.bennytsai0711.workers.dev';
+  static const String apiKey = ''; // 若 Worker 有設定 API_KEY，請在此填入
 
   // [發報機專用]：分開上傳兩組數據
   Future<void> updatePrinter(HyperData data) async {
     try {
       await http.post(
         Uri.parse('$baseUrl/update-printer'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (apiKey.isNotEmpty) 'X-API-Key': apiKey,
+        },
         body: jsonEncode({
           'walletCount': data.walletCount,
           'profitCount': data.profitCount,
@@ -34,7 +38,10 @@ class ApiService {
     try {
       await http.post(
         Uri.parse('$baseUrl/update-range'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          if (apiKey.isNotEmpty) 'X-API-Key': apiKey,
+        },
         body: jsonEncode({
           'btc': data.btc?.toJson(),
           'eth': data.eth?.toJson(),
