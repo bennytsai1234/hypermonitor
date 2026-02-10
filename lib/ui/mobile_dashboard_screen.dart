@@ -1,124 +1,35 @@
-import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // 為了震動功能
-import 'package:intl/intl.dart';
-import '../core/data_model.dart';
-import '../core/api_service.dart';
-import 'widgets/sentiment_badge.dart';
-import 'widgets/metric_card.dart';
-import 'widgets/tug_of_war_bar.dart';
-import 'widgets/trend_chart.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import '../core/data_scraper.dart';
 
-class MobileDashboardScreen extends StatefulWidget {
-  const MobileDashboardScreen({super.key});
-
-  @override
-  State<MobileDashboardScreen> createState() => _MobileDashboardScreenState();
-}
+// ... (imports remain)
 
 class _MobileDashboardScreenState extends State<MobileDashboardScreen> with SingleTickerProviderStateMixin {
-  final ApiService _apiService = ApiService();
-  HyperData? _currentData;
-  List<HyperData> _printerHistory = [];
-  String _selectedRange = "1h";
-  bool _isLoading = false;
-  Timer? _refreshTimer;
-
-  // 警報相關
-  late AnimationController _flashController;
-  bool _showFlash = false;
-  Timer? _flashTimer;
-
-  // Delta 緩衝
-  String? _lastNetDelta;
-  String? _lastLongDelta;
-  String? _lastShortDelta;
+  // ... (variables remain)
 
   @override
   void initState() {
     super.initState();
+    WakelockPlus.enable(); // 保持螢幕常亮，確保爬蟲持續運行
     _flashController = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
     _refreshAll();
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollLatest());
   }
 
-  Future<void> _refreshAll() async {
-    await _pollLatest();
-    await _loadHistory();
+  // ... (methods remain)
+
+  void _onPrinterScraped(HyperData data) {
+    _apiService.updatePrinter(data);
+    // 可選：本地也更新顯示，讓掛機手機也能看到最新數據
+    if (mounted) setState(() => _currentData = data);
   }
 
-  Future<void> _pollLatest() async {
-    final newData = await _apiService.fetchLatest();
-    if (newData == null) return;
-    
-    if (_currentData != null) {
-      _calculateDeltas(_currentData!, newData);
-    }
-
-    if (mounted) {
-      setState(() {
-        _currentData = newData;
-      });
-    }
-  }
-
-  Future<void> _loadHistory() async {
-    setState(() => _isLoading = true);
-    final history = await _apiService.fetchHistory(_selectedRange);
-    if (mounted) {
-      setState(() {
-        _printerHistory = history['printer'] ?? [];
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _calculateDeltas(HyperData old, HyperData newData) {
-    bool hasSignificantChange = false;
-    final bool isBearish = newData.sentiment.contains("跌");
-    
-    String? check(double o, double n) {
-      double d = n - o;
-      if (d.abs() < 50000) return null; // 噪點過濾
-      hasSignificantChange = true;
-      String s = d > 0 ? "+" : "-";
-      double a = d.abs();
-      String f = a >= 1e8 ? "${(a/1e8).toStringAsFixed(2)}億" : "${(a/1e4).toStringAsFixed(0)}萬";
-      return "$s\$$f";
-    }
-
-    final double oldNet = isBearish ? (old.shortVolNum - old.longVolNum) : (old.longVolNum - old.shortVolNum);
-    final double newNet = isBearish ? (newData.shortVolNum - newData.longVolNum) : (newData.longVolNum - newData.shortVolNum);
-
-    final nD = check(oldNet, newNet);
-    final lD = check(old.longVolNum, newData.longVolNum);
-    final sD = check(old.shortVolNum, newData.shortVolNum);
-
-    setState(() {
-      _lastNetDelta = nD;
-      _lastLongDelta = lD;
-      _lastShortDelta = sD;
-    });
-
-    if (hasSignificantChange) {
-      _triggerAlert();
-    }
-  }
-
-  void _triggerAlert() {
-    // 觸發震動
-    HapticFeedback.heavyImpact();
-    
-    // 觸發視覺閃爍
-    _flashTimer?.cancel();
-    setState(() => _showFlash = true);
-    _flashTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _showFlash = false);
-    });
+  void _onRangeScraped(HyperData data) {
+    _apiService.updateRange(data);
   }
 
   @override
   void dispose() {
+    WakelockPlus.disable();
     _refreshTimer?.cancel();
     _flashController.dispose();
     _flashTimer?.cancel();
@@ -132,9 +43,21 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> with Sing
     const textRed = Color(0xFFFF2E2E);
 
     if (_currentData == null) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: bgDark,
-        body: Center(child: CircularProgressIndicator(color: textGreen)),
+        body: Stack(
+          children: [
+            // 隱藏的 Scraper (必須在 Loading 時也存在，否則無法開始抓取)
+            Opacity(
+              opacity: 0.0,
+              child: SizedBox(
+                width: 1, height: 1,
+                child: CoinglassScraper(onPrinterData: _onPrinterScraped, onRangeData: _onRangeScraped)
+              ),
+            ),
+            const Center(child: CircularProgressIndicator(color: textGreen)),
+          ],
+        ),
       );
     }
 
@@ -146,7 +69,20 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> with Sing
       backgroundColor: bgDark,
       body: Stack(
         children: [
-          // 背景主要內容
+          // 1. 背景執行爬蟲 (Hidden)
+          Opacity(
+            opacity: 0.0,
+            child: SizedBox(
+              width: 1,
+              height: 1,
+              child: CoinglassScraper(
+                onPrinterData: _onPrinterScraped,
+                onRangeData: _onRangeScraped
+              )
+            ),
+          ),
+
+          // 2. Main Content
           Scaffold(
             backgroundColor: Colors.transparent,
             appBar: AppBar(
@@ -187,7 +123,7 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> with Sing
                       useColorBorder: true,
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // 多空詳細
                     Row(
                       children: [
@@ -241,7 +177,7 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> with Sing
                         isPrinter: true,
                       ),
                     ),
-                    
+
                     const SizedBox(height: 24),
                     Center(
                       child: Text(
@@ -256,7 +192,7 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> with Sing
             ),
           ),
 
-          // 警報閃爍層
+          // 3. 警報閃爍層
           if (_showFlash)
             IgnorePointer(
               child: AnimatedBuilder(
