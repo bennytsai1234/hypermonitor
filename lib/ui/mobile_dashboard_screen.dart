@@ -1,10 +1,37 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import '../core/data_model.dart';
 import '../core/data_scraper.dart';
+import '../core/api_service.dart';
+import 'widgets/sentiment_badge.dart';
+import 'widgets/metric_card.dart';
+import 'widgets/tug_of_war_bar.dart';
+import 'widgets/trend_chart.dart';
 
-// ... (imports remain)
+class MobileDashboardScreen extends StatefulWidget {
+  const MobileDashboardScreen({super.key});
+
+  @override
+  State<MobileDashboardScreen> createState() => _MobileDashboardScreenState();
+}
 
 class _MobileDashboardScreenState extends State<MobileDashboardScreen> with SingleTickerProviderStateMixin {
-  // ... (variables remain)
+  final ApiService _apiService = ApiService();
+  HyperData? _currentData;
+  List<HyperData> _printerHistory = [];
+  String _selectedRange = "1h";
+
+  Timer? _refreshTimer;
+  late AnimationController _flashController;
+  bool _showFlash = false;
+  Timer? _flashTimer;
+
+  // Delta
+  String? _lastNetDelta;
+  String? _lastLongDelta;
+  String? _lastShortDelta;
 
   @override
   void initState() {
@@ -15,7 +42,61 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> with Sing
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollLatest());
   }
 
-  // ... (methods remain)
+  Future<void> _refreshAll() async {
+    await _pollLatest();
+    await _loadHistory();
+  }
+
+  Future<void> _pollLatest() async {
+    final newData = await _apiService.fetchLatest();
+    if (newData == null) return;
+    if (_currentData != null) _calculateDeltas(_currentData!, newData);
+    if (mounted) setState(() => _currentData = newData);
+  }
+
+  Future<void> _loadHistory() async {
+    final history = await _apiService.fetchHistory(_selectedRange);
+    if (mounted) setState(() => _printerHistory = history['printer'] ?? []);
+  }
+
+  void _calculateDeltas(HyperData old, HyperData newData) {
+    bool changed = false;
+    final bool isBearish = newData.sentiment.contains("跌");
+    String? check(double o, double n) => (n - o) != 0 ? _formatDelta(o, n) : null;
+
+    final lD = check(old.longVolNum, newData.longVolNum);
+    final sD = check(old.shortVolNum, newData.shortVolNum);
+    final double oldPN = isBearish ? (old.shortVolNum - old.longVolNum) : (old.longVolNum - old.shortVolNum);
+    final double newPN = isBearish ? (newData.shortVolNum - newData.longVolNum) : (newData.longVolNum - newData.shortVolNum);
+    final nD = check(oldPN, newPN);
+    if (lD != null || sD != null || nD != null) {
+      _lastLongDelta = lD;
+      _lastShortDelta = sD;
+      _lastNetDelta = nD;
+      changed = true;
+    }
+
+    if (changed) _triggerFlash();
+  }
+
+  void _triggerFlash() {
+    _flashTimer?.cancel();
+    setState(() => _showFlash = true);
+    _flashTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showFlash = false);
+    });
+  }
+
+  String _formatDelta(double o, double n) {
+    double d = n - o;
+    double a = d.abs();
+    String f = a >= 1e8
+        ? "${(a / 1e8).toStringAsFixed(2)}億"
+        : a >= 1e4
+            ? "${(a / 1e4).toStringAsFixed(0)}萬"
+            : a.toStringAsFixed(0);
+    return "${d > 0 ? "+" : "-"}\$$f";
+  }
 
   void _onPrinterScraped(HyperData data) {
     _apiService.updatePrinter(data);
