@@ -85,7 +85,7 @@ export function showApp() {
 
 export function getDom() { return dom; }
 
-export function triggerAlert() {
+export function triggerAlert(playAudio = true) {
   if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
 
   // Flash overlay
@@ -96,8 +96,10 @@ export function triggerAlert() {
   dom.netCard.classList.add('updating');
   setTimeout(() => dom.netCard.classList.remove('updating'), ALERT_DURATION);
 
-  // Play Sound
-  if (!isMuted) {
+  // Play Sound (Only if explicitly requested AND not muted)
+  // Logic: playAudio param defaults to true for backward compatibility,
+  // but calculated delta logic sets it strictly.
+  if (playAudio && !isMuted) {
       alertAudio.currentTime = 0;
       alertAudio.play().catch(e => console.log('Audio play blocked:', e));
   }
@@ -126,6 +128,7 @@ function setDelta(el, value, isBearishMode) {
 
 export function calculateAllDeltas(oldData, newData) {
     let hasSignificant = false;
+    let shouldPlayAudio = false;
 
     const processAsset = (type) => {
         const o = extractData(oldData, type);
@@ -139,7 +142,13 @@ export function calculateAllDeltas(oldData, newData) {
         const check = (vOld, vNew) => {
             const d = vNew - vOld;
             if (d === 0) return null;
-            hasSignificant = true;
+            hasSignificant = true; // Visual trigger for ANY change
+
+            // Audio Trigger: Only for 'all'
+            if (type === 'all') {
+                shouldPlayAudio = true;
+            }
+
             const sign = d > 0 ? '+' : '-';
             const abs = Math.abs(d);
             let fmt;
@@ -156,7 +165,7 @@ export function calculateAllDeltas(oldData, newData) {
     ['all', 'hedge', 'btc', 'eth'].forEach(processAsset);
 
     if (hasSignificant) {
-      triggerAlert();
+      triggerAlert(shouldPlayAudio);
     }
 }
 
