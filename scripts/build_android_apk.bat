@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0\.."
 echo [INFO] Starting Android APK Build...
 echo [INFO] Ensuring dependencies...
 call flutter pub get
@@ -20,4 +21,4 @@ echo 1. Connect your Android phone to PC via USB.
 echo 2. Run: flutter install
 echo    OR copy the APK file to your phone and install it manually.
 echo.
-pause
+timeout /t 15

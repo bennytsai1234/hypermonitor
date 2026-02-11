@@ -51,7 +51,7 @@ Agent 注意：在執行任何指令前，請先讀取並適配以下專案特�
 
 1. **自動測試**: 執行 `flutter test` 確保核心邏輯無壞損。
 2. **部署驗證**:
-   - PWA: 執行 `deploy_pwa.bat` 並要求使用者強制刷新。
+   - PWA: 執行 `scripts/deploy_pwa.bat` 並要求使用者強制刷新。
    - API: 確保 Worker URL 已更新至 `pwa/js/config.js`。
 3. **正式提交**: 使用 Conventional Commits 格式 (`feat:`, `fix:`, `refactor:`, `docs:`) 進行最終 Commit。
 

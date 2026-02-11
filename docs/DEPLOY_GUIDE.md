@@ -89,8 +89,9 @@
 
 1.  **在專案根目錄執行**
     ```bash
-    ./deploy_pwa.bat
+    .\scripts\deploy_pwa.bat
     ```
+
     (或者是手動執行 `npx wrangler pages deploy pwa --project-name=hyper-monitor`)
 
 2.  **完成！**
@@ -110,7 +111,7 @@
 ### 更新前端介面
 1.修改 `pwa/` 內的代碼 (如 JS, CSS)。
 2.若有修改邏輯，建議更新 `pwa/sw.js` 內的版本號 (`CACHE_NAME`) 以強制用戶端更新。
-3.在根目錄執行 `./deploy_pwa.bat`。
+3.在根目錄執行 `.\scripts\deploy_pwa.bat`。
 
 ---
 

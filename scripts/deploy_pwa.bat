@@ -2,7 +2,7 @@
 echo [DEPLOY] Starting deployment to Cloudflare Pages...
 echo.
 
-cd /d "%~dp0"
+cd /d "%~dp0\.."
 echo [INFO] Current directory: %CD%
 
 REM Check if wrangler is installed
@@ -19,4 +19,4 @@ echo.
 echo [SUCCESS] Deployment complete!
 echo [INFO] Your PWA should be live at: https://hyper-monitor.pages.dev
 echo.
-pause
+timeout /t 10
