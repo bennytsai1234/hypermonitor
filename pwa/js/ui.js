@@ -11,22 +11,32 @@ import { ALERT_DURATION, ALERT_SOUND } from './config.js';
 
 // DOM Cache
 const $ = (id) => document.getElementById(id);
-const dom = {
-  loading: $('loading-screen'),
-  app: $('app'),
-  sentimentBadge: $('sentiment-badge'),
-  netLabel: $('net-label'),
-  netValue: $('net-value'),
-  netDelta: $('net-delta'),
-  netCard: $('net-card'),
-  lastUpdate: $('last-update'),
-  alertFlash: $('alert-flash'),
-  chartCanvas: $('trend-chart'),
-  assetBtns: document.querySelectorAll('.asset-btn'),
-  longVal: $('long-val'),
-  shortVal: $('short-val'),
-  muteBtn: $('mute-btn'),
-};
+
+let dom = {};
+
+export function initUi() {
+    dom = {
+        loading: $('loading-screen'),
+        app: $('app'),
+        sentimentBadge: $('sentiment-badge'),
+        netLabel: $('net-label'),
+        netValue: $('net-value'),
+        netDelta: $('net-delta'),
+        netCard: $('net-card'),
+        lastUpdate: $('last-update'),
+        alertFlash: $('alert-flash'),
+        chartCanvas: $('trend-chart'),
+        assetBtns: document.querySelectorAll('.asset-btn'),
+        longVal: $('long-val'),
+        shortVal: $('short-val'),
+        muteBtn: $('mute-btn'),
+    };
+
+    // Set initial mute UI
+    if (dom.muteBtn) {
+        updateMuteIcon();
+    }
+}
 
 // State for alerts
 const lastDeltas = {
@@ -39,10 +49,7 @@ const lastDeltas = {
 let isMuted = localStorage.getItem('hyper_muted') === 'true';
 const alertAudio = new Audio(ALERT_SOUND);
 
-// Set initial mute UI
-if (dom.muteBtn) {
-    updateMuteIcon();
-}
+// Removed top-level init call
 
 function updateMuteIcon() {
     if (!dom.muteBtn) return;

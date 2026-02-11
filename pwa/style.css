@@ -644,3 +644,14 @@ body {
 .icon-btn.active .icon {
   filter: drop-shadow(0 0 4px var(--green));
 }
+
+/* Compact Header on Mobile */
+@media (max-width: 380px) {
+  .header-title {
+    display: none;
+  }
+  .header-icon {
+    margin-right: 0;
+  }
+}
+

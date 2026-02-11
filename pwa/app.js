@@ -6,7 +6,7 @@
 import { POLL_INTERVAL } from './js/config.js';
 import { fetchLatest, fetchHistory } from './js/api.js';
 import { renderChart } from './js/chart.js';
-import { renderUI, calculateAllDeltas, triggerAlert, toggleMute, showApp, getDom } from './js/ui.js';
+import { renderUI, calculateAllDeltas, triggerAlert, toggleMute, showApp, getDom, initUi } from './js/ui.js';
 
 // Global State
 let allData = null;
@@ -133,6 +133,7 @@ async function boot() {
       }).catch(console.warn);
   }
 
+  initUi(); // Initialize DOM references
   initListeners();
 
   // Initial load
