@@ -1,32 +1,37 @@
-# Project Overview
+# 專案總覽 (Project Overview)
 
-## 🎯 Vision
-Hyperliquid Monitor is a specialized Progressive Web App (PWA) designed for crypto traders who need real-time visibility into "Super Money Printer" (large whale) positions on Hyperliquid. Unlike generic dashboards, this tool focuses on **actionable intelligence**—specifically tracking the net flow of capital (Long vs. Short) with millisecond precision and instant auditory feedback.
+## 🎯 願景 (Vision)
+Hyperliquid Monitor 是一個專為加密貨幣交易者打造的漸進式網頁應用 (PWA)。它的核心目標非常純粹：**即時捕捉 Hyperliquid 上的「超級印鈔機」(大戶) 動向**。我們不追求花俏的傳統儀表板，而是專注於**可行動的情報 (Actionable Intelligence)**——以毫秒級的精度追蹤資金的淨流向 (多 vs 空)，並提供即時的聽覺反饋。
 
-## ✨ Key Features
+## ✨ 核心功能 (Key Features)
 
-### 1. Real-Time Monitoring
-- **Live Data Polling**: Fetches data every 10 seconds (configurable) from a distributed Cloudflare Worker network.
-- **Sentiment Analysis**: Automatically classifies market sentiment (Bullish/Bearish) based on net position deltas.
-- **Visual Feedback**: The entire UI theme adapts dynamically—Green for Bullish, Red for Bearish.
+### 1. 實時監控 (Real-Time Monitoring)
+- **為什麼這樣做**：市場瞬息萬變，傳統的 1 分鐘 K 線圖往往已經太慢。
+- **實作方式**：透過分佈式 Cloudflare Worker 網絡，每 10 秒 (可配置) 輪詢一次數據。
+- **優點**：架構輕量，不需要維護昂貴的 WebSocket 伺服器。
+- **缺點**：相較於 WebSocket 仍有微小延遲，但在「大趨勢」判讀上已足夠。
+- **情感分析**：系統自動根據淨持倉變化量，將市場情緒分類為「看多 (Bullish)」或「看空 (Bearish)」。
 
-### 2. Cross-Platform Experience (PWA)
-- **Installable**: Works as a native app on iOS, Android, and Desktop.
-- **Offline Capable**: Critical UI assets are cached for instant loading.
-- **Background Sync**: Uses a dedicated Web Worker (`timer.worker.js`) to ensure data polling continues even when the mobile screen is locked.
+### 2. 跨平台體驗 (Cross-Platform PWA)
+- **為什麼這樣做**：交易者不會隨時坐在電腦前。我们需要一個在 Windows 桌機、Android 手機、iPad 上體驗完全一致的工具。
+- **實作方式**：採用 PWA 標準，支持「加入主畫面」使得網頁像原生 App 一樣運行。
+- **優點**：開發一次，隨處運行。更新時無需經過 App Store 審核，即時部署。
+- **缺點**：在 iOS 上功能受限 (例如無法後台推播)，需透過特殊手段 (Web Worker) 繞過。
 
-### 3. Audiovisual Alerts
-- **Sound System**: Plays a distinct alert sound (`alert.mp3`) when significant position changes occurred.
-- **Visual Flash**: The screen flashes and the card border glows when new data arrives.
+### 3. 視聽覺警報 (Audiovisual Alerts)
+- **為什麼這樣做**：盯盤是非常耗費精神的。我們希望交易者能「聽」盤，只有在關鍵時刻才需要看螢幕。
+- **策略調整**：最初版本所有幣種變動都會警報，導致雜訊過多。**最新版本 (v1.5) 優化為僅在「全體 (All)」資金流向發生顯著變化時才觸發音效**，其餘僅做視覺閃爍。
+- **實作方式**：
+  - **聲音**：播放 `alert.mp3`。
+  - **視覺**：卡片邊框彩虹閃爍，螢幕邊緣泛光。
 
-### 4. Advanced Charting
-- **Net Pressure Graph**: A custom area chart visualizing the `Long - Short` delta over time.
-- **Multi-Asset Support**: Tracks `All`, `Hedge` (BTC+ETH), `BTC` specific, and `ETH` specific flows.
-- **Time Travel**: Selectable time ranges from 1 Hour to 1 Year.
+### 4. 進階圖表 (Advanced Charting)
+- **為什麼這樣做**：單看數字無法感知「趨勢力度」。
+- **實作方式**：自定義的區域圖 (Area Chart)，可視化 `多單 - 空單` 的淨壓力差。
+- **多資產支持**：支持 `All` (全體), `Hedge` (核心 BTC+ETH), `BTC`, `ETH` 四種維度切換。
 
-## 📱 User Interface Design
-We utilize a **Glassmorphism** design language:
-- Translucent, frosted-glass cards.
-- Vibrant, neon-like text colors for critical metrics.
-- Minimalist iconography using SVG.
-- "Mobile-First" responsive layout ensuring usability on 5.5" screens and 30" monitors alike.
+## 📱 使用者介面設計 (UI Design)
+我們採用 **Glassmorphism (玻璃擬態)** 設計語言：
+- **風格**：半透明磨砂玻璃卡片，搭配霓虹色系文字。
+- **導航**：針對移動端優化的「緊湊佈局 (Compact Layout)」，隱藏捲軸，最大化資訊密度。
+- **夜間模式**：預設深色主題，減少長期盯盤的眼睛疲勞。

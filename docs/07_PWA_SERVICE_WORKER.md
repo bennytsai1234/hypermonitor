@@ -1,35 +1,33 @@
-# Service Worker & PWA
+# Service Worker 與 PWA (Service Worker & PWA)
 
-## 🌐 The Service Worker (`sw.js`)
+## 🌐 Service Worker (`sw.js`)
 
-The Service Worker is the key to making this web app behave like a native app.
+Service Worker 是讓網頁變身 App 的核心技術。它是一個運行在瀏覽器背景的腳本，能夠攔截並處理網絡請求。
 
-### Strategy: Stale-While-Revalidate (Hybrid)
+### 策略：混合式 Stale-While-Revalidate
 
-1.  **Static Assets (Shell)**:
-    - `index.html`, `style.css`, `app.js`, `icons/*`.
-    - **Strategy**: **Cache First**. We want the UI to load instantly, 0ms latency.
-    - **Update**: We used a versioned Cache Name (`hyper-monitor-v15...`). Changing this string in `sw.js` forces the browser to re-cache everything on the next visit.
+1.  **靜態資源 (Shell)**:
+    - 包含 `index.html`, `style.css`, `app.js`。
+    - **策略**: **Cache First (緩存優先)**。我們希望 App 能夠 0 秒開啟，即使在沒有網路的環境下也能看到 UI 框架。
+    - **版本控制**: 我們使用手動版本號 (`hyper-monitor-v15...`)。一旦修改代碼，必須更新這個版本號，這會強制用戶的瀏覽器在下次訪問時重新下載並更新緩存。
 
-2.  **API Requests**:
-    - **Strategy**: **Network Only** (mostly) or Network First.
-    - We explicitly bypass the Service Worker for API calls to ensure we never show stale financial data.
+2.  **API 請求**:
+    - **策略**: **Network Only (僅網絡)**。
+    - 金融數據具有極強的時效性。緩存昨天的比特幣價格是毫無意義的。因此，我們在 `SW` 中明確排除了 API 請求的緩存：
     ```javascript
-    if (url.origin !== self.location.origin) return; // Don't cache external API calls
+    if (url.origin !== self.location.origin) return; // 不緩存外部 API
     ```
 
-### Lifecycle
+### 生命周期 (Lifecycle)
 
-- **Install**: Caches the defined `ASSETS` list.
-- **Activate**: Cleans up *old* caches that don't match the current `CACHE_NAME`.
-- **Fetch**: Intercepts requests to serve from cache if available.
+- **Install**: 下載並緩存 `ASSETS` 列表。
+- **Activate**: 清理舊版本的緩存 (Garbage Collection)。這一步至關重要，否則用戶的手機空間會被無限佔用。
 
 ## 📦 PWA Manifest (`manifest.json`)
-The manifest defines how the app looks when installed on the home screen.
-- `display: standalone`: Removes the browser URL bar.
-- `background_color`: `#000000` for seamless startup.
-- `icons`: Providing `192x192` and `512x512` icons ensures support for Android/iOS splash screens.
+Manifest 檔案告訴手機系統「這是一個 App」。
+- `display: standalone`: 移除瀏覽器的網址列與導航按鈕，提供沉浸式體驗。
+- `background_color`: `#000000`，確保 App 啟動時的過渡畫面是黑色的，不會閃瞎用戶的眼睛。
 
-## 📱 iOS Specifics
-iOS Safari doesn't fully support Manifest for everything yet. We added `<meta>` tags in `index.html`:
-- `apple-mobile-web-app-status-bar-style`: `black-translucent` allows the content to bleed under the notch.
+## 📱 iOS 的特殊處理
+iOS (Safari) 對 PWA 標準的支持總是慢半拍。為了讓它在 iPhone 上看起來完美，我們在 HTML 中加入了一堆 Meta 標籤：
+- `apple-mobile-web-app-status-bar-style`: `black-translucent`。這讓網頁內容能延伸到劉海區域 (Notch)，看起來非常高級。

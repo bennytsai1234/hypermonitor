@@ -1,53 +1,54 @@
-# Setup & Installation Guide
+# 安裝與設置指南 (Setup & Installation Guide)
 
-## 📋 Prerequisites
-- **Git**: For version control.
-- **Node.js & NPM** (Optional): Useful if you want to run a local dev server, though any static file server works.
-- **Python/VS Code**: Recommended for editing.
+## 📋 前置需求 (Prerequisites)
+- **Git**: 用於版本控制。
+- **Node.js & NPM** (選用): 如果你想跑本地開發伺服器。雖然這是一個靜態網站，但為了測試 Service Worker，我們需要 HTTPS 或 localhost 環境。
+- **VS Code**: 推薦的編輯器。
 
-## 🚀 Local Development
+## 🚀 本地開發 (Local Development)
 
-Since this is a Vanilla JS project, there is no "build step" (like Webpack or Vite) required for logic. However, you need a local server to handle ES Modules and Service Workers correctly (browsers block connection from `file://` protocol).
+由於這是原生 JS 專案，沒有複雜的 Build 步驟 (如 Webpack)。但是，**Service Worker 與 ES Modules 有嚴格的安全限制**，瀏覽器會阻擋 `file://` 協議。
 
-### Method 1: VS Code Live Server (Recommended)
-1.  Open the project folder in VS Code.
-2.  Install the **Live Server** extension.
-3.  Right-click `pwa/index.html` and select **"Open with Live Server"**.
-4.  The app will open at `http://127.0.0.1:5500/pwa/index.html`.
+### 方法 1: VS Code Live Server (推薦)
+1.  在 VS Code 關閉專案資料夾。
+2.  安裝 **Live Server** 擴充套件。
+3.  右鍵點擊 `pwa/index.html` 選擇 **"Open with Live Server"**。
+4.  網頁將開啟於 `http://127.0.0.1:5500/pwa/index.html`。
 
-### Method 2: Python Simple HTTP Server
-Open your terminal in the project root:
-
+### 方法 2: Python Simple HTTP Server
+如果你有裝 Python，這是最快的方法：
 ```bash
 cd pwa
 python -m http.server 8000
 ```
-Then visit `http://localhost:8000`.
+然後訪問 `http://localhost:8000`。
 
-### Method 3: Node.js http-server
-```bash
-npx http-server ./pwa
-```
+## 📱 手機端真機測試 (Testing PWA on Mobile)
 
-## 📱 Testing PWA on Mobile
-To test the PWA installation on a real phone:
+要在手機上測試 PWA 安裝流程，你需要解決「HTTPS 限制」。Service Worker 預設只有在 `localhost` 或 `https` 下才能運作。
 
-1.  Ensure your phone and PC are on the same Wi-Fi.
-2.  Find your PC's local IP (e.g., `192.168.1.10`).
-3.  On your phone, visit `http://192.168.1.10:5500/pwa/index.html`.
-4.  **Note**: Service Workers require **HTTPS** or **localhost**. They often fail on local IP addresses unless you configure browser flags or use a tunneling tool like **ngrok**.
+### 為什麼不能直接用 IP (192.168.x.x)?
+因為這被瀏覽器視為「不安全」的來源，Service Worker 會註冊失敗。
 
-### Using ngrok (for proper PWA testing)
-```bash
-ngrok http 5500
-```
-Use the provided `https://...` URL on your phone. This enables full Service Worker support.
+### 解決方案：使用 ngrok
+Ngrok 可以將你的本地端口 (5500) 映射到一個公開的 HTTPS 網址。
 
-## ⚙️ Configuration
-The configuration is located in `pwa/js/config.js`.
+1.  安裝 ngrok。
+2.  執行：
+    ```bash
+    ngrok http 5500
+    ```
+3.  複製終端機顯示的 `https://xxxx-xxxx.ngrok-free.app` 網址。
+4.  在手機瀏覽器打開該網址，即可完整測試 PWA 安裝與離線功能。
+
+## ⚙️ 配置 (Configuration)
+所有設定位於 `pwa/js/config.js`。
 
 ```javascript
-export const API_BASE = '...'; // Your Worker URL
-export const POLL_INTERVAL = 10000; // Polling time in ms
+/* 你的 Cloudflare Worker 地址 */
+export const API_BASE = '...';
+
+/* 輪詢間隔 (毫秒) */
+export const POLL_INTERVAL = 10000;
 ```
-Change `API_BASE` if you deploy your own backend worker.
+建議在開發時將 `POLL_INTERVAL` 設長一點，避免觸發 API 頻率限制。

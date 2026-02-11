@@ -1,39 +1,41 @@
-# Troubleshooting
+# 疑難排解 (Troubleshooting)
 
-## 🔊 No Audio / "Mute" Button Broken
-**Symptom**: Alerts trigger (visual flash) but no sound plays.
-**Cause**: Browsers block "Autoplay" audio until the user interacts with the page.
-**Fix**:
-1.  Ensure you have clicked the **Mute/Unmute** icon at least once after loading the page.
-2.  On iOS, check that your physical "Silent Mode" switch is OFF.
+## 🔊 沒有聲音 / 靜音按鈕無效
+**症狀**: 畫面有閃爍警報，但聽不到 `alert.mp3` 的聲音。
+**原因**: 為了防止廣告濫用，現代瀏覽器實施了「自動播放限制 (Autoplay Policy)」。網頁必須在用戶與頁面進行過至少一次互動 (點擊、觸摸) 後，才被允許播放聲音。
+**解法**:
+1.  進入網頁後，請務必點擊一次右上角的 **靜音/取消靜音** 按鈕。這會解鎖瀏覽器的 Audio Context。
+2.  在 iOS 上，請確認物理靜音開關是 **關閉** 的 (橘色線條不可見)。
 
-## 📉 Chart Says "No Data" or "NaN"
-**Symptom**: Tooltips show "NaN", Chart is flat.
-**Cause**:
-1.  Backend API returned corrupt data.
-2.  Timezone parsing issue (fixed in v1.5).
-**Fix**:
-- Refresh the page.
-- Check Console (F12) for `fetch` errors.
+## 📉 圖表顯示 "No Data" 或 "NaN"
+**症狀**: Tooltip 顯示 "NaN"，圖表是一條直線。
+**原因**:
+1.  後端 API 返回了髒數據 (例如 Coinglass 更改了網頁結構導致爬蟲失敗)。
+2.  時區解析錯誤 (已在 v1.5 修復)。
+**解法**:
+- 刷新頁面。
+- 按 F12 查看 Console 是否有紅色的 `fetch` 錯誤。
 
-## 🔁 App Not Updating (Stale Version)
-**Symptom**: You deployed a fix, but your phone still shows the old bugs.
-**Cause**: Service Worker is aggressively caching the old `index.html` or `app.js`.
-**Fix**:
-1.  **Desktop**: Open DevTools -> Application -> Service Workers -> "Unregister", then reload.
-2.  **Mobile**: Close the app (kill process). Open it again. If that fails, delete the PWA and re-install.
-3.  **Dev**: Ensure you bumped `CACHE_NAME` in `sw.js`.
+## 🔁 App 沒有更新 (顯示舊版)
+**症狀**: 你明明部署了新代碼，但手機上打開還是舊的 UI。
+**原因**: Service Worker 的緩存機制太過強大，它優先使用了本地的 `index.html`。
+**解法**:
+1.  **開發者**: 確保你更新了 `sw.js` 中的 `CACHE_NAME` 版本號。
+2.  **用戶**:
+    - **Android**: 關閉 App (從多工頁面滑掉) 再重開。
+    - **iOS**: 有時候需要刪除主畫面的書籤，重新 Add to Home Screen。
+    - **強制手段**: 清除瀏覽器快取。
 
-## 🕸️ "Network Error" on Localhost
-**Symptom**: `fetch` fails when testing on phone via local IP.
-**Cause**: Mixed Content (HTTP vs HTTPS) or CORS.
-**Fix**:
-- Use `ngrok` to get a valid HTTPS URL.
-- Ensure the Worker backend allows your Origin (CORS headers).
+## 🕸️ 本地測試時出現 "Network Error"
+**症狀**: 在手機上通過 IP (192.168.x.x) 訪問電腦伺服器時，API 請求失敗。
+**原因**: 混合內容錯誤 (Mixed Content) 或 SSL 安全限制。
+**解法**:
+- 使用 `ngrok` 建立 HTTPS 通道。
+- 確保 Cloudflare Worker 的 CORS 設定允許你的本地來源。
 
-## 🌙 Background Sync Stopped
-**Symptom**: No alerts after phone was locked for > 5 minutes.
-**Cause**: Android "Deep Sleep" / Doze Mode killed the browser process.
-**Fix**:
-- This is an OS limitation. Open the app to "wake" it up.
-- Ensure Battery Saver is OFF.
+## 🌙 鎖屏後警報停止
+**症狀**: 手機鎖屏超過 5 分鐘後，不再有聲音。
+**原因**: Android 的 "Deep Sleep" 或 "Doze Mode" 殺死了瀏覽器進程。這是作業系統層級的限制。
+**解法**:
+- 這是 PWA 的極限。請確保關閉手機的「省電模式」。
+- 或保持手機充電並設定螢幕不休眠。
