@@ -28,7 +28,7 @@ class TrendChart extends StatelessWidget {
     if (displayHistory.isEmpty) {
       return const Center(child: Text("無數據", style: TextStyle(color: Colors.white24, fontSize: 10)));
     }
-    
+
     if (displayHistory.length < 2) {
       return const Center(child: Text("等待趨勢累積...", style: TextStyle(color: Colors.white24, fontSize: 10)));
     }
@@ -56,8 +56,8 @@ class TrendChart extends StatelessWidget {
       return isBearish ? (s - l) : (l - s);
     }
 
-    final double baseNet = getNet(displayHistory.first);
-    final List<double> netSeries = displayHistory.map((e) => getNet(e) - baseNet).toList();
+    // 使用絕對淨值（與 PWA 一致），不做基準線減法
+    final List<double> netSeries = displayHistory.map((e) => getNet(e)).toList();
 
     double minV = netSeries.reduce((c, n) => c < n ? c : n);
     double maxV = netSeries.reduce((c, n) => c > n ? c : n);
@@ -69,15 +69,18 @@ class TrendChart extends StatelessWidget {
       maxV = center + 50000;
       range = 100000;
     }
-    
+
     double pad = range * 0.15;
     final Color themeColor = isBearish ? const Color(0xFFFF2E2E) : const Color(0xFF00FF9D);
+
+    // 判斷趨勢：最後一筆 vs 倒數第二筆
+    final bool isTrendUp = netSeries.length >= 2 && netSeries.last >= netSeries[netSeries.length - 2];
 
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 8, 8, 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF000000), 
-        borderRadius: BorderRadius.circular(8), 
+        color: const Color(0xFF000000),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.white.withAlpha(10)),
       ),
       child: Column(
@@ -87,10 +90,10 @@ class TrendChart extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900)), 
+                Text(title, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900)),
                 Text(
-                  netSeries.last >= 0 ? "勢能增強" : "勢能減弱",
-                  style: TextStyle(color: themeColor, fontSize: 10, fontWeight: FontWeight.w900) 
+                  isTrendUp ? "勢能增強" : "勢能減弱",
+                  style: TextStyle(color: themeColor, fontSize: 10, fontWeight: FontWeight.w900)
                 ),
               ],
             ),
@@ -105,15 +108,14 @@ class TrendChart extends StatelessWidget {
                     getTooltipItems: (touchedSpots) {
                       return touchedSpots.map((spot) {
                         final double val = spot.y;
-                        String sign = val > 0 ? "+" : (val < 0 ? "-" : "");
                         double absV = val.abs();
                         String formatted;
                         if (absV >= 1e8) {
-                          formatted = "$sign${(absV / 1e8).toStringAsFixed(2)}億";
+                          formatted = "\$${(absV / 1e8).toStringAsFixed(2)}億";
                         } else if (absV >= 1e4) {
-                          formatted = "$sign${(absV / 1e4).toStringAsFixed(2)}萬";
+                          formatted = "\$${(absV / 1e4).toStringAsFixed(2)}萬";
                         } else {
-                          formatted = "$sign${absV.toStringAsFixed(0)}";
+                          formatted = "\$${absV.toStringAsFixed(0)}";
                         }
                         final time = DateFormat('HH:mm:ss').format(displayHistory[spot.x.toInt()].timestamp);
                         return LineTooltipItem(
@@ -131,7 +133,7 @@ class TrendChart extends StatelessWidget {
                   ),
                 ),
                 gridData: FlGridData(
-                  show: true, 
+                  show: true,
                   drawVerticalLine: false,
                   getDrawingHorizontalLine: (value) => FlLine(color: Colors.white.withAlpha(10), strokeWidth: 0.5),
                 ),
@@ -149,25 +151,24 @@ class TrendChart extends StatelessWidget {
                         return Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(DateFormat('HH:mm').format(displayHistory[idx].timestamp), style: const TextStyle(color: Colors.white38, fontSize: 8)),
-                        ); 
+                        );
                       },
                     ),
                   ),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 42,
+                      reservedSize: 52,
                       getTitlesWidget: (v, m) {
                         if (v == minV - pad || v == maxV + pad) return const SizedBox.shrink();
-                        String sign = v > 0 ? "+" : (v < 0 ? "-" : "");
                         double absV = v.abs();
                         String t;
                         if (absV >= 1e8) {
-                          t = "$sign${(absV / 1e8).toStringAsFixed(1)}億";
+                          t = "\$${(absV / 1e8).toStringAsFixed(1)}億";
                         } else if (absV >= 1e4) {
-                          t = "$sign${(absV / 1e4).toStringAsFixed(0)}萬";
+                          t = "\$${(absV / 1e4).toStringAsFixed(0)}萬";
                         } else {
-                          t = "$sign${absV.toStringAsFixed(0)}";
+                          t = "\$${absV.toStringAsFixed(0)}";
                         }
                         return Text(t, style: const TextStyle(color: Colors.white60, fontSize: 8, fontWeight: FontWeight.bold), textAlign: TextAlign.right);
                       },
@@ -175,12 +176,12 @@ class TrendChart extends StatelessWidget {
                   ),
                 ),
                 borderData: FlBorderData(show: false),
-                minY: minV - pad, 
+                minY: minV - pad,
                 maxY: maxV + pad,
                 lineBarsData: [
                   LineChartBarData(
                     spots: netSeries.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value)).toList(),
-                    isCurved: true, 
+                    isCurved: true,
                     curveSmoothness: 0.1,
                     color: themeColor,
                     barWidth: 2.5,
@@ -189,17 +190,15 @@ class TrendChart extends StatelessWidget {
                     belowBarData: BarAreaData(
                       show: true,
                       gradient: LinearGradient(
-                        begin: Alignment.topCenter, 
+                        begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [themeColor.withAlpha(50), themeColor.withAlpha(0)],
                       ),
                     ),
                   ),
                 ],
-                extraLinesData: ExtraLinesData(
-                  horizontalLines: [
-                    HorizontalLine(y: 0, color: Colors.white.withAlpha(40), strokeWidth: 1, dashArray: [5, 5]),
-                  ],
+                extraLinesData: const ExtraLinesData(
+                  horizontalLines: [],
                 ),
               ),
             ),
