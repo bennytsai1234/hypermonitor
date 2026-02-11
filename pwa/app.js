@@ -140,16 +140,25 @@ async function boot() {
   await refreshAll();
   showApp();
 
-  pollTimer = setInterval(pollLatest, POLL_INTERVAL);
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      clearInterval(pollTimer);
-    } else {
-      clearInterval(pollTimer);
-      refreshAll();
+  // Use Web Worker for background timing
+  if (window.Worker) {
+      const pollWorker = new Worker('timer.worker.js');
+      pollWorker.onmessage = (e) => {
+          if (e.data === 'tick') pollLatest();
+      };
+      pollWorker.postMessage({ action: 'start', interval: POLL_INTERVAL });
+  } else {
+      // Fallback for older browsers
       pollTimer = setInterval(pollLatest, POLL_INTERVAL);
-    }
+  }
+
+  // Optional: You can still use visibilitychange to limit frequency if needed,
+  // but for "background play", we keep it running.
+  document.addEventListener('visibilitychange', () => {
+      // Logic for reconnecting if needed, but worker keeps ticking
+      if (!document.hidden) {
+          refreshAll();
+      }
   });
 }
 

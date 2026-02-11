@@ -1,10 +1,18 @@
-const CACHE_NAME = 'hyper-monitor-v12-dropdown';
+const CACHE_NAME = 'hyper-monitor-v15-ui-polish';
 const ASSETS = [
   '/',
   '/index.html',
   '/style.css',
   '/app.js',
+  '/js/api.js',
+  '/js/chart.js',
+  '/js/config.js',
+  '/js/ui.js',
+  '/js/utils.js',
   '/manifest.json',
+  '/alert.mp3',
+  '/icons/icon.svg',
+  '/timer.worker.js'
 ];
 
 // Install: cache shell assets
