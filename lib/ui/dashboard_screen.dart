@@ -57,7 +57,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   Future<void> _refreshAll() async {
     await _pollLatest();
-    await _loadHistory();
+    await _loadHistory(silent: true);
   }
 
   Future<void> _pollLatest() async {
@@ -72,8 +72,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     }
   }
 
-  Future<void> _loadHistory() async {
-    setState(() => _isLoadingHistory = true);
+  /// 比較兩個歷史列表是否相同（長度 + 最後一筆時間戳）
+  bool _isHistorySame(List<HyperData> oldList, List<HyperData> newList) {
+    if (oldList.length != newList.length) return false;
+    if (oldList.isEmpty) return true;
+    return oldList.last.timestamp == newList.last.timestamp;
+  }
+
+  Future<void> _loadHistory({bool silent = false}) async {
+    if (!silent) setState(() => _isLoadingHistory = true);
     final history = await _apiService.fetchHistory(_selectedRange);
 
     // --- 關鍵修正：對齊並合併 BTC 與 ETH 的歷史數據 ---
@@ -96,6 +103,20 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     }
 
     if (mounted) {
+      // 靜默模式下，比較新舊數據，沒有變化就跳過重繪
+      if (silent) {
+        final oldPrinter = _historyMap['printer'] ?? [];
+        final oldBtc = _historyMap['btc'] ?? [];
+        final oldEth = _historyMap['eth'] ?? [];
+        final newPrinter = history['printer'] ?? [];
+
+        if (_isHistorySame(oldPrinter, newPrinter) &&
+            _isHistorySame(oldBtc, btcList) &&
+            _isHistorySame(oldEth, ethList)) {
+          return; // 數據無變化，跳過重繪
+        }
+      }
+
       setState(() {
         _historyMap = {
           ...history,
