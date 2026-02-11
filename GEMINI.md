@@ -6,12 +6,12 @@ Agent 注意：在執行任何指令前，請先讀取並適配以下專案特�
 
 | 配置項目 | 設定值 | 範例 |
 | --- | --- | --- |
-| 主要語言 | Dart / Flutter | TypeScript, Python, Rust |
-| 套件管理器 | flutter pub | npm, pip, cargo, go mod |
+| 主要語言 | Dart (Flutter) / JS (PWA) | TypeScript, Python, Rust |
+| 套件管理器 | flutter pub / npm | npm, pip, cargo, go mod |
 | 測試指令 | flutter test | npm test, pytest, cargo test |
-| 構建/執行指令 | flutter run | npm run build, python main.py |
-| 源碼目錄 | lib/ | src/, lib/, app/ |
-| 產物/進入點 | lib/main.dart | dist/bundle.js, main.py |
+| 構建/執行指令 | flutter run / wrangler deploy | npm run build, python main.py |
+| 源碼目錄 | lib/ (App), pwa/ (Web) | src/, lib/, app/ |
+| 產物/進入點 | lib/main.dart, pwa/app.js | dist/bundle.js, main.py |
 
 ---
 
@@ -33,25 +33,26 @@ Agent 注意：在執行任何指令前，請先讀取並適配以下專案特�
 1. **需求理解**: 修改前必須明確區分修復 (Fix)、新功能 (Feat) 或重構 (Refactor)。
 2. **代碼修改規範 [CRITICAL]**:
   - **嚴禁覆寫**: 嚴禁對任何 Git 追蹤檔案使用全量寫入 (`write_file`)。不論是源碼還是文件，修改時僅允許使用 `replace` (字串替換) 工具。
+  - **例外**: **PWA 相關檔案 (`pwa/js/*.js`, `pwa/*.worker.js`) 若進行全結構重構，允許使用 write_file 以確保文件完整性，但禁止用於 Flutter 核心業務代碼。**
   - **禁止截斷**: 嚴禁因「變更面積大」或「重構」而下意識尋求捷徑使用覆寫，這會導致不可預測的代碼截斷與遺失。
-  - **結構完整性驗證 [NEW]**: 當使用 `replace_file_content` 修改函數或類別結構（特別是涉及刪除代碼塊）時，**必須**先 `view_file` 確認上下文邊界。嚴禁憑 "猜測" 刪除孤立的 `}` 或 `catch` 區塊，必須採用「整塊函數替換」的方式以確保括號配對正確。
-  - **結構完整性**: 保持 `lib/` 下的結構，禁止直接修改自動生成的構建產物（除非該專案無構建步驟）。
+  - **結構完整性驗證**: 當使用 `replace_file_content` 修改函數或類別結構時，**必須**先 `view_file` 確認上下文邊界。
 3. **立即自動備份 [CRITICAL]**:
   - 每次完成單個檔案的修改後，AI Agent 必須在 **同一個 Turn (對話輪次)** 內立即執行備份指令。
   - 指令: `git add <file> ; git commit -m "backup: update <file>"`
-  - *注意：若偵測到 Windows PowerShell 環境，必須確保指令連接符適用（見疑難排解章節）。*
 
 ### 第二階段：文檔同步 (Documentation Sync)
 每次修改後，必須更新對應文檔：
 
 - **新功能**: 更新 `README.md` 功能列表、`CHANGELOG.md` 及版本號。
-- **修復**: 在 `CHANGELOG.md` 記錄修復內容與原因。
-- **依賴變更**: 若新增套件/庫，必須同步更新依賴定義檔（如 `pubspec.yaml`）。
+- **PWA 更新**: 若涉及 PWA 結構變更，需同步更新 `pwa/README.md` 與 `DEPLOY_GUIDE.md`。
+- **依賴變更**: 若新增套件/庫，必須同步更新依賴定義檔（如 `pubspec.yaml`, `worker/package.json`）。
 
 ### 第三階段：驗證與交付 (Verification)
 
 1. **自動測試**: 執行 `flutter test` 確保核心邏輯無壞損。
-2. **手動構建/檢查**: 執行 `flutter run` (或 build) 確保語法無誤且能正常啟動。
+2. **部署驗證**:
+   - PWA: 執行 `deploy_pwa.bat` 並要求使用者強制刷新。
+   - API: 確保 Worker URL 已更新至 `pwa/js/config.js`。
 3. **正式提交**: 使用 Conventional Commits 格式 (`feat:`, `fix:`, `refactor:`, `docs:`) 進行最終 Commit。
 
 ---
@@ -60,33 +61,33 @@ Agent 注意：在執行任何指令前，請先讀取並適配以下專案特�
 
 | 問題場景 | 解決方案 |
 | --- | --- |
-| 代碼編輯 (replace) 失敗 | 嚴禁改用 write_file。正確做法：1. 縮小範圍：僅替換變動的關鍵行，並包含前後 1 行作為唯一識別錨點。2. 檢查隱形字元：失敗後重新 read_file 檢查縮排 (Tabs vs Spaces) 或行尾空格。3. 分段執行：將大變更拆分為多個小的 replace 呼叫。 |
-| Shell 語法錯誤 | Windows PowerShell: 不支援 &&，必須改用 ; 分隔指令。Linux/macOS (Bash/Zsh): 使用 && 或 ; 皆可。Agent 應先偵測環境或嘗試最兼容寫法。 |
-| 搜尋工具失敗 (grep) | Windows 預設無 grep。應優先使用 Agent 內建的 search_file_content 工具，或使用跨平台兼容指令。 |
-| 行尾符號 (CRLF/LF) | 若 Git 出現警告：1. 保持專案一致性 (通常推薦 LF)。2. 執行 git config core.autocrlf false 避免自動轉換干擾編輯精準度。 |
-| 代碼遺失/截斷 | 立即執行 git checkout <file> 恢復至上一次自動備份的穩定版本（這就是為什麼第一階段的備份如此重要）。 |
+| 代碼編輯 (replace) 失敗 | 嚴禁改用 write_file。正確做法：1. 縮小範圍：僅替換變動的關鍵行。2. 檢查隱形字元 (Tabs vs Spaces)。 |
+| Shell 語法錯誤 | Windows PowerShell: 不支援 &&，必須改用 ; 分隔指令。 |
+| PWA 緩存不更新 | 修改 `pwa/sw.js` 中的 `CACHE_NAME` 版本號，並確保新檔案已加入 `ASSETS` 列表。 |
+| PWA 音效無聲 | 1. 確認 `alert.mp3` 存在於 `pwa/`。 2. 確保使用者已與頁面互動（點擊喇叭按鈕）。 |
+| SVG 位置偏移 | 在 CSS 中給 SVG 添加 `display: block` 或 `margin-top` 微調，避免 `inline` 元素的 vertical-align 導致偏移。 |
 
 ---
 
 ## 🛡️ 代碼品質與自我查核 (Self-Verification)
-為避免重構導致專案癱瘓，Agent 必須執行以下操作：
-
-1. **跨檔案影響分析 [CRITICAL]**:
-  - 修改任何 **公共常數、配置檔、或核心型別定義** 後，必須使用全域搜尋 (`search_file_content`) 找出所有引用處，同步更新受影響的檔案。
-2. **匯入完整性檢查**:
-  - 使用新變數或函式庫前，必須確認檔案頂部已有對應的 Import/Include 語句。
-3. **編譯與靜態檢查**:
-  - 修改完成後，務必執行 `flutter run` / `flutter analyze` 或 Linter。
-  - 對於直譯式語言（如 Python/JS），需檢查是否有 `SyntaxError` 或未定義變數。
-4. **環境復原**:
-  - 若修改導致環境報錯且無法在一輪內修復，應主動回滾 (`git revert` 或 `git checkout`)，不要留下壞掉的代碼庫。
+1. **跨檔案影響分析**: 修改 `config.js` 或 `utils.js` 等共享模組後，檢查引用處。
+2. **Web Worker 安全**: 在 PWA 中使用 Worker 時，確保在 `sw.js` 緩存列表中包含該 worker 檔案，以支援離線模式。
+3. **DOM 初始化**: 在 ES Modules 中，避免在頂層直接查詢 DOM 元素。應將 DOM 查詢封裝在 `initUi()` 等函數中，並在 `boot()` 階段呼叫。
 
 ---
 
-## 🐞 Debug Log (2025-02-06)
-- **Issue**: Scraper was returning `null`, then fixed syntax but scraping failed silently.
-- **Action**: Improved `data_scraper.dart` with debug logging (sample rows) and replaced RegEx JSON parsing with `jsonDecode` for robustness.
-- **Result**: **FIXED**.
-  - Initial scrape may fail (React rendering), but subsequent scrapes (10s interval) successfully find data.
-  - Sample successful payload: `{"found":true,"walletCount":"578","shortVol":"$14.12亿",...}`
-  - JSON parsing is now stable.
+## 🐞 Debug Log (2025-02-06 ~ 2026-02-11)
+- **Issue (2025-02-06)**: Scraper returning `null`.
+  - **Fix**: Replaced RegEx with `jsonDecode` and focused on targeted scraping.
+
+- **Issue (2026-02-11)**: PWA 音效失效與喇叭按鈕消失。
+  - **Cause**: DOM 元素在 ES Module 載入時尚未渲染完成，導致 `$('mute-btn')` 為 null。
+  - **Fix**: 將 DOM 初始化移至 `initUi()`，並在 App 啟動時呼叫。
+
+- **Issue (2026-02-11)**: PWA 在手機後台不更新。
+  - **Cause**: 瀏覽器凍結後台分頁的 `setInterval`。
+  - **Fix**: 引入 `timer.worker.js` (Web Worker) 替代主線程定時器。
+
+- **Issue (2026-02-11)**: PWA 樣式/邏輯更新後客戶端無效。
+  - **Cause**: Service Worker 緩存了舊版 HTML/JS，且 SW 版本號未更新。
+  - **Fix**: 每次部署前手動更新 `sw.js` 的 `CACHE_NAME`。
