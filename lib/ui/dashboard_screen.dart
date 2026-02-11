@@ -23,9 +23,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   final ApiService _apiService = ApiService();
   HyperData? _currentData;
   DateTime? _lastDataChange;
-  
+
   Map<String, List<HyperData>> _historyMap = {'printer': [], 'btc': [], 'eth': [], 'combined': []};
-  String _selectedRange = "1h"; 
+  String _selectedRange = "1h";
   bool _isLoadingHistory = false;
 
   Timer? _pollingTimer;
@@ -46,9 +46,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     windowManager.addListener(this);
     _mainFocusNode = FocusNode();
     _rainbowController = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
-    
+
     _refreshAll();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollLatest());
+    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) => _refreshAll());
 
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) _mainFocusNode.requestFocus();
@@ -75,12 +75,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Future<void> _loadHistory() async {
     setState(() => _isLoadingHistory = true);
     final history = await _apiService.fetchHistory(_selectedRange);
-    
+
     // --- 關鍵修正：對齊並合併 BTC 與 ETH 的歷史數據 ---
     List<HyperData> combinedHistory = [];
     final btcList = history['btc'] ?? [];
     final ethList = history['eth'] ?? [];
-    
+
     // 取較短的那一邊進行對齊合併
     int count = btcList.length < ethList.length ? btcList.length : ethList.length;
     for (int i = 0; i < count; i++) {
@@ -183,10 +183,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    const bgDark = Color(0xFF000000); 
-    const cardBg = Color(0xFF080808); 
-    const textGreen = Color(0xFF00FF9D); 
-    const textRed = Color(0xFFFF2E2E); 
+    const bgDark = Color(0xFF000000);
+    const cardBg = Color(0xFF080808);
+    const textGreen = Color(0xFF00FF9D);
+    const textRed = Color(0xFFFF2E2E);
 
     if (_currentData == null) {
       return Scaffold(
@@ -203,7 +203,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final pNet = isBearish ? (_currentData!.shortVolNum - _currentData!.longVolNum) : (_currentData!.longVolNum - _currentData!.shortVolNum);
 
     return KeyboardListener(
-      focusNode: _mainFocusNode, 
+      focusNode: _mainFocusNode,
       autofocus: true,
       onKeyEvent: (event) { if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.f11) _toggleFullscreen(); },
       child: Scaffold(
@@ -289,7 +289,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               children: [
                 const Icon(Icons.access_time_rounded, color: Color(0xFFFFD700), size: 10),
                 const SizedBox(width: 4),
-                Text("TPE ${DateFormat('HH:mm').format(_lastDataChange!)}", 
+                Text("TPE ${DateFormat('HH:mm').format(_lastDataChange!)}",
                   style: const TextStyle(color: Color(0xFFFFD700), fontSize: 10, fontWeight: FontWeight.bold)),
               ],
             ),
@@ -322,12 +322,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Widget _buildChart(String title, List<HyperData> data, {bool isPrinter = false, bool isCombined = false, bool isBTC = false, bool isETH = false}) {
     if (_isLoadingHistory) return const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)));
     return TrendChart(
-      title: title, 
-      displayHistory: data, 
+      title: title,
+      displayHistory: data,
       overrideSentiment: _currentData?.sentiment, // 關鍵修正：傳遞全局情緒
-      isPrinter: isPrinter, 
-      isCombined: isCombined, 
-      isBTC: isBTC, 
+      isPrinter: isPrinter,
+      isCombined: isCombined,
+      isBTC: isBTC,
       isETH: isETH
     );
   }
