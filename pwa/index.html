@@ -30,10 +30,20 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Loading Screen -->
+  <!-- Skeleton Loading Screen -->
   <div id="loading-screen">
-    <div class="loader-pulse"></div>
-    <p class="loader-text">正在連接雲端...</p>
+    <div class="skeleton-app">
+      <div class="sk-header">
+        <div class="sk-bar" style="width:120px;height:16px"></div>
+        <div class="sk-bar" style="width:50px;height:16px"></div>
+      </div>
+      <div class="sk-content">
+        <div class="sk-pills"><div class="sk-pill"></div><div class="sk-pill"></div><div class="sk-pill"></div><div class="sk-pill"></div></div>
+        <div class="sk-card sk-hero"></div>
+        <div class="sk-grid"><div class="sk-card sk-half"></div><div class="sk-card sk-half"></div></div>
+        <div class="sk-card sk-chart"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Main App -->
@@ -45,6 +55,7 @@
         <span class="header-title">HYPER MONITOR</span>
       </div>
       <div class="header-right">
+        <span id="conn-status" class="conn-dot online" title="已連線"></span>
         <button id="mute-btn" class="icon-btn" aria-label="Toggle Sound">
           <span class="icon">🔇</span>
         </button>
@@ -57,6 +68,12 @@
 
     <!-- Content -->
     <main id="content">
+
+      <!-- Pull to Refresh -->
+      <div id="ptr-indicator" class="ptr-hidden">
+        <div class="ptr-spinner"></div>
+        <span class="ptr-text">下拉刷新</span>
+      </div>
 
       <!-- Asset Selector -->
       <div id="asset-selector">

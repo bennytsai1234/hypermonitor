@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hyper-monitor-v17-layout-fix';
+const CACHE_NAME = 'hyper-monitor-v18-swr';
 const ASSETS = [
   '/',
   '/index.html',
@@ -33,17 +33,23 @@ self.addEventListener('activate', (e) => {
   self.clients.claim(); // Take control of all clients immediately
 });
 
-// Fetch: network-first for API, cache-first for assets
+// Fetch: Stale-While-Revalidate for same-origin assets
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
-  // Cross-origin requests (API calls to worker): don't intercept
-  if (url.origin !== self.location.origin) {
-    return;
-  }
+  // Cross-origin requests (API, CDN): don't intercept
+  if (url.origin !== self.location.origin) return;
 
-  // Static assets: cache-first
   e.respondWith(
-    caches.match(e.request).then((cached) => cached || fetch(e.request))
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cached = await cache.match(e.request);
+      // Background fetch & cache update
+      const fetchPromise = fetch(e.request).then((res) => {
+        if (res.ok) cache.put(e.request, res.clone());
+        return res;
+      }).catch(() => null);
+      // Return cached immediately, fallback to network
+      return cached || fetchPromise;
+    })
   );
 });

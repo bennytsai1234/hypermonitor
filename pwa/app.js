@@ -4,9 +4,9 @@
  */
 
 import { POLL_INTERVAL } from './js/config.js';
-import { fetchLatest, fetchHistory } from './js/api.js';
+import { fetchLatest, fetchHistory, onConnectionStatusChange } from './js/api.js';
 import { renderChart } from './js/chart.js';
-import { renderUI, calculateAllDeltas, triggerAlert, toggleMute, showApp, getDom, initUi } from './js/ui.js';
+import { renderUI, calculateAllDeltas, triggerAlert, toggleMute, showApp, getDom, initUi, updateConnectionStatus, requestNotificationPermission } from './js/ui.js';
 
 // Global State
 let allData = null;
@@ -124,6 +124,62 @@ function initListeners() {
 }
 
 // ============================================
+// Pull to Refresh
+// ============================================
+function initPullToRefresh() {
+    const content = document.getElementById('content');
+    const ptr = document.getElementById('ptr-indicator');
+    if (!content || !ptr) return;
+
+    let startY = 0;
+    let pulling = false;
+    const THRESHOLD = 60;
+
+    content.addEventListener('touchstart', (e) => {
+        if (content.scrollTop <= 0) {
+            startY = e.touches[0].clientY;
+            pulling = true;
+        }
+    }, { passive: true });
+
+    content.addEventListener('touchmove', (e) => {
+        if (!pulling) return;
+        const dy = e.touches[0].clientY - startY;
+        if (dy > 0 && dy < 120) {
+            ptr.style.height = `${Math.min(dy * 0.6, THRESHOLD)}px`;
+            ptr.style.opacity = String(Math.min(dy / THRESHOLD, 1));
+            ptr.classList.remove('ptr-hidden');
+            const ptrText = ptr.querySelector('.ptr-text');
+            if (dy > THRESHOLD) {
+                if (ptrText) ptrText.textContent = '釋放刷新';
+                ptr.classList.add('ptr-ready');
+            } else {
+                if (ptrText) ptrText.textContent = '下拉刷新';
+                ptr.classList.remove('ptr-ready');
+            }
+        }
+    }, { passive: true });
+
+    content.addEventListener('touchend', async () => {
+        if (!pulling) return;
+        pulling = false;
+        if (ptr.classList.contains('ptr-ready')) {
+            const ptrText = ptr.querySelector('.ptr-text');
+            if (ptrText) ptrText.textContent = '刷新中...';
+            ptr.classList.add('ptr-loading');
+            await refreshAll();
+            ptr.classList.remove('ptr-loading');
+        }
+        setTimeout(() => {
+            ptr.style.height = '0';
+            ptr.style.opacity = '0';
+            ptr.classList.add('ptr-hidden');
+            ptr.classList.remove('ptr-ready');
+        }, 200);
+    });
+}
+
+// ============================================
 // Boot
 // ============================================
 async function boot() {
@@ -133,8 +189,15 @@ async function boot() {
       }).catch(console.warn);
   }
 
-  initUi(); // Initialize DOM references
+  initUi();
   initListeners();
+  initPullToRefresh();
+
+  // Connection status listener
+  onConnectionStatusChange(updateConnectionStatus);
+
+  // Request notification permission
+  requestNotificationPermission();
 
   // Initial load
   await refreshAll();
