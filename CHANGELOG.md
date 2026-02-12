@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-02-12
+
+### Optimization
+- **[Critical] D1 讀取量降低 ~95%**：修正讀取列數超標問題 (114M → 預估 <5M/天)。
+  - Worker 所有多查詢端點改用 `batch()` 並行化 (減少 D1 往返次數)。
+  - 移除 `SELECT MAX(timestamp)` 子查詢，改用高效 2-step 查詢方式。
+  - PWA `/history` 呼叫頻率從每 10 秒降為每 5 分鐘自動刷新一次。
+  - 頁面回前景時僅呼叫 `/latest`，不再自動重載 `/history`。
+- **SQL 注入修復**：`rangeQuery` 的 `symbol` 改用參數化綁定。
+- **複合索引**：新增 `idx_range_symbol_time` 加速 `WHERE symbol=? AND timestamp>?` 查詢。
+
+### Added
+- **自動資料清理 (Cron)**：每日 UTC 03:00 自動刪除 30 天以上舊資料，防止資料庫無限膨脹。
+- **`/stats` 端點**：查看資料庫健康狀態 (列數、最舊時間戳)。
+- **`/cleanup` 端點**：手動觸發資料清理 (支援 `?days=N` 參數)。
+- **SW Cache**：升級至 v22。
+
 ## [1.1.2] - 2026-02-12
 
 ### Changed
