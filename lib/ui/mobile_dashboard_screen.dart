@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../core/data_model.dart';
 import '../core/data_scraper.dart';
 import '../core/api_service.dart';
@@ -40,6 +42,22 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> with Sing
     _flashController = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
     _refreshAll();
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollLatest());
+
+    // Android: Start foreground service to prevent system kill
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      _startForegroundService();
+    }
+  }
+
+  Future<void> _startForegroundService() async {
+    if (await FlutterForegroundTask.isRunningService) return;
+    await FlutterForegroundTask.startService(
+      serviceId: 256,
+      notificationTitle: '超級印鈔機 運行中',
+      notificationText: '正在監控 Hyperliquid 數據...',
+      notificationIcon: null,
+      callback: null,
+    );
   }
 
   Future<void> _refreshAll() async {
@@ -114,6 +132,9 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> with Sing
     _refreshTimer?.cancel();
     _flashController.dispose();
     _flashTimer?.cancel();
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      FlutterForegroundTask.stopService();
+    }
     super.dispose();
   }
 
@@ -146,7 +167,7 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> with Sing
     final Color sColor = isBearish ? textRed : textGreen;
     final double netVal = isBearish ? (_currentData!.shortVolNum - _currentData!.longVolNum) : (_currentData!.longVolNum - _currentData!.shortVolNum);
 
-    return Scaffold(
+    return WithForegroundTask(child: Scaffold(
       backgroundColor: bgDark,
       body: Stack(
         children: [
@@ -290,7 +311,7 @@ class _MobileDashboardScreenState extends State<MobileDashboardScreen> with Sing
             ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildRangeSelector() {

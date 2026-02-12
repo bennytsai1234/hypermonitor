@@ -44,6 +44,7 @@ dependencies:
   path_provider: ^2.1.5
   http: ^1.6.0
   wakelock_plus: ^1.4.0
+  flutter_foreground_task: ^8.17.0
 
 dev_dependencies:
   flutter_test:
