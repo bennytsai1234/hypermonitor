@@ -295,6 +295,9 @@ body {
 .dropdown-item.active { color: var(--green); background: rgba(0,255,157,0.08); }
 
 
+/* Button & Icons */
+.header-right { display: flex; gap: 8px; }
+
 /* --- Footer --- */
 #app-footer {
   display: flex;
@@ -303,27 +306,11 @@ body {
   padding: 3px 16px;
   flex-shrink: 0;
 }
-#last-update, #last-change { font-size: 9px; color: var(--text-ghost); }
-
-/* Button & Icons */
-.header-right {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
-.header-status-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-#header-time-display {
-  font-size: 11px;
-  font-weight: 700;
-  color: #ffffff; /* Brighter */
+#last-update, #last-change {
+  font-size: 10px;
+  color: #ffffff; /* User requested pure white */
+  font-weight: 600;
   letter-spacing: 0.5px;
-  line-height: 1;
-  margin-right: 2px;
 }
 .icon-btn {
   width: 28px; height: 28px;

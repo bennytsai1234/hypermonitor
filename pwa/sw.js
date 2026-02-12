@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hyper-monitor-v20-time-layout';
+const CACHE_NAME = 'hyper-monitor-v21-revert-layout';
 const ASSETS = [
   '/',
   '/index.html',
