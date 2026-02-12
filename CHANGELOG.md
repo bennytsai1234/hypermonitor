@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-02-12
+
+### Changed
+- **PWA Layout**: PWA 時間顯示優化，移至 Header 第二行並調亮字體。
+- **PWA UI**: Header 右側圖示（連線、靜音、情緒）現在垂直居中對齊。
+- **SW Cache**: 升級至 v20。
+
 ## [1.1.1] - 2026-02-11
 
 ### Fixed
