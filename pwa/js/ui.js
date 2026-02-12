@@ -22,7 +22,7 @@ export function initUi() {
         netValue: $('net-value'),
         netDelta: $('net-delta'),
         netCard: $('net-card'),
-        lastUpdate: $('last-update'),
+        lastUpdate: $('header-time-display'),
         alertFlash: $('alert-flash'),
         chartCanvas: $('trend-chart'),
         assetBtns: document.querySelectorAll('.asset-btn'),
@@ -266,7 +266,7 @@ export function renderUI(allData, currentAsset, renderChartCallback) {
 
     // 4. Timestamp
     const ts = parseTimestamp(data.timestamp);
-    dom.lastUpdate.textContent = `最後更新: ${padTime(ts.getHours())}:${padTime(ts.getMinutes())}:${padTime(ts.getSeconds())}`;
+    dom.lastUpdate.textContent = `${padTime(ts.getHours())}:${padTime(ts.getMinutes())}:${padTime(ts.getSeconds())}`;
 
     // 5. Chart
     if (renderChartCallback) renderChartCallback();

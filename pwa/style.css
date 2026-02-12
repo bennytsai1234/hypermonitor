@@ -306,7 +306,25 @@ body {
 #last-update, #last-change { font-size: 9px; color: var(--text-ghost); }
 
 /* Button & Icons */
-.header-right { display: flex; gap: 8px; }
+.header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.header-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#header-time-display {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff; /* Brighter */
+  letter-spacing: 0.5px;
+  line-height: 1;
+  margin-right: 2px;
+}
 .icon-btn {
   width: 28px; height: 28px;
   background: rgba(255,255,255,0.05);
