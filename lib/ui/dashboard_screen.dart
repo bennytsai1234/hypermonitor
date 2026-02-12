@@ -29,10 +29,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   bool _isLoadingHistory = false;
 
   Timer? _pollingTimer;
+  Timer? _historyTimer;
   late AnimationController _rainbowController;
   bool _showRainbow = false;
   Timer? _rainbowTimer;
   late FocusNode _mainFocusNode;
+
+  // History refresh interval (5 minutes, same as PWA)
+  static const _historyRefreshInterval = Duration(minutes: 5);
 
   // Delta 緩衝區
   String? _lastBtcLongDelta; String? _lastBtcShortDelta; String? _lastBtcNetDelta;
@@ -47,18 +51,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     _mainFocusNode = FocusNode();
     _rainbowController = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
 
-    _refreshAll();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) => _refreshAll());
+    _pollLatest();
+    _loadHistory();
+
+    // Poll /latest every 10 seconds (lightweight)
+    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollLatest());
+    // Poll /history every 5 minutes (heavy query, reduce DB reads)
+    _historyTimer = Timer.periodic(_historyRefreshInterval, (_) => _loadHistory(silent: true));
 
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) _mainFocusNode.requestFocus();
     });
   }
 
-  Future<void> _refreshAll() async {
-    await _pollLatest();
-    await _loadHistory(silent: true);
-  }
 
   Future<void> _pollLatest() async {
     final newData = await _apiService.fetchLatest();
@@ -197,6 +202,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   void dispose() {
     windowManager.removeListener(this);
     _pollingTimer?.cancel();
+    _historyTimer?.cancel();
     _rainbowController.dispose();
     _rainbowTimer?.cancel();
     super.dispose();
