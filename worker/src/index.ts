@@ -224,7 +224,7 @@ export default {
 
 			// --- GET: /cleanup — Manual trigger for data purge ---
 			if (url.pathname === '/cleanup') {
-				const days = parseInt(url.searchParams.get('days') || '30');
+				const days = parseInt(url.searchParams.get('days') || '365');
 				const result = await cleanupOldData(env.DB, days);
 				return new Response(JSON.stringify(result), { headers: corsHeaders });
 			}
@@ -237,7 +237,7 @@ export default {
 
 	// --- Cron: Scheduled cleanup ---
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-		ctx.waitUntil(cleanupOldData(env.DB, 30));
+		ctx.waitUntil(cleanupOldData(env.DB, 365));
 	},
 };
 
