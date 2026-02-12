@@ -31,3 +31,6 @@ CREATE TABLE IF NOT EXISTS range_metrics (
 
 CREATE INDEX IF NOT EXISTS idx_printer_time ON printer_metrics(timestamp);
 CREATE INDEX IF NOT EXISTS idx_range_time ON range_metrics(timestamp);
+
+-- 複合索引：加速 WHERE symbol=? AND timestamp>? 的查詢
+CREATE INDEX IF NOT EXISTS idx_range_symbol_time ON range_metrics(symbol, timestamp);
