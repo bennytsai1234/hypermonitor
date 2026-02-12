@@ -1,0 +1,13 @@
+{
+  "name": "hyper-monitor-scraper",
+  "version": "1.0.0",
+  "description": "Cloud scraper for Coinglass Hyperliquid data",
+  "main": "scraper.js",
+  "scripts": {
+    "start": "node scraper.js",
+    "test": "node scraper.js --once"
+  },
+  "dependencies": {
+    "puppeteer": "^24.0.0"
+  }
+}
