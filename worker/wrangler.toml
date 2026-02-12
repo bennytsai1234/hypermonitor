@@ -7,3 +7,7 @@ compatibility_date = "2024-02-08"
 binding = "DB"
 database_name = "hyper_db"
 database_id = "a9219271-4051-4433-9db0-8fec5d522a9c"
+
+# 定時清理：每天 UTC 03:00 (台北 11:00) 自動清除 30 天以上的舊資料
+[triggers]
+crons = ["0 3 * * *"]
