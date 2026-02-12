@@ -14,6 +14,8 @@ let currentAsset = 'all';
 let selectedRange = '1h';
 let historyData = { printer: [], btc: [], eth: [], hedge: [] };
 let pollTimer = null;
+let lastHistoryLoad = 0; // timestamp of last history API call
+const HISTORY_REFRESH_INTERVAL = 5 * 60 * 1000; // Refresh history every 5 minutes max
 
 // ============================================
 // Logic
@@ -31,12 +33,16 @@ async function pollLatest() {
 
 async function loadHistory() {
   historyData = await fetchHistory(selectedRange);
+  lastHistoryLoad = Date.now();
   render();
 }
 
 async function refreshAll() {
   await pollLatest();
-  await loadHistory();
+  // Only refresh history if enough time has passed (avoid excessive DB reads)
+  if (Date.now() - lastHistoryLoad > HISTORY_REFRESH_INTERVAL) {
+    await loadHistory();
+  }
 }
 
 function render() {
@@ -167,7 +173,9 @@ function initPullToRefresh() {
             const ptrText = ptr.querySelector('.ptr-text');
             if (ptrText) ptrText.textContent = '刷新中...';
             ptr.classList.add('ptr-loading');
-            await refreshAll();
+            // Force full refresh on pull-to-refresh (user intent)
+            await pollLatest();
+            await loadHistory();
             ptr.classList.remove('ptr-loading');
         }
         setTimeout(() => {
@@ -218,9 +226,13 @@ async function boot() {
   // Optional: You can still use visibilitychange to limit frequency if needed,
   // but for "background play", we keep it running.
   document.addEventListener('visibilitychange', () => {
-      // Logic for reconnecting if needed, but worker keeps ticking
       if (!document.hidden) {
-          refreshAll();
+          // Only poll latest on visibility change, history refreshes on its own schedule
+          pollLatest();
+          // Only refresh history if stale (>5 min)
+          if (Date.now() - lastHistoryLoad > HISTORY_REFRESH_INTERVAL) {
+              loadHistory();
+          }
       }
   });
 }
