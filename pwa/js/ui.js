@@ -30,6 +30,7 @@ export function initUi() {
         shortVal: $('short-val'),
         muteBtn: $('mute-btn'),
         connStatus: $('conn-status'),
+        lastChange: $('last-change'),
     };
 
     if (dom.muteBtn) {
@@ -219,6 +220,11 @@ export function calculateAllDeltas(oldData, newData) {
 
     if (hasSignificant) {
       triggerAlert(shouldPlayAudio);
+      // Record change time
+      const now = new Date();
+      if (dom.lastChange) {
+        dom.lastChange.textContent = `變動: ${padTime(now.getHours())}:${padTime(now.getMinutes())}:${padTime(now.getSeconds())}`;
+      }
       // Web Notification for 'all' changes when app is in background
       if (shouldPlayAudio && notifBody) {
         sendNotification('⚡ HyperMonitor 資金變動', notifBody);
