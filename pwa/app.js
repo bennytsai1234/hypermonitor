@@ -6,7 +6,7 @@
 import { POLL_INTERVAL } from './js/config.js';
 import { fetchLatest, fetchHistory, onConnectionStatusChange } from './js/api.js';
 import { renderChart } from './js/chart.js';
-import { renderUI, calculateAllDeltas, triggerAlert, toggleMute, showApp, getDom, initUi, updateConnectionStatus, requestNotificationPermission } from './js/ui.js';
+import { renderUI, calculateAllDeltas, toggleMute, showApp, getDom, initUi, updateConnectionStatus, requestNotificationPermission } from './js/ui.js';
 
 // Global State
 let allData = null;
