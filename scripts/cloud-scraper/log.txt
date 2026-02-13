@@ -1,0 +1,7 @@
+[2026/2/13 11:16:36] 🚀 Hyper Monitor Cloud Scraper starting...
+[2026/2/13 11:16:36]    API: https://hyper-monitor-worker.bennytsai0711.workers.dev
+[2026/2/13 11:16:36]    Interval: 10s
+[2026/2/13 11:16:36]    Mode: Single run
+[2026/2/13 11:16:36] ✅ Browser launched
+[2026/2/13 11:16:36] 📄 Loading Coinglass pages...
+[2026/2/13 11:16:37] 🔴 Fatal error: Navigating frame was detached
