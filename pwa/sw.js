@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hyper-monitor-v29-bugfix-all';
+const CACHE_NAME = 'hyper-monitor-v30-new-alert';
 const ASSETS = [
   '/',
   '/index.html',
