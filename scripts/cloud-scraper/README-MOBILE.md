@@ -105,7 +105,7 @@ npm install
 pkg install tmux -y
 
 # 啟動一個名為 "hyper" 的背景視窗
-tmux new -s hyper
+tmux new -s hyper-ubuntu
 ```
 (此時畫面會清空，下方出現綠色狀態列，代表你已進入不死的背景視窗)
 
@@ -134,7 +134,7 @@ pm2 save
 ### 4. 之後如何回來查看？
 下次 SSH 連進手機後，輸入：
 ```bash
-tmux attach -t hyper
+tmux attach -t hyper-ubuntu
 ```
 你就會瞬間回到 Ubuntu 的畫面。
 
