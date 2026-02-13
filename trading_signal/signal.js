@@ -78,13 +78,7 @@ async function processSignal(data) {
   }
 
   // Calculate order value (direct, no accumulation)
-  let orderUSD = Math.abs(deltaH) * CONFIG.RATIO;
-
-  // Cap maximum order
-  if (orderUSD > CONFIG.MAX_ORDER_USD) {
-    orderUSD = CONFIG.MAX_ORDER_USD;
-    log(`⚠️ Order capped to $${CONFIG.MAX_ORDER_USD}`);
-  }
+  const orderUSD = Math.abs(deltaH) * CONFIG.RATIO;
 
   // Get price and instrument info
   if (!instrumentInfo) {
@@ -142,46 +136,33 @@ async function processSignal(data) {
       }
 
       if (side === 'buy') {
-        targetPrice = blockLow;
-        strategyNote = `(Prev 6m Low)`;
+        // Maker Logic: Buy at lower of (6m Low, Current Price)
+        // If current price < 6m Low, we must follow current price to get a fill (and not be rejected as taker)
+        targetPrice = Math.min(blockLow, price);
+        strategyNote = `(Min of 6m Low / Current)`;
       } else {
-        targetPrice = blockHigh;
-        strategyNote = `(Prev 6m High)`;
+        // Maker Logic: Sell at higher of (6m High, Current Price)
+        targetPrice = Math.max(blockHigh, price);
+        strategyNote = `(Max of 6m High / Current)`;
       }
 
-      log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}`);
+      log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
 
     } else {
       log(`⚠️ Could not find complete previous 6m candle data. Using current price.`);
-      targetPrice = await okx.getPrice(CONFIG.INST_ID);
+      targetPrice = price;
     }
   } catch (e) {
     log(`⚠️ Strategy error: ${e.message}. Using current price.`);
-    targetPrice = await okx.getPrice(CONFIG.INST_ID);
+    targetPrice = price;
   }
 
   const finalPrice = targetPrice;
   const actualUSD = sz * contractValueUSD;
 
-  // Urgent logic config
-  const URGENT_DELTA = 5000000; // 5M
-
-  // Check if we should panic buy/sell (Market Order)
-  // Condition: Huge Delta (> 5M) -> Direct Market Order
-  const isUrgent = Math.abs(deltaH) >= URGENT_DELTA;
-
-  let orderType = 'LIMIT';
-  let orderOpts = {};
-
-  if (isUrgent) {
-    orderType = 'MARKET';
-    orderOpts = { type: 'market' };
-    log(`🚨 URGENT SIGNAL (${formatUSD(deltaH)}) > 5M → MARKET ORDER!`);
-  } else {
-    // Standard: Post Only Limit
-    orderType = 'LIMIT (Post Only)';
-    orderOpts = { price: finalPrice, postOnly: true };
-  }
+  // Always use Post Only Limit Order
+  const orderType = 'LIMIT (Post Only)';
+  const orderOpts = { price: finalPrice, postOnly: true };
 
   log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${orderType} ${side.toUpperCase()} ${sz} ct @ ${orderType === 'MARKET' ? 'MARKET' : '$' + finalPrice} ${strategyNote} (~$${actualUSD.toFixed(0)})`);
 
