@@ -96,10 +96,10 @@ npm install
 
 ### 1. 啟動爬蟲 (PM2 背景執行)
 ```bash
-# 啟動 (每 3 秒檢查一次，極速模式)
-pm2 start scraper.js --name "hyper-scraper" --env PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+# 啟動 (已內建自動偵測 Termux 環境)
+pm2 start scraper.js --name "hyper-scraper"
 
-# 保存設定 (讓 PM2 記得)
+# 保存設定 (讓 PM2 記得，重開機自動啟動)
 pm2 save
 ```
 
@@ -108,7 +108,7 @@ pm2 save
 # 查看即時日誌
 pm2 logs hyper-scraper
 ```
-如果看到綠色的 `Printer:✅ Range:✅` 並且時間持續更新，就成功了！可以按 `Ctrl+C` 退出日誌，**直接關閉 SSH 視窗**，手機會繼續跑。
+如果不需一直看，按 `Ctrl+C` 退出日誌，**直接關閉 SSH 視窗**，手機會繼續跑。
 
 ---
 
@@ -135,20 +135,30 @@ pm2 restart hyper-scraper # 重啟爬蟲
 ```bash
 cd ~/hypermonitor/scripts/cloud-scraper
 git pull
+# 更新後建議重啟
 pm2 restart hyper-scraper
 ```
 
 ---
 
-### ⚠️ 常見問題
-1.  **連不上 SSH？**
-    -   檢查手機和電腦是否在同一個 Wi-Fi。
-    -   檢查手機 Termux 是否開著 (且有 Acquire wakelock)。
-    -   檢查手機 IP 是否變了 (重開機可能會變)。
-2.  **爬蟲掛了 (Error)？**
-    -   檢查 Internet 連線。
-    -   `pm2 logs` 看錯誤訊息。
-    -   如果是 `Browser launch failed`，確認 `PUPPETEER_EXECUTABLE_PATH` 環境變數是否正確。
+## ⚠️ 故障排除 (Troubleshooting)
+
+### 1. 爬蟲卡住不更新 (Hang)？
+- **症狀**：`pm2 status` 顯示 online，但 `pm2 logs` 完全沒有新內容。
+- **原因**：手機網路波動導致請求卡死。
+- **解法**：最新版代碼已加入 **10秒強制超時 (Timeout)** 機制。請執行 `git pull` 更新代碼並重啟即可。
+
+### 2. 錯誤：`Failed to launch the browser process`
+- **原因**：Puppeteer 找不到 Chrome。
+- **解法**：最新版代碼已 **硬編碼 (Hardcoded)** 指定使用 Termux 系統自帶的 `/usr/bin/chromium`。
+    1.  確認已安裝 Chromium: `pkg install chromium -y` (在 Termux) 或 `apt install chromium-browser -y` (在 Ubuntu)。
+    2.  執行 `git pull` 更新代碼。
+    3.  刪除舊排程並重啟：`pm2 delete hyper-scraper && pm2 start scraper.js --name "hyper-scraper"`。
+
+### 3. 連不上 SSH？
+- 檢查手機和電腦是否在同一個 Wi-Fi。
+- 檢查手機 Termux 是否開著 (且有 Acquire wakelock)。
+- 檢查手機 IP 是否變了 (重開機可能會變)。
 
 ---
 **Enjoy your high-performance mobile scraper! 🚀**
