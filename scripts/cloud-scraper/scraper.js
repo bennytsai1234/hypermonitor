@@ -138,19 +138,30 @@ async function postData(endpoint, data) {
   const headers = { 'Content-Type': 'application/json' };
   if (CONFIG.API_KEY) headers['X-API-Key'] = CONFIG.API_KEY;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(data),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
+
     if (!res.ok) {
       log(`❌ POST ${endpoint} failed: ${res.status} ${res.statusText}`);
       return false;
     }
     return true;
   } catch (e) {
-    log(`❌ POST ${endpoint} error: ${e.message}`);
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') {
+      log(`❌ POST ${endpoint} timeout (10s)`);
+    } else {
+      log(`❌ POST ${endpoint} error: ${e.message}`);
+    }
     return false;
   }
 }
