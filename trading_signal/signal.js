@@ -105,16 +105,73 @@ async function processSignal(data) {
 
   // Direction: delta > 0 = longs increasing = BUY, delta < 0 = shorts increasing = SELL
   const side = deltaH > 0 ? 'buy' : 'sell';
+
+  // Strategy: 6-minute candle logic
+  let targetPrice = 0;
+  let strategyNote = '';
+
+  try {
+    // 1. Fetch recent 1m candles (limit 15 is enough for last 12 mins)
+    const klines = await okx.getKlines(CONFIG.INST_ID, '1m', 15);
+
+    // 2. Aggregate to find "Previous 6m Candle"
+    // Valid 6m blocks start at :00, :06, :12 ...
+    const now = Date.now();
+    const BLOCK_MS = 6 * 60 * 1000;
+    const currentBlockStart = now - (now % BLOCK_MS);
+    const prevBlockStart = currentBlockStart - BLOCK_MS;
+
+    // Filter candles that belong to the previous completed 6m block
+    // OKX API returns candles in reverse chronological order (newest first), but filter logic relies on timestamps
+    const targetCandles = klines.filter(k => {
+      const ts = parseInt(k[0]);
+      return ts >= prevBlockStart && ts < currentBlockStart;
+    });
+
+    if (targetCandles.length > 0) {
+      // Find High and Low of this 6m block
+      // Candle format: [ts, o, h, l, c, vol, volCcy]
+      let blockHigh = -Infinity;
+      let blockLow = Infinity;
+
+      for (const c of targetCandles) {
+        const h = parseFloat(c[2]);
+        const l = parseFloat(c[3]);
+        if (h > blockHigh) blockHigh = h;
+        if (l < blockLow) blockLow = l;
+      }
+
+      if (side === 'buy') {
+        targetPrice = blockLow;
+        strategyNote = `(Prev 6m Low)`;
+      } else {
+        targetPrice = blockHigh;
+        strategyNote = `(Prev 6m High)`;
+      }
+
+      log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}`);
+
+    } else {
+      log(`⚠️ Could not find complete previous 6m candle data. Using current price.`);
+      targetPrice = await okx.getPrice(CONFIG.INST_ID);
+    }
+  } catch (e) {
+    log(`⚠️ Strategy error: ${e.message}. Using current price.`);
+    targetPrice = await okx.getPrice(CONFIG.INST_ID);
+  }
+
+  const finalPrice = targetPrice;
   const actualUSD = sz * contractValueUSD;
 
-  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${side.toUpperCase()} ${sz} ct @ $${price.toFixed(1)} (~$${actualUSD.toFixed(0)})`);
+  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → LIMIT ${side.toUpperCase()} ${sz} ct @ $${finalPrice} ${strategyNote} (~$${actualUSD.toFixed(0)})`);
 
   // Execute or dry-run
   if (CONFIG.DRY_RUN) {
-    log(`🔕 [DRY RUN] Would ${side} ${sz} contracts. Skipping.`);
+    log(`🔕 [DRY RUN] Would LIMIT ${side} ${sz} contracts @ $${finalPrice}. Skipping.`);
   } else {
     try {
-      const result = await okx.placeOrder(CONFIG.INST_ID, side, '', sz);
+      // Pass finalPrice as the last argument for Limit Order
+      const result = await okx.placeOrder(CONFIG.INST_ID, side, '', sz, finalPrice);
       const ordId = result[0]?.ordId || 'unknown';
       const sCode = result[0]?.sCode || '';
       const sMsg = result[0]?.sMsg || '';

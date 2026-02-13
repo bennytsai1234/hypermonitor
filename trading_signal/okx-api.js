@@ -95,6 +95,15 @@ async function getInstrumentInfo(instId) {
   };
 }
 
+/** Get candles (K-lines) */
+async function getKlines(instId, bar = '1m', limit = 50) {
+  const path = `/api/v5/market/candles?instId=${instId}&bar=${bar}&limit=${limit}`;
+  const data = await okxGet(path);
+  if (!data) return [];
+  // OKX Candle format: [ts, o, h, l, c, vol, volCcy]
+  return data;
+}
+
 // ============================================
 // Account & Position
 // ============================================
@@ -134,17 +143,33 @@ async function setLeverage(instId, lever, mgnMode = 'cross') {
  * @param {string} posSide - 'long' or 'short'
  * @param {string} sz - Number of contracts (string)
  */
-async function placeOrder(instId, side, posSide, sz) {
+/**
+ * Place an order
+ * @param {string} instId - e.g. 'BTC-USDT-SWAP'
+ * @param {string} side - 'buy' or 'sell'
+ * @param {string} posSide - 'long' or 'short'
+ * @param {string} sz - Number of contracts (string)
+ * @param {string} [px] - Optional price for Limit Order
+ */
+async function placeOrder(instId, side, posSide, sz, px = null) {
   const path = '/api/v5/trade/order';
   const body = {
     instId,
     tdMode: 'cross',     // Cross margin
     side,                 // buy / sell
-    ordType: 'market',    // Market order
     sz: String(sz),
   };
-  // Only include posSide for hedge mode
+
+  if (px) {
+    body.ordType = 'limit';
+    body.px = String(px);
+  } else {
+    body.ordType = 'market';
+  }
+
+  // Only include posSide for hedge mode (if needed, though typically net mode is default for simple bots)
   if (posSide) body.posSide = posSide;
+
   return okxPost(path, body);
 }
 
@@ -154,4 +179,5 @@ module.exports = {
   getPosition,
   setLeverage,
   placeOrder,
+  getKlines,
 };
