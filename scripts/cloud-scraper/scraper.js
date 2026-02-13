@@ -22,7 +22,7 @@ const puppeteer = require('puppeteer');
 const CONFIG = {
   API_URL: process.env.API_URL || 'https://hyper-monitor-worker.bennytsai0711.workers.dev',
   API_KEY: process.env.API_KEY || '',
-  INTERVAL: parseInt(process.env.INTERVAL || '10') * 1000,
+  INTERVAL: parseInt(process.env.INTERVAL || '3') * 1000,
   ONCE: process.argv.includes('--once'),
 
   URLS: {
