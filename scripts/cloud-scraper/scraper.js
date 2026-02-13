@@ -189,6 +189,7 @@ async function main() {
   const isWin = process.platform === 'win32';
   const browser = await puppeteer.launch({
     headless: true,
+    executablePath: isWin ? undefined : '/usr/bin/chromium', // Hardcoded for Termux
     args: isWin ? [] : [
       '--no-sandbox',
       '--disable-setuid-sandbox',
