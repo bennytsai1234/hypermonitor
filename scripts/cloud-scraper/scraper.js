@@ -31,9 +31,9 @@ const CONFIG = {
   },
 
   // Wait for page data to load (milliseconds)
-  PAGE_LOAD_WAIT: 5000,
+  PAGE_LOAD_WAIT: 2000, // Reduced for mobile: 5s -> 2s
   // Wait after reload for data to refresh
-  RELOAD_WAIT: 3000,
+  RELOAD_WAIT: 1000,    // Reduced for mobile: 3s -> 1s
 };
 
 // ============================================
