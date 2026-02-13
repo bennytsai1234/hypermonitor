@@ -7,11 +7,11 @@ import 'package:webview_windows/webview_windows.dart' as win;
 import 'data_model.dart';
 
 class CoinglassScraper extends StatefulWidget {
-  final Function(HyperData) onPrinterData; 
-  final Function(HyperData) onRangeData;   
+  final Function(HyperData) onPrinterData;
+  final Function(HyperData) onRangeData;
 
   const CoinglassScraper({
-    super.key, 
+    super.key,
     required this.onPrinterData,
     required this.onRangeData,
   });
@@ -31,6 +31,9 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
   Timer? _scrapeTimer;
   HyperData? _lastHyperData;
+  bool _isFirstScrape = true;
+  int _failCountA = 0;
+  int _failCountB = 0;
 
   @override
   void initState() {
@@ -42,15 +45,28 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
     if (defaultTargetPlatform == TargetPlatform.windows) {
       _initWindowsWebview(_winA, 'https://www.coinglass.com/zh/hl', (ok) => setState(() => _isWinAInit = ok));
       _initWindowsWebview(_winB, 'https://www.coinglass.com/zh/hl/range/9', (ok) => setState(() => _isWinBInit = ok));
+      Future.delayed(const Duration(seconds: 5), () => _startScrapingLoop());
     } else {
       _mobileA = _createMobileController('https://www.coinglass.com/zh/hl');
       _mobileB = _createMobileController('https://www.coinglass.com/zh/hl/range/9');
+      // Mobile SPA needs more time for initial page render + JS bundle execution
+      Future.delayed(const Duration(seconds: 10), () => _startScrapingLoop());
     }
-    Future.delayed(const Duration(seconds: 5), () => _startScrapingLoop());
   }
 
   WebViewController _createMobileController(String url) {
-    return WebViewController()..setJavaScriptMode(JavaScriptMode.unrestricted)..loadRequest(Uri.parse(url));
+    final controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+        '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      )
+      ..setNavigationDelegate(NavigationDelegate(
+        onPageFinished: (url) => debugPrint('[Scraper] Page loaded: $url'),
+        onWebResourceError: (err) => debugPrint('[Scraper] Resource error: ${err.description}'),
+      ))
+      ..loadRequest(Uri.parse(url));
+    return controller;
   }
 
   Future<void> _initWindowsWebview(win.WebviewController ctrl, String url, Function(bool) onInit) async {
@@ -72,25 +88,39 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   }
 
   Future<void> _doScrapes() async {
-    // 只有在 Windows 平台且初始化完成後才執行，或在行動端執行
     bool canScrapeA = (defaultTargetPlatform == TargetPlatform.windows) ? _isWinAInit : true;
     bool canScrapeB = (defaultTargetPlatform == TargetPlatform.windows) ? _isWinBInit : true;
 
     if (canScrapeA) {
       final printerResult = await _executeScrape(_winA, _mobileA, _printerJs);
       if (printerResult != null && printerResult != "null") {
+        _failCountA = 0;
         final data = _parsePrinterJson(printerResult);
-        if (data != null) widget.onPrinterData(data);
+        if (data != null) {
+          debugPrint('[Scraper] ✅ Printer data scraped successfully');
+          widget.onPrinterData(data);
+        }
+      } else {
+        _failCountA++;
+        debugPrint('[Scraper] ❌ Printer scrape failed (#$_failCountA)');
       }
     }
 
     if (canScrapeB) {
       final rangeResult = await _executeScrape(_winB, _mobileB, _rangeJs);
       if (rangeResult != null && rangeResult != "null") {
+        _failCountB = 0;
         final data = _parseRangeJson(rangeResult);
-        if (data != null) widget.onRangeData(data);
+        if (data != null) {
+          debugPrint('[Scraper] ✅ Range data scraped successfully');
+          widget.onRangeData(data);
+        }
+      } else {
+        _failCountB++;
+        debugPrint('[Scraper] ❌ Range scrape failed (#$_failCountB)');
       }
     }
+    _isFirstScrape = false;
   }
 
   Future<String?> _executeScrape(win.WebviewController? winCtrl, WebViewController? mobCtrl, String js) async {
@@ -98,21 +128,40 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       if (defaultTargetPlatform == TargetPlatform.windows) {
         if (winCtrl == null) return null;
         await winCtrl.reload();
-        await Future.delayed(const Duration(seconds: 2)); 
+        await Future.delayed(const Duration(seconds: 2));
         return await winCtrl.executeScript(js);
       } else {
         if (mobCtrl == null) return null;
-        await mobCtrl.reload();
-        await Future.delayed(const Duration(seconds: 2));
+
+        // Mobile strategy: try JS first without reload (Coinglass SPA may auto-update)
+        if (!_isFirstScrape) {
+          try {
+            final quickRes = await mobCtrl.runJavaScriptReturningResult(js);
+            String q = _cleanMobileResult(quickRes);
+            if (q != "null" && q.isNotEmpty && q.length > 5) {
+              return q; // Page data was already fresh, no reload needed
+            }
+          } catch (_) {}
+
+          // Quick scrape returned empty — reload page and retry with longer wait
+          debugPrint('[Scraper] Quick scrape empty, reloading page...');
+          await mobCtrl.reload();
+          await Future.delayed(const Duration(seconds: 5));
+        }
+
         final res = await mobCtrl.runJavaScriptReturningResult(js);
-        String s = res.toString();
-        if (s.startsWith('"') && s.endsWith('"')) s = s.substring(1, s.length - 1);
-        return s.replaceAll(r'\"', '"');
+        return _cleanMobileResult(res);
       }
     } catch (e) {
-      debugPrint('Error executing scrape: $e');
+      debugPrint('[Scraper] Error: $e');
       return null;
     }
+  }
+
+  String _cleanMobileResult(Object res) {
+    String s = res.toString();
+    if (s.startsWith('"') && s.endsWith('"')) s = s.substring(1, s.length - 1);
+    return s.replaceAll(r'\"', '"');
   }
 
   static const _printerJs = r"""
@@ -225,7 +274,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   int _toInt(dynamic v) => int.tryParse(v.toString().replaceAll(',', '').replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
   String _cleanJson(String s) => (s.startsWith('"') && s.endsWith('"')) ? s.substring(1, s.length - 1).replaceAll(r'\"', '"') : s;
   String _formatNet(double v) => (v >= 0 ? "+" : "") + (v.abs() >= 1e8 ? "${(v / 1e8).toStringAsFixed(2)}億" : "${(v / 1e4).toStringAsFixed(0)}萬");
-  
+
   double _parseValue(String raw) {
     try {
       String clean = raw.replaceAll(RegExp(r'[\$¥,]'), '').trim();
@@ -238,10 +287,21 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
   @override
   Widget build(BuildContext context) => Stack(children: [
-    SizedBox(width: 1, height: 1, child: defaultTargetPlatform == TargetPlatform.windows ? (_isWinAInit ? win.Webview(_winA) : Container()) : (Container())),
-    SizedBox(width: 1, height: 1, child: defaultTargetPlatform == TargetPlatform.windows ? (_isWinBInit ? win.Webview(_winB) : Container()) : (Container())),
+    SizedBox(width: 1, height: 1, child: defaultTargetPlatform == TargetPlatform.windows
+      ? (_isWinAInit ? win.Webview(_winA) : Container())
+      : (_mobileA != null ? WebViewWidget(controller: _mobileA!) : Container())),
+    SizedBox(width: 1, height: 1, child: defaultTargetPlatform == TargetPlatform.windows
+      ? (_isWinBInit ? win.Webview(_winB) : Container())
+      : (_mobileB != null ? WebViewWidget(controller: _mobileB!) : Container())),
   ]);
 
   @override
-  void dispose() { _scrapeTimer?.cancel(); _winA.dispose(); _winB.dispose(); super.dispose(); }
+  void dispose() {
+    _scrapeTimer?.cancel();
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      _winA.dispose();
+      _winB.dispose();
+    }
+    super.dispose();
+  }
 }
