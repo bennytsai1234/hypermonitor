@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hyper-monitor-v24-rollback';
+const CACHE_NAME = 'hyper-monitor-v29-bugfix-all';
 const ASSETS = [
   '/',
   '/index.html',

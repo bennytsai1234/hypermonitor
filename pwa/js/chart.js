@@ -8,9 +8,62 @@ export function renderChart(canvas, historyData, currentAsset, allData, selected
 
   // Map currentAsset ('all') to historyData key ('printer')
   const key = currentAsset === 'all' ? 'printer' : currentAsset;
-  const history = historyData[key] || [];
+  const originalHistory = historyData[key] || [];
 
-  if (!history || history.length === 0) {
+  // Scheme C: View-Only Merge (Optimistic UI)
+  // Create a shallow copy to avoid mutating the original history
+  const history = [...originalHistory];
+
+  // Try to append the latest data point if available and newer
+  if (allData && allData.timestamp) {
+      try {
+          const lastHist = history[history.length - 1];
+          const latestTs = parseTimestamp(allData.timestamp).getTime();
+          const lastTs = lastHist ? parseTimestamp(lastHist.timestamp || lastHist.time_bucket).getTime() : 0;
+
+          // Only append if significantly newer (> 1 min) or if history is empty
+          if (latestTs > lastTs + 1000) {
+              let newPoint = null;
+              if (currentAsset === 'all') {
+                  newPoint = {
+                      timestamp: allData.timestamp,
+                      long_vol_num: toNum(allData.long_vol_num),
+                      short_vol_num: toNum(allData.short_vol_num)
+                  };
+              } else if (currentAsset === 'hedge') {
+                  // Sum up BTC + ETH
+                  const btc = allData.btc || {};
+                  const eth = allData.eth || {};
+                  // Hedge history uses _num suffix unlike btc/eth arrays
+                  newPoint = {
+                      timestamp: allData.timestamp,
+                      long_vol_num: toNum(btc.long_vol) + toNum(eth.long_vol),
+                      short_vol_num: toNum(btc.short_vol) + toNum(eth.short_vol)
+                  };
+              } else if (currentAsset === 'btc' && allData.btc) {
+                   newPoint = {
+                      timestamp: allData.timestamp,
+                      long_vol: toNum(allData.btc.long_vol),
+                      short_vol: toNum(allData.btc.short_vol)
+                  };
+              } else if (currentAsset === 'eth' && allData.eth) {
+                   newPoint = {
+                      timestamp: allData.timestamp,
+                      long_vol: toNum(allData.eth.long_vol),
+                      short_vol: toNum(allData.eth.short_vol)
+                  };
+              }
+
+              if (newPoint) {
+                  history.push(newPoint);
+              }
+          }
+      } catch (e) {
+          console.warn('Optimistic merge failed:', e);
+      }
+  }
+
+  if (history.length === 0) {
     if (chartInstance) {
         chartInstance.destroy();
         chartInstance = null;
@@ -19,8 +72,14 @@ export function renderChart(canvas, historyData, currentAsset, allData, selected
   }
 
   // Optimization: Skip re-render if data hasn't changed
-  const latestTs = history[history.length - 1]?.timestamp || history[history.length - 1]?.time_bucket;
-  const signature = `${key}-${selectedRange}-${latestTs}`;
+  // Use data VALUES (not timestamp) to build signature
+  // This prevents re-rendering when timestamp changes but data stays the same
+  const lastItem = history[history.length - 1];
+  const histLen = history.length;
+  const firstItem = history[0];
+  const firstTs = firstItem?.timestamp || firstItem?.time_bucket || '';
+  const lastVals = lastItem ? `${toNum(lastItem.long_vol_num || lastItem.long_vol)}-${toNum(lastItem.short_vol_num || lastItem.short_vol)}` : '';
+  const signature = `${key}-${selectedRange}-${histLen}-${firstTs}-${lastVals}`;
 
   if (lastSignature === signature && chartInstance) {
       return;
@@ -70,7 +129,8 @@ export function renderChart(canvas, historyData, currentAsset, allData, selected
           backgroundColor: bg,
           borderWidth: 2,
           fill: true,
-          tension: 0.3,
+          tension: 0,
+          stepped: true,
           pointRadius: 0,
           pointHitRadius: 10,
         },

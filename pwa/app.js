@@ -38,17 +38,24 @@ async function loadHistory() {
 }
 
 async function refreshAll() {
-  await pollLatest();
-  // Only refresh history if enough time has passed (avoid excessive DB reads)
+  // Parallel Fetching: Start both requests at the same time
+  const latestPromise = pollLatest();
+  let historyPromise = Promise.resolve();
+  // Only refresh history if enough time has passed
   if (Date.now() - lastHistoryLoad > HISTORY_REFRESH_INTERVAL) {
-    await loadHistory();
+    historyPromise = loadHistory().catch(console.warn);
   }
+  // Wait for BOTH to complete (ensures chart has data on first load)
+  await Promise.all([latestPromise, historyPromise]);
 }
 
 function render() {
     renderUI(allData, currentAsset, () => {
         const dom = getDom();
-        renderChart(dom.chartCanvas, historyData, currentAsset, allData, selectedRange);
+        // Safety check: Chart canvas might not be ready in DOM yet
+        if (dom && dom.chartCanvas) {
+            renderChart(dom.chartCanvas, historyData, currentAsset, allData, selectedRange);
+        }
     });
 }
 
@@ -201,15 +208,17 @@ async function boot() {
   initListeners();
   initPullToRefresh();
 
+  // Show UI immediately (skeleton state)
+  showApp();
+
   // Connection status listener
   onConnectionStatusChange(updateConnectionStatus);
 
   // Request notification permission
   requestNotificationPermission();
 
-  // Initial load
+  // Initial load (Non-blocking history)
   await refreshAll();
-  showApp();
 
   // Use Web Worker for background timing
   if (window.Worker) {

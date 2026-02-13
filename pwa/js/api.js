@@ -18,7 +18,10 @@ function setStatus(status) {
 
 export async function fetchLatest() {
   try {
-    const res = await fetch(`${API_BASE}/latest`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+    const res = await fetch(`${API_BASE}/latest`, { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (!res.ok) {
       setStatus('error');
       return loadCachedLatest();
@@ -29,7 +32,7 @@ export async function fetchLatest() {
     return data;
   } catch (e) {
     console.warn('Fetch latest failed:', e);
-    setStatus('offline');
+    setStatus(e.name === 'AbortError' ? 'error' : 'offline');
     return loadCachedLatest();
   }
 }
