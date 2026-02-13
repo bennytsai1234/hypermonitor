@@ -33,20 +33,26 @@ const binance = require('./binance-api');
     console.log('Balance:', e.message);
   }
 
-  // 4. Get price
+  // 4. Get price and instrument info
   const price = await binance.getPrice('BTCUSDT');
+  const info = await binance.getInstrumentInfo('BTCUSDT');
   console.log(`BTC Price: $${price}`);
 
-  // 5. Place order: BUY 0.001 BTC (最小單位)
+  // 5. Place LIMIT order: BUY 0.002 BTC
   const qty = 0.002;
-  const notional = (qty * price).toFixed(2);
-  console.log(`\nPlacing: BUY ${qty} BTC (~$${notional})`);
+  // Calculate price with precision
+  const pricePrecision = info.pricePrecision || 2;
+  const limitPrice = parseFloat(price.toFixed(pricePrecision));
+
+  const notional = (qty * limitPrice).toFixed(2);
+  console.log(`\nPlacing: LIMIT BUY ${qty} BTC @ $${limitPrice} (~$${notional})`);
 
   try {
-    const result = await binance.placeOrder('BTCUSDT', 'BUY', qty);
+    // Pass limitPrice to enable Limit Order
+    const result = await binance.placeOrder('BTCUSDT', 'BUY', qty, limitPrice);
     console.log('Result:', JSON.stringify(result, null, 2));
     if (result.orderId) {
-      console.log(`\n✅ SUCCESS! orderId: ${result.orderId}`);
+      console.log(`\n✅ SUCCESS! orderId: ${result.orderId} (Status: ${result.status})`);
     } else {
       console.log(`\n❌ FAILED: ${result.msg}`);
     }

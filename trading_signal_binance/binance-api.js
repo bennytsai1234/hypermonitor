@@ -97,12 +97,26 @@ async function getInstrumentInfo(symbol) {
     // Binance futures qty is in BTC directly (not contracts)
     minQty: parseFloat(lotFilter?.minQty || '0.001'),
     stepSize: parseFloat(lotFilter?.stepSize || '0.001'),
-    tickSize: parseFloat(priceFilter?.tickSz || '0.1'),
+    tickSize: parseFloat(priceFilter?.tickSize || '0.1'),
+    minNotional: parseFloat(minNotional?.notional || '5'),
+    contractType: sym.contractType,
+    pricePrecision: sym.pricePrecision,
+    tickSize: parseFloat(priceFilter?.tickSize || '0.1'),
     minNotional: parseFloat(minNotional?.notional || '5'),
     contractType: sym.contractType,
     pricePrecision: sym.pricePrecision,
     quantityPrecision: sym.quantityPrecision,
   };
+}
+
+/**
+ * Get K-line (Candlestick) data
+ * @param {string} symbol
+ * @param {string} interval - e.g. '1m', '5m', '1h'
+ * @param {number} limit - default 50
+ */
+async function getKlines(symbol, interval, limit = 50) {
+  return publicGet('/fapi/v1/klines', { symbol, interval, limit });
 }
 
 // ============================================
@@ -130,18 +144,28 @@ async function setMarginType(symbol, marginType = 'CROSSED') {
 }
 
 /**
- * Place a market order
+ * Place an order
  * @param {string} symbol - e.g. 'BTCUSDT'
  * @param {string} side - 'BUY' or 'SELL'
  * @param {number} quantity - amount in BTC (e.g. 0.001)
+ * @param {number} [price] - Optional. If provided, places LIMIT order. If null/undefined, places MARKET order.
  */
-async function placeOrder(symbol, side, quantity) {
-  return binancePost('/fapi/v1/order', {
+async function placeOrder(symbol, side, quantity, price = null) {
+  const params = {
     symbol,
     side: side.toUpperCase(),
-    type: 'MARKET',
     quantity: String(quantity),
-  });
+  };
+
+  if (price) {
+    params.type = 'LIMIT';
+    params.price = String(price);
+    params.timeInForce = 'GTC'; // Good Till Cancel
+  } else {
+    params.type = 'MARKET';
+  }
+
+  return binancePost('/fapi/v1/order', params);
 }
 
 /**
@@ -170,4 +194,5 @@ module.exports = {
   placeOrder,
   getPosition,
   getBalance,
+  getKlines,
 };

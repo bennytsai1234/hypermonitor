@@ -91,17 +91,80 @@ async function processSignal(data) {
     log(`⚠️ Order capped to $${CONFIG.MAX_ORDER_USD} notional ($${marginUSD.toFixed(1)} margin)`);
   }
 
-  // Get price and instrument info
+  // Get instrument info if not available
   if (!instrumentInfo) {
     instrumentInfo = await binance.getInstrumentInfo(CONFIG.INST_ID);
     log(`📋 Instrument: minQty=${instrumentInfo.minQty}, stepSize=${instrumentInfo.stepSize}, qtyPrecision=${instrumentInfo.quantityPrecision}`);
   }
 
-  const price = await binance.getPrice(CONFIG.INST_ID);
+  // Direction: delta > 0 = longs increasing = BUY, delta < 0 = shorts increasing = SELL
+  const side = deltaH > 0 ? 'BUY' : 'SELL';
+
+  // Strategy: 6-minute candle logic
+  // BUY  -> Limit at Previous 6m Candle LOW
+  // SELL -> Limit at Previous 6m Candle HIGH
+  let targetPrice = 0;
+  let strategyNote = '';
+
+  try {
+    // 1. Fetch recent 1m candles (enough to cover last 12 mins)
+    const klines = await binance.getKlines(CONFIG.INST_ID, '1m', 15);
+
+    // 2. Aggregate to find "Previous 6m Candle"
+    // Valid 6m blocks start at :00, :06, :12 ...
+    const now = Date.now();
+    const BLOCK_MS = 6 * 60 * 1000;
+    const currentBlockStart = now - (now % BLOCK_MS);
+    const prevBlockStart = currentBlockStart - BLOCK_MS;
+
+    // Filter candles that belong to the previous completed 6m block
+    const targetCandles = klines.filter(k => {
+      const openTime = k[0];
+      return openTime >= prevBlockStart && openTime < currentBlockStart;
+    });
+
+    if (targetCandles.length > 0) {
+      // Find High and Low of this 6m block
+      // Candle format: [ openTime, open, high, low, close, ... ]
+      let blockHigh = -Infinity;
+      let blockLow = Infinity;
+
+      for (const c of targetCandles) {
+        const h = parseFloat(c[2]);
+        const l = parseFloat(c[3]);
+        if (h > blockHigh) blockHigh = h;
+        if (l < blockLow) blockLow = l;
+      }
+
+      if (side === 'BUY') {
+        targetPrice = blockLow;
+        strategyNote = `(Prev 6m Low)`;
+      } else {
+        targetPrice = blockHigh;
+        strategyNote = `(Prev 6m High)`;
+      }
+
+      log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}`);
+
+    } else {
+      log(`⚠️ Could not find complete previous 6m candle data. Using current price.`);
+      targetPrice = await binance.getPrice(CONFIG.INST_ID);
+    }
+
+  } catch (e) {
+    log(`⚠️ Strategy error: ${e.message}. Using current price.`);
+    targetPrice = await binance.getPrice(CONFIG.INST_ID);
+  }
+
+  const price = targetPrice; // variable name used below
+
+  // Calculate Order Price for Limit Order
+  const pricePrecision = instrumentInfo.pricePrecision;
+  const finalPrice = parseFloat(price.toFixed(typeof pricePrecision === 'number' ? pricePrecision : 2));
 
   // Calculate quantity in BTC
   // Binance futures: qty is in BTC directly
-  const rawQty = notionalUSD / price;
+  const rawQty = notionalUSD / finalPrice;
   const qtyPrecision = instrumentInfo.quantityPrecision || 3;
   const qty = parseFloat(rawQty.toFixed(qtyPrecision));
 
@@ -110,19 +173,19 @@ async function processSignal(data) {
     return;
   }
 
-  // Direction: delta > 0 = longs increasing = BUY, delta < 0 = shorts increasing = SELL
-  const side = deltaH > 0 ? 'BUY' : 'SELL';
+  // (Side is already defined above)
 
-  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${side} ${qty} BTC @ $${price.toFixed(1)} (margin: $${marginUSD.toFixed(1)}, notional: ~$${notionalUSD.toFixed(0)})`);
+  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → LIMIT ${side} ${qty} BTC @ $${finalPrice} ${strategyNote} (margin: $${marginUSD.toFixed(1)}, notional: ~$${notionalUSD.toFixed(0)})`);
 
   // Execute or dry-run
   if (CONFIG.DRY_RUN) {
-    log(`🔕 [DRY RUN] Would ${side} ${qty} BTC. Skipping.`);
+    log(`🔕 [DRY RUN] Would LIMIT ${side} ${qty} BTC @ $${finalPrice} ${strategyNote}. Skipping.`);
   } else {
     try {
-      const result = await binance.placeOrder(CONFIG.INST_ID, side, qty);
+      // Pass finalPrice to place a LIMIT order
+      const result = await binance.placeOrder(CONFIG.INST_ID, side, qty, finalPrice);
       if (result.orderId) {
-        log(`✅ Order placed! orderId: ${result.orderId} | status: ${result.status}`);
+        log(`✅ Limit Order placed! orderId: ${result.orderId} | status: ${result.status}`);
         totalTraded += notionalUSD;
         log(`📊 Session total traded: $${totalTraded.toFixed(0)}`);
       } else {
