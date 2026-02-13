@@ -175,9 +175,10 @@ async function main() {
   log(`   Mode: ${CONFIG.ONCE ? 'Single run' : 'Continuous'}`);
 
   // Launch browser
+  const isWin = process.platform === 'win32';
   const browser = await puppeteer.launch({
     headless: true,
-    args: [
+    args: isWin ? [] : [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
@@ -284,6 +285,10 @@ async function scrapeAndUpload(pagePrinter, pageRange, cycle) {
         netDisplay: toTC(d.netVol),
       };
 
+      if (CONFIG.ONCE) {
+        log(`Printer Data: ${JSON.stringify(payload, null, 2)}`);
+      }
+
       printerOk = await postData('/update-printer', payload);
     }
   }
@@ -317,6 +322,9 @@ async function scrapeAndUpload(pagePrinter, pageRange, cycle) {
       }
 
       if (Object.keys(payload).length > 0) {
+        if (CONFIG.ONCE) {
+          log(`Range Data: ${JSON.stringify(payload, null, 2)}`);
+        }
         rangeOk = await postData('/update-range', payload);
       }
     }
