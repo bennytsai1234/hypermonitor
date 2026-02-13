@@ -136,14 +136,16 @@ async function setLeverage(instId, lever, mgnMode = 'cross') {
  */
 async function placeOrder(instId, side, posSide, sz) {
   const path = '/api/v5/trade/order';
-  return okxPost(path, {
+  const body = {
     instId,
     tdMode: 'cross',     // Cross margin
     side,                 // buy / sell
-    posSide,              // long / short
     ordType: 'market',    // Market order
     sz: String(sz),
-  });
+  };
+  // Only include posSide for hedge mode
+  if (posSide) body.posSide = posSide;
+  return okxPost(path, body);
 }
 
 module.exports = {
