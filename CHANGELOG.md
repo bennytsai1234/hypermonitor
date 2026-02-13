@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-13
+
+### Added
+- **Android 完整監控面板**：行動端新增「核心對沖」、「BTC 監控」、「ETH 監控」三大區塊，與 Windows 桌面版完全對齊。
+- **全資產 Delta 追蹤**：行動端現支援 4 組 × 3 個（多/空/淨）共 12 個變化量追蹤，數據變動時每張卡片即時顯示 +/- 增減。
+- **時間範圍擴展**：行動端從 4 個選項擴展至 14 個（1h~1y），與桌面版一致。
+- **歷史自動刷新**：行動端新增每 5 分鐘自動刷新歷史數據（含靜默優化，無變化時跳過重繪）。
+- **數據變動時間戳**：Header 新增金色時間標記，顯示最後一次數據變動的精確時間。
+- **爬取診斷日誌**：Scraper 新增 ✅/❌ 結果日誌與連續失敗計數器，方便 Debug。
+
+### Fixed
+- **[Critical] Android WebView 未掛載**：`data_scraper.dart` 的 `build()` 在行動端渲染空 `Container()` 而非 `WebViewWidget`，導致 WebView 未建立 platform view、JS 無法正確執行。現已修復。
+- **Android 頁面載入時間不足**：行動端初始化延遲從 5 秒增至 10 秒，reload 後等待從 2 秒增至 5 秒，適配 SPA 重型頁面。
+- **Cloudflare 指紋偵測**：行動端 WebView 新增 Desktop Chrome User-Agent，避免被識別為行動端 WebView 而觸發 CAPTCHA。
+- **Range 爬取數據未即時反映**：`_onRangeScraped` 新增 merge 邏輯，將 BTC/ETH 即時合併到當前顯示數據。
+
+### Changed
+- **智慧重試策略**：行動端爬取改為先嘗試直接執行 JS（不 reload），失敗時才 reload 並等待 5 秒重試，大幅降低流量與電量消耗。
+- **行動端配置為發報機**：Android 端同時作為爬取數據源（發報機）與顯示接收機，爬取結果即時更新本地 UI。
+- **dispose 平台安全**：Windows WebView 的 dispose 僅在 Windows 平台執行，避免 Android 上的潛在異常。
+
 ## [1.1.3] - 2026-02-12
 
 ### Optimization
