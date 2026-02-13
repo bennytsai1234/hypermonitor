@@ -22,7 +22,9 @@ const puppeteer = require('puppeteer');
 const CONFIG = {
   API_URL: process.env.API_URL || 'https://hyper-monitor-worker.bennytsai0711.workers.dev',
   API_KEY: process.env.API_KEY || '',
-  INTERVAL: parseInt(process.env.INTERVAL || '3') * 1000,
+  // Total cycle time (including reload + scrape + upload)
+  // Smart sleep: will subtract elapsed time from this value
+  CYCLE_TIME: parseInt(process.env.INTERVAL || '10') * 1000,
   ONCE: process.argv.includes('--once'),
 
   URLS: {
@@ -31,10 +33,14 @@ const CONFIG = {
   },
 
   // Wait for page data to load (milliseconds)
-  PAGE_LOAD_WAIT: 2000, // Reduced for mobile: 5s -> 2s
+  PAGE_LOAD_WAIT: 2000,
   // Wait after reload for data to refresh
-  RELOAD_WAIT: 1000,    // Reduced for mobile: 3s -> 1s
+  RELOAD_WAIT: 1000,
 };
+
+// Track last uploaded data to avoid redundant POSTs
+let lastPrinterFingerprint = '';
+let lastRangeFingerprint = '';
 
 // ============================================
 // Scrape JavaScript (same logic as Flutter)
@@ -182,7 +188,7 @@ function log(msg) {
 async function main() {
   log('🚀 Hyper Monitor Cloud Scraper starting...');
   log(`   API: ${CONFIG.API_URL}`);
-  log(`   Interval: ${CONFIG.INTERVAL / 1000}s`);
+  log(`   Cycle: ${CONFIG.CYCLE_TIME / 1000}s`);
   log(`   Mode: ${CONFIG.ONCE ? 'Single run' : 'Continuous'}`);
 
   // Launch browser
@@ -215,8 +221,8 @@ async function main() {
   const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
   await pagePrinter.setUserAgent(ua);
   await pageRange.setUserAgent(ua);
-  await pagePrinter.setViewport({ width: 1280, height: 720 }); // Lower resolution to save RAM
-  await pageRange.setViewport({ width: 1280, height: 720 });
+  await pagePrinter.setViewport({ width: 800, height: 600 }); // Low resolution to save RAM & CPU
+  await pageRange.setViewport({ width: 800, height: 600 });
 
   // Optimize: Block images, fonts, css to save bandwidth & CPU
   await pagePrinter.setRequestInterception(true);
@@ -252,6 +258,7 @@ async function main() {
 
   while (true) {
     cycle++;
+    const cycleStart = Date.now();
     try {
       await scrapeAndUpload(pagePrinter, pageRange, cycle);
       consecutiveErrors = 0;
@@ -276,7 +283,11 @@ async function main() {
     }
 
     if (CONFIG.ONCE) break;
-    await sleep(CONFIG.INTERVAL);
+
+    // Smart sleep: total cycle = CONFIG.CYCLE_TIME
+    const elapsed = Date.now() - cycleStart;
+    const remaining = Math.max(1000, CONFIG.CYCLE_TIME - elapsed);
+    await sleep(remaining);
   }
 
   await browser.close();
@@ -317,11 +328,17 @@ async function scrapeAndUpload(pagePrinter, pageRange, cycle) {
         netDisplay: toTC(d.netVol),
       };
 
-      if (CONFIG.ONCE) {
-        log(`Printer Data (at ${new Date().toLocaleTimeString()}): ${JSON.stringify(payload, null, 2)}`);
+      // Smart skip: only POST if data actually changed
+      const pFingerprint = `${longNum}-${shortNum}-${netNum}`;
+      if (pFingerprint === lastPrinterFingerprint && !CONFIG.ONCE) {
+          // Data unchanged, skip upload
+      } else {
+          if (CONFIG.ONCE) {
+            log(`Printer Data (at ${new Date().toLocaleTimeString()}): ${JSON.stringify(payload, null, 2)}`);
+          }
+          printerOk = await postData('/update-printer', payload);
+          if (printerOk) lastPrinterFingerprint = pFingerprint;
       }
-
-      printerOk = await postData('/update-printer', payload);
     }
   }
 
@@ -354,19 +371,26 @@ async function scrapeAndUpload(pagePrinter, pageRange, cycle) {
       }
 
       if (Object.keys(payload).length > 0) {
-        if (CONFIG.ONCE) {
-          log(`Range Data (at ${new Date().toLocaleTimeString()}): ${JSON.stringify(payload, null, 2)}`);
+        // Smart skip: only POST if data actually changed
+        const rFingerprint = JSON.stringify(payload);
+        if (rFingerprint === lastRangeFingerprint && !CONFIG.ONCE) {
+            // Data unchanged, skip upload
+        } else {
+            if (CONFIG.ONCE) {
+              log(`Range Data (at ${new Date().toLocaleTimeString()}): ${JSON.stringify(payload, null, 2)}`);
+            }
+            rangeOk = await postData('/update-range', payload);
+            if (rangeOk) lastRangeFingerprint = rFingerprint;
         }
-        rangeOk = await postData('/update-range', payload);
       }
     }
   }
 
-  // Log status
-  const pStatus = printerOk ? '✅' : (printerRaw ? '⚠️' : '❌');
-  const rStatus = rangeOk ? '✅' : (rangeRaw ? '⚠️' : '❌');
+  // Log status (show skip status)
+  const pStatus = printerOk ? '✅' : (printerRaw ? (lastPrinterFingerprint ? '⏭️' : '⚠️') : '❌');
+  const rStatus = rangeOk ? '✅' : (rangeRaw ? (lastRangeFingerprint ? '⏭️' : '⚠️') : '❌');
   const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-  log(`#${cycle} Printer:${pStatus} Range:${rStatus} (took ${duration}s)`);
+  log(`#${cycle} Printer:${pStatus} Range:${rStatus} (${duration}s)`);
 }
 
 function sleep(ms) {
