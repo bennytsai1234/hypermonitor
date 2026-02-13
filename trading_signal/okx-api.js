@@ -149,9 +149,9 @@ async function setLeverage(instId, lever, mgnMode = 'cross') {
  * @param {string} side - 'buy' or 'sell'
  * @param {string} posSide - 'long' or 'short'
  * @param {string} sz - Number of contracts (string)
- * @param {string} [px] - Optional price for Limit Order
+ * @param {object} [opts] - options including price, type, postOnly
  */
-async function placeOrder(instId, side, posSide, sz, px = null) {
+async function placeOrder(instId, side, posSide, sz, opts = {}) {
   const path = '/api/v5/trade/order';
   const body = {
     instId,
@@ -160,11 +160,15 @@ async function placeOrder(instId, side, posSide, sz, px = null) {
     sz: String(sz),
   };
 
-  if (px) {
-    body.ordType = 'limit';
-    body.px = String(px);
-  } else {
+  if (opts.type === 'market') {
     body.ordType = 'market';
+  } else if (opts.postOnly) {
+    body.ordType = 'post_only';
+    body.px = String(opts.price);
+  } else {
+    // Default to limit
+    body.ordType = 'limit';
+    body.px = String(opts.price);
   }
 
   // Only include posSide for hedge mode (if needed, though typically net mode is default for simple bots)

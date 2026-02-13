@@ -163,15 +163,34 @@ async function processSignal(data) {
   const finalPrice = targetPrice;
   const actualUSD = sz * contractValueUSD;
 
-  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → LIMIT ${side.toUpperCase()} ${sz} ct @ $${finalPrice} ${strategyNote} (~$${actualUSD.toFixed(0)})`);
+  // Urgent logic config
+  const URGENT_DELTA = 5000000; // 5M
+
+  // Check if we should panic buy/sell (Market Order)
+  // Condition: Huge Delta (> 5M) -> Direct Market Order
+  const isUrgent = Math.abs(deltaH) >= URGENT_DELTA;
+
+  let orderType = 'LIMIT';
+  let orderOpts = {};
+
+  if (isUrgent) {
+    orderType = 'MARKET';
+    orderOpts = { type: 'market' };
+    log(`🚨 URGENT SIGNAL (${formatUSD(deltaH)}) > 5M → MARKET ORDER!`);
+  } else {
+    // Standard: Post Only Limit
+    orderType = 'LIMIT (Post Only)';
+    orderOpts = { price: finalPrice, postOnly: true };
+  }
+
+  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${orderType} ${side.toUpperCase()} ${sz} ct @ ${orderType === 'MARKET' ? 'MARKET' : '$' + finalPrice} ${strategyNote} (~$${actualUSD.toFixed(0)})`);
 
   // Execute or dry-run
   if (CONFIG.DRY_RUN) {
-    log(`🔕 [DRY RUN] Would LIMIT ${side} ${sz} contracts @ $${finalPrice}. Skipping.`);
+    log(`🔕 [DRY RUN] Would place ${orderType} ${side} ${sz} contracts. Skipping.`);
   } else {
     try {
-      // Pass finalPrice as the last argument for Limit Order
-      const result = await okx.placeOrder(CONFIG.INST_ID, side, '', sz, finalPrice);
+      const result = await okx.placeOrder(CONFIG.INST_ID, side, '', sz, orderOpts);
       const ordId = result[0]?.ordId || 'unknown';
       const sCode = result[0]?.sCode || '';
       const sMsg = result[0]?.sMsg || '';
