@@ -76,20 +76,17 @@ async function processSignal(data) {
     return;
   }
 
-  // Calculate order value
+  // Calculate order value (direct, no accumulation)
   let orderUSD = deltaH * CONFIG.RATIO;
 
-  // Accumulate (in case order is too small for 1 contract)
-  accumulatedOrderUSD += orderUSD;
-
-  log(`📈 Delta: ${formatUSD(deltaH)} → Order: $${orderUSD.toFixed(2)} (Accumulated: $${accumulatedOrderUSD.toFixed(2)})`);
-
   // Cap maximum order
-  if (Math.abs(accumulatedOrderUSD) > CONFIG.MAX_ORDER_USD) {
-    const sign = accumulatedOrderUSD > 0 ? 1 : -1;
-    accumulatedOrderUSD = sign * CONFIG.MAX_ORDER_USD;
+  if (Math.abs(orderUSD) > CONFIG.MAX_ORDER_USD) {
+    const sign = orderUSD > 0 ? 1 : -1;
+    orderUSD = sign * CONFIG.MAX_ORDER_USD;
     log(`⚠️ Order capped to $${CONFIG.MAX_ORDER_USD}`);
   }
+
+  log(`📈 Delta: ${formatUSD(deltaH)} → Order: $${orderUSD.toFixed(2)}`);
 
   // Get price and instrument info
   if (!instrumentInfo) {
@@ -99,18 +96,18 @@ async function processSignal(data) {
 
   const price = await okx.getPrice(CONFIG.INST_ID);
   const contractValueUSD = instrumentInfo.ctVal * price;  // Value of 1 contract in USD
-  const rawSz = Math.abs(accumulatedOrderUSD) / contractValueUSD;
+  const rawSz = Math.abs(orderUSD) / contractValueUSD;
   // Fix floating point: round to lotSz precision (e.g. 0.01)
   const lotDecimals = Math.max(0, -Math.floor(Math.log10(instrumentInfo.lotSz)));
   const sz = parseFloat((Math.floor(rawSz / instrumentInfo.lotSz) * instrumentInfo.lotSz).toFixed(lotDecimals));
 
   if (sz < instrumentInfo.minSz) {
-    log(`⏳ Accumulated $${accumulatedOrderUSD.toFixed(2)} not enough for 1 contract ($${contractValueUSD.toFixed(0)}/ct). Waiting...`);
+    log(`⏳ Order $${Math.abs(orderUSD).toFixed(0)} too small for min contract ($${contractValueUSD.toFixed(0)}/ct). Skipped.`);
     return;
   }
 
   // Determine direction (net mode: buy = increase long / decrease short, sell = opposite)
-  const isBuy = accumulatedOrderUSD > 0;
+  const isBuy = orderUSD > 0;
   const side = isBuy ? 'buy' : 'sell';
   const actualUSD = sz * contractValueUSD;
 
@@ -134,7 +131,6 @@ async function processSignal(data) {
       log(`📊 Session total traded: $${totalTraded.toFixed(0)}`);
     } catch (e) {
       log(`❌ Order failed: ${e.message}`);
-      // Don't clear accumulated - retry next cycle
       return;
     }
   }
