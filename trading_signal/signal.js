@@ -52,37 +52,37 @@ async function fetchLatest() {
 // Core Signal Logic
 // ============================================
 async function processSignal(data) {
-  // Use 全體 (ALL) net pressure directly from printer data
-  const currentNet = parseFloat(data.net_vol_num) || 0;
+  // Use 全體 (ALL) data: long_vol - short_vol = net direction
+  const longVol = parseFloat(data.long_vol_num) || 0;
+  const shortVol = parseFloat(data.short_vol_num) || 0;
+  const currentNet = longVol - shortVol;  // 正=多頭佔優, 負=空頭佔優
   const sentiment = data.sentiment || '';
 
   // First run: just record, don't trade
   if (previousNet === null) {
     previousNet = currentNet;
-    log(`📊 Initial 全體 net: ${formatUSD(currentNet)} (${sentiment})`);
+    log(`📊 Initial 全體: 多${formatUSD(longVol)} 空${formatUSD(shortVol)} 淨${formatUSD(currentNet)} (${sentiment})`);
     return;
   }
 
   // Only trade when 全體 net pressure changes
   if (currentNet === previousNet) return;
 
-  // Calculate delta
+  // Calculate delta: positive = longs growing more than shorts, negative = shorts growing more
   const deltaH = currentNet - previousNet;
   previousNet = currentNet;
 
   // Check minimum threshold
   if (Math.abs(deltaH) < CONFIG.MIN_DELTA) {
-    // Delta too small, skip
     return;
   }
 
   // Calculate order value (direct, no accumulation)
-  let orderUSD = deltaH * CONFIG.RATIO;
+  let orderUSD = Math.abs(deltaH) * CONFIG.RATIO;
 
   // Cap maximum order
-  if (Math.abs(orderUSD) > CONFIG.MAX_ORDER_USD) {
-    const sign = orderUSD > 0 ? 1 : -1;
-    orderUSD = sign * CONFIG.MAX_ORDER_USD;
+  if (orderUSD > CONFIG.MAX_ORDER_USD) {
+    orderUSD = CONFIG.MAX_ORDER_USD;
     log(`⚠️ Order capped to $${CONFIG.MAX_ORDER_USD}`);
   }
 
@@ -94,21 +94,17 @@ async function processSignal(data) {
 
   const price = await okx.getPrice(CONFIG.INST_ID);
   const contractValueUSD = instrumentInfo.ctVal * price;
-  const rawSz = Math.abs(orderUSD) / contractValueUSD;
+  const rawSz = orderUSD / contractValueUSD;
   const lotDecimals = Math.max(0, -Math.floor(Math.log10(instrumentInfo.lotSz)));
   const sz = parseFloat((Math.floor(rawSz / instrumentInfo.lotSz) * instrumentInfo.lotSz).toFixed(lotDecimals));
 
   if (sz < instrumentInfo.minSz) {
-    log(`⏳ Order $${Math.abs(orderUSD).toFixed(0)} too small for min contract ($${contractValueUSD.toFixed(0)}/ct). Skipped.`);
+    log(`⏳ Order $${orderUSD.toFixed(0)} too small for min contract ($${contractValueUSD.toFixed(0)}/ct). Skipped.`);
     return;
   }
 
-  // Determine direction based on sentiment
-  // 看跌 (bearish): delta+ = shorts strengthening = SELL, delta- = shorts weakening = BUY
-  // 看漲 (bullish): delta+ = longs strengthening = BUY, delta- = longs weakening = SELL
-  const isBearish = sentiment.includes('跌');
-  const isBuy = isBearish ? (deltaH < 0) : (deltaH > 0);
-  const side = isBuy ? 'buy' : 'sell';
+  // Direction: delta > 0 = longs increasing = BUY, delta < 0 = shorts increasing = SELL
+  const side = deltaH > 0 ? 'buy' : 'sell';
   const actualUSD = sz * contractValueUSD;
 
   log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${side.toUpperCase()} ${sz} ct @ $${price.toFixed(1)} (~$${actualUSD.toFixed(0)})`);
