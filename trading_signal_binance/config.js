@@ -11,9 +11,9 @@ module.exports = {
   BINANCE_API_KEY: process.env.BINANCE_API_KEY || '',
   BINANCE_SECRET_KEY: process.env.BINANCE_SECRET_KEY || '',
   // Production: https://fapi.binance.com
-  // Testnet:    https://testnet.binancefuture.com
+  // Testnet:    https://demo-fapi.binance.com
   BINANCE_BASE_URL: process.env.BINANCE_TESTNET === 'true'
-    ? 'https://testnet.binancefuture.com'
+    ? 'https://demo-fapi.binance.com'
     : 'https://fapi.binance.com',
   BINANCE_TESTNET: process.env.BINANCE_TESTNET === 'true',
 
