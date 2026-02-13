@@ -61,7 +61,9 @@ async function okxPost(path, body) {
   const data = await res.json();
 
   if (data.code !== '0') {
-    throw new Error(`OKX POST ${path} failed: ${data.msg} (code: ${data.code})`);
+    // Log detailed error info
+    const detail = data.data ? JSON.stringify(data.data) : '';
+    throw new Error(`OKX POST ${path} failed: ${data.msg} (code: ${data.code}) ${detail}`);
   }
   return data.data;
 }

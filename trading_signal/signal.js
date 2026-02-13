@@ -100,7 +100,9 @@ async function processSignal(data) {
   const price = await okx.getPrice(CONFIG.INST_ID);
   const contractValueUSD = instrumentInfo.ctVal * price;  // Value of 1 contract in USD
   const rawSz = Math.abs(accumulatedOrderUSD) / contractValueUSD;
-  const sz = Math.floor(rawSz / instrumentInfo.lotSz) * instrumentInfo.lotSz;
+  // Fix floating point: round to lotSz precision (e.g. 0.01)
+  const lotDecimals = Math.max(0, -Math.floor(Math.log10(instrumentInfo.lotSz)));
+  const sz = parseFloat((Math.floor(rawSz / instrumentInfo.lotSz) * instrumentInfo.lotSz).toFixed(lotDecimals));
 
   if (sz < instrumentInfo.minSz) {
     log(`⏳ Accumulated $${accumulatedOrderUSD.toFixed(2)} not enough for 1 contract ($${contractValueUSD.toFixed(0)}/ct). Waiting...`);
@@ -121,7 +123,14 @@ async function processSignal(data) {
   } else {
     try {
       const result = await okx.placeOrder(CONFIG.INST_ID, side, posSide, sz);
-      log(`✅ Order placed! ordId: ${result[0]?.ordId || 'unknown'}`);
+      const ordId = result[0]?.ordId || 'unknown';
+      const sCode = result[0]?.sCode || '';
+      const sMsg = result[0]?.sMsg || '';
+      if (sCode !== '0' && sCode !== '') {
+        log(`❌ Order rejected: ${sMsg} (sCode: ${sCode})`);
+        return;
+      }
+      log(`✅ Order placed! ordId: ${ordId}`);
       totalTraded += actualUSD;
       log(`📊 Session total traded: $${totalTraded.toFixed(0)}`);
     } catch (e) {
@@ -168,6 +177,33 @@ async function main() {
   if (!CONFIG.OKX_API_KEY || !CONFIG.OKX_SECRET_KEY || !CONFIG.OKX_PASSPHRASE) {
     log('❌ Missing OKX API credentials. Check .env file.');
     process.exit(1);
+  }
+
+  // Set position mode to long/short (hedge mode)
+  if (!CONFIG.DRY_RUN) {
+    try {
+      const modeRes = await fetch(CONFIG.OKX_BASE_URL + '/api/v5/account/set-position-mode', {
+        method: 'POST',
+        headers: (() => {
+          const ts = new Date().toISOString();
+          const body = JSON.stringify({ posMode: 'long_short_mode' });
+          const crypto = require('crypto');
+          const sign = crypto.createHmac('sha256', CONFIG.OKX_SECRET_KEY).update(ts + 'POST' + '/api/v5/account/set-position-mode' + body).digest('base64');
+          const h = { 'OK-ACCESS-KEY': CONFIG.OKX_API_KEY, 'OK-ACCESS-SIGN': sign, 'OK-ACCESS-TIMESTAMP': ts, 'OK-ACCESS-PASSPHRASE': CONFIG.OKX_PASSPHRASE, 'Content-Type': 'application/json' };
+          if (CONFIG.OKX_DEMO) h['x-simulated-trading'] = '1';
+          return h;
+        })(),
+        body: JSON.stringify({ posMode: 'long_short_mode' }),
+      });
+      const modeData = await modeRes.json();
+      if (modeData.code === '0') {
+        log('✅ Position mode set to long/short (hedge)');
+      } else {
+        log(`⚠️ Set position mode: ${modeData.msg} (may already be set)`);
+      }
+    } catch (e) {
+      log(`⚠️ Set position mode failed: ${e.message}`);
+    }
   }
 
   // Set leverage (once)
