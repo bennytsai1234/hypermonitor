@@ -81,15 +81,8 @@ async function processSignal(data) {
   // Calculate order:
   // Step 1: margin = |delta| × RATIO   (e.g. 100萬 × 0.00001 = $10 margin)
   // Step 2: notional = margin × LEVERAGE  (e.g. $10 × 20 = $200 position)
-  let marginUSD = Math.abs(deltaH) * CONFIG.RATIO;
-  let notionalUSD = marginUSD * CONFIG.LEVERAGE;
-
-  // Cap maximum order (by notional)
-  if (notionalUSD > CONFIG.MAX_ORDER_USD) {
-    notionalUSD = CONFIG.MAX_ORDER_USD;
-    marginUSD = notionalUSD / CONFIG.LEVERAGE;
-    log(`⚠️ Order capped to $${CONFIG.MAX_ORDER_USD} notional ($${marginUSD.toFixed(1)} margin)`);
-  }
+  const marginUSD = Math.abs(deltaH) * CONFIG.RATIO;
+  const notionalUSD = marginUSD * CONFIG.LEVERAGE;
 
   // Get instrument info if not available
   if (!instrumentInfo) {
@@ -137,33 +130,35 @@ async function processSignal(data) {
       }
 
       if (side === 'BUY') {
-        targetPrice = blockLow;
-        strategyNote = `(Prev 6m Low)`;
+        // Maker Logic: Buy at Lower of (6m Low, Current Price)
+        // If current < 6m Low, use Current to be Maker
+        targetPrice = Math.min(blockLow, price);
+        strategyNote = `(Min of 6m Low / Current)`;
       } else {
-        targetPrice = blockHigh;
-        strategyNote = `(Prev 6m High)`;
+        // Maker Logic: Sell at Higher of (6m High, Current Price)
+        targetPrice = Math.max(blockHigh, price);
+        strategyNote = `(Max of 6m High / Current)`;
       }
 
-      log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}`);
+      log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
 
     } else {
       log(`⚠️ Could not find complete previous 6m candle data. Using current price.`);
-      targetPrice = await binance.getPrice(CONFIG.INST_ID);
+      targetPrice = price;
     }
 
   } catch (e) {
     log(`⚠️ Strategy error: ${e.message}. Using current price.`);
-    targetPrice = await binance.getPrice(CONFIG.INST_ID);
+    targetPrice = price;
   }
-
-  const price = targetPrice; // variable name used below
 
   // Calculate Order Price for Limit Order
   const pricePrecision = instrumentInfo.pricePrecision;
-  const finalPrice = parseFloat(price.toFixed(typeof pricePrecision === 'number' ? pricePrecision : 2));
+  const finalPrice = parseFloat(targetPrice.toFixed(typeof pricePrecision === 'number' ? pricePrecision : 2));
 
   // Calculate quantity in BTC
   // Binance futures: qty is in BTC directly
+  // Calculate quantity in BTC
   const rawQty = notionalUSD / finalPrice;
   const qtyPrecision = instrumentInfo.quantityPrecision || 3;
   const qty = parseFloat(rawQty.toFixed(qtyPrecision));
@@ -173,27 +168,9 @@ async function processSignal(data) {
     return;
   }
 
-  // (Side is already defined above)
-
-  // Urgent logic config
-  const URGENT_DELTA = 5000000; // 5M
-
-  // Check if we should panic buy/sell (Market Order)
-  // Condition: Huge Delta (> 5M) -> Direct Market Order
-  const isUrgent = Math.abs(deltaH) >= URGENT_DELTA;
-
-  let orderType = 'LIMIT';
-  let orderOpts = {};
-
-  if (isUrgent) {
-    orderType = 'MARKET';
-    orderOpts = { type: 'MARKET' };
-    log(`🚨 URGENT SIGNAL (${formatUSD(deltaH)}) > 5M → MARKET ORDER!`);
-  } else {
-    // Standard: Post Only Limit
-    orderType = 'LIMIT (Post Only)';
-    orderOpts = { price: finalPrice, postOnly: true };
-  }
+  // Always use Post Only Limit Order
+  const orderType = 'LIMIT (Post Only)';
+  const orderOpts = { price: finalPrice, postOnly: true };
 
   log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${orderType} ${side.toUpperCase()} ${qty} BTC @ ${orderType === 'MARKET' ? 'MARKET' : '$' + finalPrice} ${strategyNote} (margin: $${marginUSD.toFixed(1)}, notional: ~$${notionalUSD.toFixed(0)})`);
 
