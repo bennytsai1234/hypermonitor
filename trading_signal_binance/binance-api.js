@@ -148,21 +148,27 @@ async function setMarginType(symbol, marginType = 'CROSSED') {
  * @param {string} symbol - e.g. 'BTCUSDT'
  * @param {string} side - 'BUY' or 'SELL'
  * @param {number} quantity - amount in BTC (e.g. 0.001)
- * @param {number} [price] - Optional. If provided, places LIMIT order. If null/undefined, places MARKET order.
+ * @param {object} [opts] - options including price, type, postOnly
  */
-async function placeOrder(symbol, side, quantity, price = null) {
+async function placeOrder(symbol, side, quantity, opts = {}) {
   const params = {
     symbol,
     side: side.toUpperCase(),
     quantity: String(quantity),
   };
 
-  if (price) {
-    params.type = 'LIMIT';
-    params.price = String(price);
-    params.timeInForce = 'GTC'; // Good Till Cancel
-  } else {
+  if (opts.type === 'MARKET') {
     params.type = 'MARKET';
+  } else {
+    // Default to LIMIT
+    params.type = 'LIMIT';
+    params.price = String(opts.price);
+
+    if (opts.postOnly) {
+      params.timeInForce = 'GTX'; // Post Only
+    } else {
+      params.timeInForce = 'GTC'; // Good Till Cancel
+    }
   }
 
   return binancePost('/fapi/v1/order', params);

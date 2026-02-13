@@ -175,15 +175,34 @@ async function processSignal(data) {
 
   // (Side is already defined above)
 
-  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → LIMIT ${side} ${qty} BTC @ $${finalPrice} ${strategyNote} (margin: $${marginUSD.toFixed(1)}, notional: ~$${notionalUSD.toFixed(0)})`);
+  // Urgent logic config
+  const URGENT_DELTA = 5000000; // 5M
+
+  // Check if we should panic buy/sell (Market Order)
+  // Condition: Huge Delta (> 5M) -> Direct Market Order
+  const isUrgent = Math.abs(deltaH) >= URGENT_DELTA;
+
+  let orderType = 'LIMIT';
+  let orderOpts = {};
+
+  if (isUrgent) {
+    orderType = 'MARKET';
+    orderOpts = { type: 'MARKET' };
+    log(`🚨 URGENT SIGNAL (${formatUSD(deltaH)}) > 5M → MARKET ORDER!`);
+  } else {
+    // Standard: Post Only Limit
+    orderType = 'LIMIT (Post Only)';
+    orderOpts = { price: finalPrice, postOnly: true };
+  }
+
+  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${orderType} ${side.toUpperCase()} ${qty} BTC @ ${orderType === 'MARKET' ? 'MARKET' : '$' + finalPrice} ${strategyNote} (margin: $${marginUSD.toFixed(1)}, notional: ~$${notionalUSD.toFixed(0)})`);
 
   // Execute or dry-run
   if (CONFIG.DRY_RUN) {
-    log(`🔕 [DRY RUN] Would LIMIT ${side} ${qty} BTC @ $${finalPrice} ${strategyNote}. Skipping.`);
+    log(`🔕 [DRY RUN] Would place ${orderType} ${side} ${qty} BTC. Skipping.`);
   } else {
     try {
-      // Pass finalPrice to place a LIMIT order
-      const result = await binance.placeOrder(CONFIG.INST_ID, side, qty, finalPrice);
+      const result = await binance.placeOrder(CONFIG.INST_ID, side, qty, orderOpts);
       if (result.orderId) {
         log(`✅ Limit Order placed! orderId: ${result.orderId} | status: ${result.status}`);
         totalTraded += notionalUSD;
