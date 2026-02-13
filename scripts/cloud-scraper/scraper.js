@@ -181,13 +181,15 @@ async function main() {
     args: isWin ? [] : [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
+      '--disable-dev-shm-usage', // Essential for low memory environments
       '--disable-gpu',
       '--disable-extensions',
       '--disable-background-networking',
       '--disable-default-apps',
       '--no-first-run',
-      '--single-process',
+      '--single-process', // Force single process to save RAM
+      '--no-zygote',
+      '--renderer-process-limit=1',
     ],
   });
 
@@ -201,17 +203,33 @@ async function main() {
   const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
   await pagePrinter.setUserAgent(ua);
   await pageRange.setUserAgent(ua);
-  await pagePrinter.setViewport({ width: 1920, height: 1080 });
-  await pageRange.setViewport({ width: 1920, height: 1080 });
+  await pagePrinter.setViewport({ width: 1280, height: 720 }); // Lower resolution to save RAM
+  await pageRange.setViewport({ width: 1280, height: 720 });
+
+  // Optimize: Block images, fonts, css to save bandwidth & CPU
+  await pagePrinter.setRequestInterception(true);
+  await pageRange.setRequestInterception(true);
+
+  const blockResources = ['image', 'stylesheet', 'font', 'media'];
+  const handleRequest = (req) => {
+    if (blockResources.includes(req.resourceType())) {
+      req.abort();
+    } else {
+      req.continue();
+    }
+  };
+
+  pagePrinter.on('request', handleRequest);
+  pageRange.on('request', handleRequest);
 
   // Initial page load
-  log('📄 Loading Coinglass pages...');
+  log('📄 Loading Coinglass pages (Timeout: 60s)...');
   await Promise.all([
-    pagePrinter.goto(CONFIG.URLS.printer, { waitUntil: 'networkidle2', timeout: 30000 }),
-    pageRange.goto(CONFIG.URLS.range, { waitUntil: 'networkidle2', timeout: 30000 }),
+    pagePrinter.goto(CONFIG.URLS.printer, { waitUntil: 'domcontentloaded', timeout: 60000 }),
+    pageRange.goto(CONFIG.URLS.range, { waitUntil: 'domcontentloaded', timeout: 60000 }),
   ]);
 
-  // Wait for data to render
+  // Wait for data to render (since we used domcontentloaded)
   await sleep(CONFIG.PAGE_LOAD_WAIT);
   log('✅ Pages loaded');
 
@@ -254,10 +272,12 @@ async function main() {
 }
 
 async function scrapeAndUpload(pagePrinter, pageRange, cycle) {
-  // Reload pages to get fresh data (same as Flutter's approach)
+  const startTime = Date.now();
+  // Reload pages to get fresh data
+  // Optimize: Wait for DOM only, since we block images/CSS
   await Promise.all([
-    pagePrinter.reload({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {}),
-    pageRange.reload({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {}),
+    pagePrinter.reload({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
+    pageRange.reload({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
   ]);
   await sleep(CONFIG.RELOAD_WAIT);
 
@@ -286,7 +306,7 @@ async function scrapeAndUpload(pagePrinter, pageRange, cycle) {
       };
 
       if (CONFIG.ONCE) {
-        log(`Printer Data: ${JSON.stringify(payload, null, 2)}`);
+        log(`Printer Data (at ${new Date().toLocaleTimeString()}): ${JSON.stringify(payload, null, 2)}`);
       }
 
       printerOk = await postData('/update-printer', payload);
@@ -323,7 +343,7 @@ async function scrapeAndUpload(pagePrinter, pageRange, cycle) {
 
       if (Object.keys(payload).length > 0) {
         if (CONFIG.ONCE) {
-          log(`Range Data: ${JSON.stringify(payload, null, 2)}`);
+          log(`Range Data (at ${new Date().toLocaleTimeString()}): ${JSON.stringify(payload, null, 2)}`);
         }
         rangeOk = await postData('/update-range', payload);
       }
@@ -333,7 +353,8 @@ async function scrapeAndUpload(pagePrinter, pageRange, cycle) {
   // Log status
   const pStatus = printerOk ? '✅' : (printerRaw ? '⚠️' : '❌');
   const rStatus = rangeOk ? '✅' : (rangeRaw ? '⚠️' : '❌');
-  log(`#${cycle} Printer:${pStatus} Range:${rStatus}`);
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  log(`#${cycle} Printer:${pStatus} Range:${rStatus} (took ${duration}s)`);
 }
 
 function sleep(ms) {
