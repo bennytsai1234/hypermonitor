@@ -1,0 +1,14 @@
+{
+  "name": "hyper-trading-signal-binance",
+  "version": "1.0.0",
+  "description": "Binance USDⓈ-M Futures trading signal based on Hyperliquid net pressure",
+  "main": "signal.js",
+  "scripts": {
+    "start": "node signal.js",
+    "dry-run": "node signal.js --dry-run",
+    "test": "node signal.js --once --dry-run"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1"
+  }
+}
