@@ -90,6 +90,8 @@ async function processSignal(data) {
     log(`📋 Instrument: minQty=${instrumentInfo.minQty}, stepSize=${instrumentInfo.stepSize}, qtyPrecision=${instrumentInfo.quantityPrecision}`);
   }
 
+  const price = await binance.getPrice(CONFIG.INST_ID);
+
   // Direction: delta > 0 = longs increasing = BUY, delta < 0 = shorts increasing = SELL
   const side = deltaH > 0 ? 'BUY' : 'SELL';
 
