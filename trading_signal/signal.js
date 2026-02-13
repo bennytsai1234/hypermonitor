@@ -52,19 +52,19 @@ async function fetchLatest() {
 // Core Signal Logic
 // ============================================
 async function processSignal(data) {
-  // Extract net pressure (bearish mode: short - long, bullish: long - short)
+  // Use 全體 (ALL) net pressure directly from printer data
+  const currentNet = parseFloat(data.net_vol_num) || 0;
   const sentiment = data.sentiment || '';
-  const isBearish = sentiment.includes('跌');
-  const longNum = parseFloat(data.long_vol_num) || 0;
-  const shortNum = parseFloat(data.short_vol_num) || 0;
-  const currentNet = isBearish ? (shortNum - longNum) : (longNum - shortNum);
 
   // First run: just record, don't trade
   if (previousNet === null) {
     previousNet = currentNet;
-    log(`📊 Initial net pressure: ${formatUSD(currentNet)} (${sentiment})`);
+    log(`📊 Initial 全體 net: ${formatUSD(currentNet)} (${sentiment})`);
     return;
   }
+
+  // Only trade when 全體 net pressure changes
+  if (currentNet === previousNet) return;
 
   // Calculate delta
   const deltaH = currentNet - previousNet;
