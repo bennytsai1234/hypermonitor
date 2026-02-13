@@ -50,6 +50,11 @@ node_modules/
 worker/node_modules/
 worker/.wrangler/
 pwa/node_modules/
+trading_signal/node_modules/
+
+# Secrets (API Keys)
+.env
+trading_signal/.env
 
 # Windows
 windows/flutter/ephemeral/

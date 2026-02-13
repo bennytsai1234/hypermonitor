@@ -1,0 +1,14 @@
+{
+  "name": "hyper-trading-signal",
+  "version": "1.0.0",
+  "description": "Hyperliquid → OKX trading signal engine (incremental ratio strategy)",
+  "main": "signal.js",
+  "scripts": {
+    "start": "node signal.js",
+    "dry-run": "node signal.js --dry-run",
+    "test": "node signal.js --once --dry-run"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.0"
+  }
+}
