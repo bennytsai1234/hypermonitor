@@ -92,23 +92,51 @@ npm install
 
 ---
 
-## 🏃 第三階段：啟動與管理
+## 🏃 第三階段：啟動與管理 (關鍵：防止 SSH 斷線死機)
 
-### 1. 啟動爬蟲 (PM2 背景執行)
+這一步最重要！如果你直接啟動，SSH 斷線後爬蟲就會死掉。
+我們必須使用 `tmux` (終端機多工器) 來讓它永遠在背景執行。
+
+### 1. 安裝與啟動 tmux (在 Termux 層)
+請先確保你在 Termux 的初始畫面 (如果已經在 Ubuntu 裡，請輸入 `exit` 退出來)。
+
 ```bash
-# 啟動 (已內建自動偵測 Termux 環境)
-pm2 start scraper.js --name "hyper-scraper"
+# 安裝 tmux
+pkg install tmux -y
 
-# 保存設定 (讓 PM2 記得，重開機自動啟動)
+# 啟動一個名為 "hyper" 的背景視窗
+tmux new -s hyper
+```
+(此時畫面會清空，下方出現綠色狀態列，代表你已進入不死的背景視窗)
+
+### 2. 在 tmux 裡面進入 Ubuntu 並啟動爬蟲
+```bash
+# 進入 Ubuntu
+proot-distro login ubuntu
+
+# 進入資料夾
+cd hypermonitor/scripts/cloud-scraper
+
+# 啟動爬蟲
+pm2 delete hyper-scraper  # 清理舊的 (如果有的話)
+pm2 start scraper.js --name "hyper-scraper" --hp /root
 pm2 save
 ```
 
-### 2. 驗證是否成功
+### 3. 分離視窗 (Detach) - 這步做完就可以關閉 SSH 了！
+1. 按下鍵盤 `Ctrl` + `b` (按住 Ctrl 點一下 b)
+2. 放開所有按鍵
+3. 按一下 `d`
+
+你會看到 `[detached]` 字樣，並且回到原本的 Termux 畫面。
+**恭喜！現在你可以放心地關閉 SSH 或電腦，爬蟲會在手機背景永遠執行！**
+
+### 4. 之後如何回來查看？
+下次 SSH 連進手機後，輸入：
 ```bash
-# 查看即時日誌
-pm2 logs hyper-scraper
+tmux attach -t hyper
 ```
-如果不需一直看，按 `Ctrl+C` 退出日誌，**直接關閉 SSH 視窗**，手機會繼續跑。
+你就會瞬間回到 Ubuntu 的畫面。
 
 ---
 
