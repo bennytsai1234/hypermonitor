@@ -100,9 +100,10 @@ async function processSignal(data) {
   // Direction: delta > 0 = longs increasing = BUY, delta < 0 = shorts increasing = SELL
   const side = deltaH > 0 ? 'buy' : 'sell';
 
-  // Strategy: 6-minute candle logic
+  // Strategy: 6-minute candle logic (Maker first, Taker if price moved favorably)
   let targetPrice = 0;
   let strategyNote = '';
+  let useTaker = false;
 
   try {
     // 1. Fetch recent 1m candles (limit 15 is enough for last 12 mins)
@@ -136,35 +137,51 @@ async function processSignal(data) {
       }
 
       if (side === 'buy') {
-        // Maker Logic: Buy at lower of (6m Low, Current Price)
-        // If current price < 6m Low, we must follow current price to get a fill (and not be rejected as taker)
-        targetPrice = Math.min(blockLow, price);
-        strategyNote = `(Min of 6m Low / Current)`;
+        if (price <= blockLow) {
+          // Price already dropped below 6m Low → better for buyer → Market (Taker)
+          useTaker = true;
+          strategyNote = `(Curr ${price} ≤ 6m Low ${blockLow} → Taker)`;
+        } else {
+          // Price still above 6m Low → Maker at 6m Low for better entry
+          targetPrice = blockLow;
+          strategyNote = `(Maker @ 6m Low ${blockLow})`;
+        }
       } else {
-        // Maker Logic: Sell at higher of (6m High, Current Price)
-        targetPrice = Math.max(blockHigh, price);
-        strategyNote = `(Max of 6m High / Current)`;
+        if (price >= blockHigh) {
+          // Price already spiked above 6m High → better for seller → Market (Taker)
+          useTaker = true;
+          strategyNote = `(Curr ${price} ≥ 6m High ${blockHigh} → Taker)`;
+        } else {
+          // Price still below 6m High → Maker at 6m High for better entry
+          targetPrice = blockHigh;
+          strategyNote = `(Maker @ 6m High ${blockHigh})`;
+        }
       }
 
       log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
 
     } else {
-      log(`⚠️ Could not find complete previous 6m candle data. Using current price.`);
-      targetPrice = price;
+      log(`⚠️ Could not find complete previous 6m candle data. Using Market.`);
+      useTaker = true;
     }
   } catch (e) {
-    log(`⚠️ Strategy error: ${e.message}. Using current price.`);
-    targetPrice = price;
+    log(`⚠️ Strategy error: ${e.message}. Using Market.`);
+    useTaker = true;
   }
 
-  const finalPrice = targetPrice;
   const actualUSD = sz * contractValueUSD;
 
-  // Always use Post Only Limit Order
-  const orderType = 'LIMIT (Post Only)';
-  const orderOpts = { price: finalPrice, postOnly: true };
+  // Decide order type: Maker (Post Only Limit) or Taker (Market)
+  let orderType, orderOpts;
+  if (useTaker) {
+    orderType = 'MARKET (Taker)';
+    orderOpts = { type: 'market' };
+  } else {
+    orderType = 'LIMIT (Post Only)';
+    orderOpts = { price: targetPrice, postOnly: true };
+  }
 
-  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${orderType} ${side.toUpperCase()} ${sz} ct @ ${orderType === 'MARKET' ? 'MARKET' : '$' + finalPrice} ${strategyNote} (~$${actualUSD.toFixed(0)})`);
+  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${orderType} ${side.toUpperCase()} ${sz} ct ${useTaker ? '' : '@ $' + targetPrice + ' '}${strategyNote} (~$${actualUSD.toFixed(0)})`);
 
   // Execute or dry-run
   if (CONFIG.DRY_RUN) {

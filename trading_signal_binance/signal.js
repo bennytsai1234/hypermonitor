@@ -95,11 +95,14 @@ async function processSignal(data) {
   // Direction: delta > 0 = longs increasing = BUY, delta < 0 = shorts increasing = SELL
   const side = deltaH > 0 ? 'BUY' : 'SELL';
 
-  // Strategy: 6-minute candle logic
-  // BUY  -> Limit at Previous 6m Candle LOW
-  // SELL -> Limit at Previous 6m Candle HIGH
+  // Strategy: 6-minute candle logic (Maker first, Taker if price moved favorably)
+  // BUY + price <= 6m Low  → Market (Taker, price already better)
+  // BUY + price > 6m Low   → Maker @ 6m Low
+  // SELL + price >= 6m High → Market (Taker, price already better)
+  // SELL + price < 6m High  → Maker @ 6m High
   let targetPrice = 0;
   let strategyNote = '';
+  let useTaker = false;
 
   try {
     // 1. Fetch recent 1m candles (enough to cover last 12 mins)
@@ -132,34 +135,44 @@ async function processSignal(data) {
       }
 
       if (side === 'BUY') {
-        // Maker Logic: Buy at Lower of (6m Low, Current Price)
-        // If current < 6m Low, use Current to be Maker
-        targetPrice = Math.min(blockLow, price);
-        strategyNote = `(Min of 6m Low / Current)`;
+        if (price <= blockLow) {
+          // Price already dropped below 6m Low → better for buyer → Market (Taker)
+          useTaker = true;
+          strategyNote = `(Curr ${price} ≤ 6m Low ${blockLow} → Taker)`;
+        } else {
+          // Price still above 6m Low → Maker at 6m Low for better entry
+          targetPrice = blockLow;
+          strategyNote = `(Maker @ 6m Low ${blockLow})`;
+        }
       } else {
-        // Maker Logic: Sell at Higher of (6m High, Current Price)
-        targetPrice = Math.max(blockHigh, price);
-        strategyNote = `(Max of 6m High / Current)`;
+        if (price >= blockHigh) {
+          // Price already spiked above 6m High → better for seller → Market (Taker)
+          useTaker = true;
+          strategyNote = `(Curr ${price} ≥ 6m High ${blockHigh} → Taker)`;
+        } else {
+          // Price still below 6m High → Maker at 6m High for better entry
+          targetPrice = blockHigh;
+          strategyNote = `(Maker @ 6m High ${blockHigh})`;
+        }
       }
 
       log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
 
     } else {
-      log(`⚠️ Could not find complete previous 6m candle data. Using current price.`);
-      targetPrice = price;
+      log(`⚠️ Could not find complete previous 6m candle data. Using Market.`);
+      useTaker = true;
     }
 
   } catch (e) {
-    log(`⚠️ Strategy error: ${e.message}. Using current price.`);
-    targetPrice = price;
+    log(`⚠️ Strategy error: ${e.message}. Using Market.`);
+    useTaker = true;
   }
 
-  // Calculate Order Price for Limit Order
+  // Calculate Order Price (for Maker) or use current price (for qty calculation)
   const pricePrecision = instrumentInfo.pricePrecision;
-  const finalPrice = parseFloat(targetPrice.toFixed(typeof pricePrecision === 'number' ? pricePrecision : 2));
+  const priceForCalc = useTaker ? price : targetPrice;
+  const finalPrice = parseFloat(priceForCalc.toFixed(typeof pricePrecision === 'number' ? pricePrecision : 2));
 
-  // Calculate quantity in BTC
-  // Binance futures: qty is in BTC directly
   // Calculate quantity in BTC
   const rawQty = notionalUSD / finalPrice;
   const qtyPrecision = instrumentInfo.quantityPrecision || 3;
@@ -170,11 +183,17 @@ async function processSignal(data) {
     return;
   }
 
-  // Always use Post Only Limit Order
-  const orderType = 'LIMIT (Post Only)';
-  const orderOpts = { price: finalPrice, postOnly: true };
+  // Decide order type: Maker (Post Only Limit) or Taker (Market)
+  let orderType, orderOpts;
+  if (useTaker) {
+    orderType = 'MARKET (Taker)';
+    orderOpts = { type: 'MARKET' };
+  } else {
+    orderType = 'LIMIT (Post Only)';
+    orderOpts = { price: finalPrice, postOnly: true };
+  }
 
-  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${orderType} ${side.toUpperCase()} ${qty} BTC @ ${orderType === 'MARKET' ? 'MARKET' : '$' + finalPrice} ${strategyNote} (margin: $${marginUSD.toFixed(1)}, notional: ~$${notionalUSD.toFixed(0)})`);
+  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${orderType} ${side.toUpperCase()} ${qty} BTC ${useTaker ? '' : '@ $' + finalPrice + ' '}${strategyNote} (margin: $${marginUSD.toFixed(1)}, notional: ~$${notionalUSD.toFixed(0)})`);
 
   // Execute or dry-run
   if (CONFIG.DRY_RUN) {
