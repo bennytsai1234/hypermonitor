@@ -78,12 +78,7 @@ async function processSignal(data) {
     return;
   }
 
-  // Check maximum threshold (User rule: > 8000萬 skip)
-  const MAX_DELTA = 80000000;
-  if (Math.abs(deltaH) > MAX_DELTA) {
-    log(`⚠️ Delta ${formatUSD(deltaH)} > ${formatUSD(MAX_DELTA)} (Too volatile). Skipped.`);
-    return;
-  }
+
 
   // Calculate order:
   // Step 1: margin = |delta| × RATIO   (e.g. 100萬 × 0.00001 = $10 margin)
