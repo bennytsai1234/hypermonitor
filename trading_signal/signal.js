@@ -100,92 +100,102 @@ async function processSignal(data) {
   // Direction: delta > 0 = longs increasing = BUY, delta < 0 = shorts increasing = SELL
   const side = deltaH > 0 ? 'buy' : 'sell';
 
-  // ============================================
-  // [ARCHIVED] 6-Minute Candle Maker Strategy
-  // 若需切換回 Maker 掛單策略，取消以下註解並註解掉下方的市價單區塊
-  // ============================================
-  /*
+  // Strategy Thresholds
+  const MARKET_THRESHOLD = 5000000; // 500萬
+  const absDelta = Math.abs(deltaH);
+
+  let orderType = '';
+  let orderOpts = {};
   let targetPrice = 0;
   let strategyNote = '';
-  let useCurrentPrice = false;
 
-  try {
-    const klines = await okx.getKlines(CONFIG.INST_ID, '1m', 15);
+  // ============================================
+  // Hybrid Strategy
+  // < 500萬: Maker (Post Only) via 6m Candle
+  // >= 500萬: Market (Immediate)
+  // ============================================
 
-    const now = Date.now();
-    const BLOCK_MS = 6 * 60 * 1000;
-    const currentBlockStart = now - (now % BLOCK_MS);
-    const prevBlockStart = currentBlockStart - BLOCK_MS;
+  if (absDelta < MARKET_THRESHOLD) {
+    // --- Case A: Small Delta (< 500萬) → Maker Strategy ---
+    let useCurrentPrice = false;
 
-    const targetCandles = klines.filter(k => {
-      const ts = parseInt(k[0]);
-      return ts >= prevBlockStart && ts < currentBlockStart;
-    });
+    try {
+      // 1. Fetch recent 1m candles
+      const klines = await okx.getKlines(CONFIG.INST_ID, '1m', 15);
 
-    if (targetCandles.length > 0) {
-      let blockHigh = -Infinity;
-      let blockLow = Infinity;
+      // 2. Aggregate "Previous 6m Candle"
+      const now = Date.now();
+      const BLOCK_MS = 6 * 60 * 1000;
+      const currentBlockStart = now - (now % BLOCK_MS);
+      const prevBlockStart = currentBlockStart - BLOCK_MS;
 
-      for (const c of targetCandles) {
-        const h = parseFloat(c[2]);
-        const l = parseFloat(c[3]);
-        if (h > blockHigh) blockHigh = h;
-        if (l < blockLow) blockLow = l;
-      }
+      const targetCandles = klines.filter(k => {
+        const ts = parseInt(k[0]);
+        return ts >= prevBlockStart && ts < currentBlockStart;
+      });
 
-      if (side === 'buy') {
-        if (price <= blockLow) {
-          useCurrentPrice = true;
-          targetPrice = price;
-          strategyNote = `(Curr ${price} ≤ 6m Low ${blockLow} → Limit@Curr)`;
-        } else {
-          targetPrice = blockLow;
-          strategyNote = `(Maker @ 6m Low ${blockLow})`;
+      if (targetCandles.length > 0) {
+        let blockHigh = -Infinity;
+        let blockLow = Infinity;
+
+        for (const c of targetCandles) {
+          const h = parseFloat(c[2]);
+          const l = parseFloat(c[3]);
+          if (h > blockHigh) blockHigh = h;
+          if (l < blockLow) blockLow = l;
         }
+
+        if (side === 'buy') {
+          if (price <= blockLow) {
+            useCurrentPrice = true;
+            targetPrice = price;
+            strategyNote = `(Curr ${price} ≤ 6m Low ${blockLow} → Limit@Curr)`;
+          } else {
+            targetPrice = blockLow;
+            strategyNote = `(Maker @ 6m Low ${blockLow})`;
+          }
+        } else {
+          if (price >= blockHigh) {
+            useCurrentPrice = true;
+            targetPrice = price;
+            strategyNote = `(Curr ${price} ≥ 6m High ${blockHigh} → Limit@Curr)`;
+          } else {
+            targetPrice = blockHigh;
+            strategyNote = `(Maker @ 6m High ${blockHigh})`;
+          }
+        }
+        log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
       } else {
-        if (price >= blockHigh) {
-          useCurrentPrice = true;
-          targetPrice = price;
-          strategyNote = `(Curr ${price} ≥ 6m High ${blockHigh} → Limit@Curr)`;
-        } else {
-          targetPrice = blockHigh;
-          strategyNote = `(Maker @ 6m High ${blockHigh})`;
-        }
+        log(`⚠️ No complete 6m candle found. Fallback to limit @ current.`);
+        useCurrentPrice = true;
+        targetPrice = price;
       }
-
-      log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
-
-    } else {
-      log(`⚠️ Could not find complete previous 6m candle data. Using current price.`);
+    } catch (e) {
+      log(`⚠️ Strategy error: ${e.message}. Fallback to limit @ current.`);
       useCurrentPrice = true;
       targetPrice = price;
     }
-  } catch (e) {
-    log(`⚠️ Strategy error: ${e.message}. Using current price.`);
-    useCurrentPrice = true;
-    targetPrice = price;
-  }
 
-  const actualUSD_maker = sz * contractValueUSD;
+    // Configure Maker/Limit Order
+    if (useCurrentPrice) {
+      orderType = 'LIMIT';
+      orderOpts = { price: targetPrice };
+    } else {
+      orderType = 'LIMIT (Post Only)';
+      orderOpts = { price: targetPrice, postOnly: true };
+    }
 
-  let orderType, orderOpts;
-  if (useCurrentPrice) {
-    orderType = 'LIMIT';
-    orderOpts = { price: targetPrice };
   } else {
-    orderType = 'LIMIT (Post Only)';
-    orderOpts = { price: targetPrice, postOnly: true };
+    // --- Case B: Large Delta (>= 500萬) → Market Strategy ---
+    orderType = 'MARKET';
+    targetPrice = price; // For estimation
+    strategyNote = `(🔥 Big Signal >= 500w → Immediate Entry)`;
+    orderOpts = { type: 'market' };
   }
 
-  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${orderType} ${side.toUpperCase()} ${sz} ct @ $${targetPrice} ${strategyNote} (~$${actualUSD_maker.toFixed(0)})`);
-  // ... then use orderOpts in placeOrder call instead of { type: 'market' }
-  */
-  // ============================================
-  // [ACTIVE] Market Order Strategy (市價單直接進場)
-  // ============================================
   const actualUSD = sz * contractValueUSD;
 
-  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → MARKET ${side.toUpperCase()} ${sz} ct @ ~$${price} (~$${actualUSD.toFixed(0)})`);
+  log(`📈 Delta: ${formatUSD(deltaH)} (${sentiment}) → ${orderType} ${side.toUpperCase()} ${sz} ct @ ~$${targetPrice} ${strategyNote} (~$${actualUSD.toFixed(0)})`);
 
   // Execute or dry-run
   if (CONFIG.DRY_RUN) {
@@ -238,7 +248,7 @@ async function main() {
   log(`   Leverage: ${CONFIG.LEVERAGE}x`);
   log(`   Ratio: 1/${(1 / CONFIG.RATIO).toFixed(0)} (${formatUSD(1 / CONFIG.RATIO)} delta → $1 order)`);
   log(`   Min Delta: ${formatUSD(CONFIG.MIN_DELTA)}`);
-  log(`   Order Type: MARKET (市價單)`);
+  log(`   Order Type: Hybird (≥500w Market, <500w Maker 6m)`);
   log(`   Mode: ${CONFIG.DRY_RUN ? '🔕 DRY RUN' : (CONFIG.OKX_DEMO ? '🧪 DEMO' : '🔴 LIVE')}`);
   log('');
 
