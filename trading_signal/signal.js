@@ -182,6 +182,14 @@ async function processSignal(data) {
       targetPrice = price;
     }
 
+    // --- CRITICAL FIX: Round price to Tick Size ---
+    // OKX API will reject "96000.0999999" if tickSz is "0.1"
+    if (instrumentInfo.tickSz) {
+      const pStr = instrumentInfo.tickSz.toString();
+      const decimals = pStr.includes('.') ? pStr.split('.')[1].length : 0;
+      targetPrice = parseFloat(targetPrice.toFixed(decimals));
+    }
+
     // Strategy A: Standard Limit Order (Not Post-Only)
     orderType = 'LIMIT';
     orderOpts = { price: targetPrice }; // Removed postOnly: true
