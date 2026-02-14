@@ -118,86 +118,80 @@ async function processSignal(data) {
 
   // ============================================
   // Hybrid Strategy
-  // < 500萬: Maker (Post Only) via 6m Candle
+  // < 500萬: Maker (Limit - Post Only) via 6m Candle
   // >= 500萬: Market (Immediate)
   // ============================================
 
+
+
   if (absDelta < MARKET_THRESHOLD) {
     // --- Case A: Small Delta (< 500萬) → Maker Strategy ---
-    let useCurrentPrice = false;
 
+    // 1. Fetch recent 1m candles
+    let klines = [];
     try {
-      // 1. Fetch recent 1m candles
-      const klines = await okx.getKlines(CONFIG.INST_ID, '1m', 15);
-
-      // 2. Aggregate "Previous 6m Candle"
-      const now = Date.now();
-      const BLOCK_MS = 6 * 60 * 1000;
-      const currentBlockStart = now - (now % BLOCK_MS);
-      const prevBlockStart = currentBlockStart - BLOCK_MS;
-
-      const targetCandles = klines.filter(k => {
-        const ts = parseInt(k[0]);
-        return ts >= prevBlockStart && ts < currentBlockStart;
-      });
-
-      if (targetCandles.length > 0) {
-        let blockHigh = -Infinity;
-        let blockLow = Infinity;
-
-        for (const c of targetCandles) {
-          const h = parseFloat(c[2]);
-          const l = parseFloat(c[3]);
-          if (h > blockHigh) blockHigh = h;
-          if (l < blockLow) blockLow = l;
-        }
-
-        if (side === 'buy') {
-          if (price <= blockLow) {
-            useCurrentPrice = true;
-            targetPrice = price;
-            strategyNote = `(Curr ${price} ≤ 6m Low ${blockLow} → Limit@Curr)`;
-          } else {
-            targetPrice = blockLow;
-            strategyNote = `(Maker @ 6m Low ${blockLow})`;
-          }
-        } else {
-          if (price >= blockHigh) {
-            useCurrentPrice = true;
-            targetPrice = price;
-            strategyNote = `(Curr ${price} ≥ 6m High ${blockHigh} → Limit@Curr)`;
-          } else {
-            targetPrice = blockHigh;
-            strategyNote = `(Maker @ 6m High ${blockHigh})`;
-          }
-        }
-        log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
-      } else {
-        log(`⚠️ No complete 6m candle found. Fallback to limit @ current.`);
-        useCurrentPrice = true;
-        targetPrice = price;
-      }
+      klines = await okx.getKlines(CONFIG.INST_ID, '1m', 15);
     } catch (e) {
-      log(`⚠️ Strategy error: ${e.message}. Fallback to limit @ current.`);
-      useCurrentPrice = true;
+      log(`⚠️ Fetch klines failed: ${e.message}`);
+    }
+
+    // 2. Aggregate "Previous 6m Candle"
+    const now = Date.now();
+    const BLOCK_MS = 6 * 60 * 1000;
+    const currentBlockStart = now - (now % BLOCK_MS);
+    const prevBlockStart = currentBlockStart - BLOCK_MS;
+
+    const targetCandles = klines.filter(k => {
+      const ts = parseInt(k[0]);
+      return ts >= prevBlockStart && ts < currentBlockStart;
+    });
+
+    if (targetCandles.length > 0) {
+      let blockHigh = -Infinity;
+      let blockLow = Infinity;
+
+      for (const c of targetCandles) {
+        const h = parseFloat(c[2]);
+        const l = parseFloat(c[3]);
+        if (h > blockHigh) blockHigh = h;
+        if (l < blockLow) blockLow = l;
+      }
+
+      if (side === 'buy') {
+        // Buy: Post at Lower of (Current, 6m Low)
+        if (price < blockLow) {
+          targetPrice = price;
+          strategyNote = `(Curr ${price} < 6m Low ${blockLow} → PostOnly@Curr)`;
+        } else {
+          targetPrice = blockLow;
+          strategyNote = `(Maker @ 6m Low ${blockLow})`;
+        }
+      } else {
+        // Sell: Post at Higher of (Current, 6m High)
+        if (price > blockHigh) {
+          targetPrice = price;
+          strategyNote = `(Curr ${price} > 6m High ${blockHigh} → PostOnly@Curr)`;
+        } else {
+          targetPrice = blockHigh;
+          strategyNote = `(Maker @ 6m High ${blockHigh})`;
+        }
+      }
+      log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
+    } else {
+      log(`⚠️ No complete 6m candle found. Fallback to PostOnly @ current.`);
       targetPrice = price;
     }
 
-    // Configure Maker/Limit Order
-    if (useCurrentPrice) {
-      orderType = 'LIMIT';
-      orderOpts = { price: targetPrice };
-    } else {
-      orderType = 'LIMIT (Post Only)';
-      orderOpts = { price: targetPrice, postOnly: true };
-    }
+    // Strategy A: Post Only
+    orderType = 'LIMIT (Post Only)';
+    orderOpts = { price: targetPrice, postOnly: true };
 
   } else {
     // --- Case B: Large Delta (>= 500萬) → Market Strategy ---
     orderType = 'MARKET';
     targetPrice = price; // For estimation
     strategyNote = `(🔥 Big Signal >= 500w → Immediate Entry)`;
-    orderOpts = { type: 'market' };
+    orderOpts = { type: 'market' }; // API uses lowercase 'market' for OKX
   }
 
   const actualUSD = sz * contractValueUSD;
@@ -209,7 +203,7 @@ async function processSignal(data) {
     log(`🔕 [DRY RUN] Would place MARKET ${side} ${sz} contracts. Skipping.`);
   } else {
     try {
-      const result = await okx.placeOrder(CONFIG.INST_ID, side, '', sz, { type: 'market' });
+      const result = await okx.placeOrder(CONFIG.INST_ID, side, '', sz, orderOpts);
       const ordId = result[0]?.ordId || 'unknown';
       const sCode = result[0]?.sCode || '';
       const sMsg = result[0]?.sMsg || '';
@@ -255,7 +249,7 @@ async function main() {
   log(`   Leverage: ${CONFIG.LEVERAGE}x`);
   log(`   Ratio: 1/${(1 / CONFIG.RATIO).toFixed(0)} (${formatUSD(1 / CONFIG.RATIO)} delta → $1 order)`);
   log(`   Min Delta: ${formatUSD(CONFIG.MIN_DELTA)}`);
-  log(`   Order Type: Hybird (≥500w Market, <500w Maker 6m)`);
+  log(`   Order Type: Hybrid (≥500w Market, <500w Maker 6m)`);
   log(`   Mode: ${CONFIG.DRY_RUN ? '🔕 DRY RUN' : (CONFIG.OKX_DEMO ? '🧪 DEMO' : '🔴 LIVE')}`);
   log('');
 

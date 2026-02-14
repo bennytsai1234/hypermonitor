@@ -111,96 +111,80 @@ async function processSignal(data) {
   let targetPrice = 0;
   let strategyNote = '';
 
+
   // ============================================
   // Hybrid Strategy
-  // < 500萬: Maker (Post Only) via 6m Candle
+  // < 500萬: Maker (Limit - Post Only) via 6m Candle
   // >= 500萬: Market (Immediate)
   // ============================================
 
+
+
   if (absDelta < MARKET_THRESHOLD) {
     // --- Case A: Small Delta (< 500萬) → Maker Strategy ---
-    let useCurrentPrice = false;
 
+    // 1. Fetch recent 1m candles
+    let klines = [];
     try {
-      // 1. Fetch recent 1m candles (enough to cover last 12 mins)
-      const klines = await binance.getKlines(CONFIG.INST_ID, '1m', 15);
+      klines = await binance.getKlines(CONFIG.INST_ID, '1m', 15);
+    } catch (e) {
+      log(`⚠️ Fetch klines failed: ${e.message}`);
+    }
 
-      // 2. Aggregate to find "Previous 6m Candle"
-      // Valid 6m blocks start at :00, :06, :12 ...
-      const now = Date.now();
-      const BLOCK_MS = 6 * 60 * 1000;
-      const currentBlockStart = now - (now % BLOCK_MS);
-      const prevBlockStart = currentBlockStart - BLOCK_MS;
+    // 2. Aggregate "Previous 6m Candle"
+    const now = Date.now();
+    const BLOCK_MS = 6 * 60 * 1000;
+    const currentBlockStart = now - (now % BLOCK_MS);
+    const prevBlockStart = currentBlockStart - BLOCK_MS;
 
-      // Filter candles that belong to the previous completed 6m block
-      const targetCandles = klines.filter(k => {
-        const openTime = k[0];
-        return openTime >= prevBlockStart && openTime < currentBlockStart;
-      });
+    const targetCandles = klines.filter(k => {
+      const openTime = k[0];
+      return openTime >= prevBlockStart && openTime < currentBlockStart;
+    });
 
-      if (targetCandles.length > 0) {
-        // Find High and Low of this 6m block
-        // Candle format: [ openTime, open, high, low, close, ... ]
-        let blockHigh = -Infinity;
-        let blockLow = Infinity;
+    if (targetCandles.length > 0) {
+      let blockHigh = -Infinity;
+      let blockLow = Infinity;
 
-        for (const c of targetCandles) {
-          const h = parseFloat(c[2]);
-          const l = parseFloat(c[3]);
-          if (h > blockHigh) blockHigh = h;
-          if (l < blockLow) blockLow = l;
-        }
-
-        if (side === 'BUY') {
-          if (price <= blockLow) {
-            // Price already dropped below 6m Low → better for buyer → Limit at current price
-            useCurrentPrice = true;
-            targetPrice = price;
-            strategyNote = `(Curr ${price} ≤ 6m Low ${blockLow} → Limit@Curr)`;
-          } else {
-            // Price still above 6m Low → Maker at 6m Low for better entry
-            targetPrice = blockLow;
-            strategyNote = `(Maker @ 6m Low ${blockLow})`;
-          }
-        } else {
-          if (price >= blockHigh) {
-            // Price already spiked above 6m High → better for seller → Limit at current price
-            useCurrentPrice = true;
-            targetPrice = price;
-            strategyNote = `(Curr ${price} ≥ 6m High ${blockHigh} → Limit@Curr)`;
-          } else {
-            // Price still below 6m High → Maker at 6m High for better entry
-            targetPrice = blockHigh;
-            strategyNote = `(Maker @ 6m High ${blockHigh})`;
-          }
-        }
-
-        log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
-
-      } else {
-        log(`⚠️ Could not find complete previous 6m candle data. Using current price.`);
-        useCurrentPrice = true;
-        targetPrice = price;
+      for (const c of targetCandles) {
+        const h = parseFloat(c[2]);
+        const l = parseFloat(c[3]);
+        if (h > blockHigh) blockHigh = h;
+        if (l < blockLow) blockLow = l;
       }
 
-    } catch (e) {
-      log(`⚠️ Strategy error: ${e.message}. Using current price.`);
-      useCurrentPrice = true;
+      if (side === 'BUY') {
+        // Buy: Post at Lower of (Current, 6m Low)
+        if (price < blockLow) {
+          targetPrice = price;
+          strategyNote = `(Curr ${price} < 6m Low ${blockLow} → PostOnly@Curr)`;
+        } else {
+          targetPrice = blockLow;
+          strategyNote = `(Maker @ 6m Low ${blockLow})`;
+        }
+      } else {
+        // Sell: Post at Higher of (Current, 6m High)
+        if (price > blockHigh) {
+          targetPrice = price;
+          strategyNote = `(Curr ${price} > 6m High ${blockHigh} → PostOnly@Curr)`;
+        } else {
+          targetPrice = blockHigh;
+          strategyNote = `(Maker @ 6m High ${blockHigh})`;
+        }
+      }
+      log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
+    } else {
+      log(`⚠️ No complete 6m candle found. Fallback to PostOnly @ current.`);
       targetPrice = price;
     }
 
-    // Configure Maker/Limit Order
     // Calculate Order Price (Apply precision)
     const pricePrecision = instrumentInfo.pricePrecision;
     targetPrice = parseFloat(targetPrice.toFixed(typeof pricePrecision === 'number' ? pricePrecision : 2));
 
-    if (useCurrentPrice) {
-      orderType = 'LIMIT';
-      orderOpts = { price: targetPrice };
-    } else {
-      orderType = 'LIMIT (Post Only)';
-      orderOpts = { price: targetPrice, postOnly: true };
-    }
+    // Strategy A: Post Only
+    orderType = 'LIMIT (Post Only)';
+    orderOpts = { price: targetPrice, postOnly: true };
 
   } else {
     // --- Case B: Large Delta (>= 500萬) → Market Strategy ---
@@ -211,9 +195,7 @@ async function processSignal(data) {
   }
 
   // Calculate quantity in BTC
-  // Note: For market orders, execution price might vary, but we define quantity based on current estimation
-  const pricePrecision = instrumentInfo.pricePrecision;
-  const finalPrice = parseFloat(targetPrice.toFixed(typeof pricePrecision === 'number' ? pricePrecision : 2));
+  const finalPrice = targetPrice;
 
   const rawQty = notionalUSD / finalPrice;
   const qtyPrecision = instrumentInfo.quantityPrecision || 3;
@@ -273,7 +255,7 @@ async function main() {
   log(`   Formula: margin = delta × ${CONFIG.RATIO}, position = margin × ${CONFIG.LEVERAGE}x`);
   log(`   Example: 100萬 delta → $${(1000000 * CONFIG.RATIO).toFixed(0)} margin → $${(1000000 * CONFIG.RATIO * CONFIG.LEVERAGE).toFixed(0)} position`);
   log(`   Min Delta: ${formatUSD(CONFIG.MIN_DELTA)}`);
-  log(`   Order Type: Hybird (≥500w Market, <500w Maker 6m)`);
+  log(`   Order Type: Hybrid (≥500w Market, <500w Maker 6m)`);
   log(`   Mode: ${CONFIG.DRY_RUN ? '🔕 DRY RUN' : (CONFIG.BINANCE_TESTNET ? '🧪 TESTNET' : '🔴 LIVE')}`);
   log('');
 
