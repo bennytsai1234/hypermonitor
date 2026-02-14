@@ -34,3 +34,58 @@ CREATE INDEX IF NOT EXISTS idx_range_time ON range_metrics(timestamp);
 
 -- 複合索引：加速 WHERE symbol=? AND timestamp>? 的查詢
 CREATE INDEX IF NOT EXISTS idx_range_symbol_time ON range_metrics(symbol, timestamp);
+
+-- ==========================================
+-- 1分鐘聚合表 (1m Aggregation)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS printer_1m (
+    bucket DATETIME PRIMARY KEY,
+    avg_long_vol_num REAL,
+    avg_short_vol_num REAL,
+    avg_net_vol_num REAL,
+    max_wallet_count INTEGER,
+    last_sentiment TEXT,
+    sample_count INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS range_1m (
+    bucket DATETIME,
+    symbol TEXT, -- 'btc', 'eth'
+    avg_long_vol REAL,
+    avg_short_vol REAL,
+    avg_total_vol REAL,
+    avg_net_vol REAL,
+    sample_count INTEGER,
+    PRIMARY KEY (bucket, symbol)
+);
+
+-- ==========================================
+-- 1小時聚合表 (1h Aggregation)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS printer_1h (
+    bucket DATETIME PRIMARY KEY,
+    avg_long_vol_num REAL,
+    avg_short_vol_num REAL,
+    avg_net_vol_num REAL,
+    max_wallet_count INTEGER,
+    last_sentiment TEXT,
+    sample_count INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS range_1h (
+    bucket DATETIME,
+    symbol TEXT,
+    avg_long_vol REAL,
+    avg_short_vol REAL,
+    avg_total_vol REAL,
+    avg_net_vol REAL,
+    sample_count INTEGER,
+    PRIMARY KEY (bucket, symbol)
+);
+
+-- Indexes for Aggregated Tables
+CREATE INDEX IF NOT EXISTS idx_p1m_bucket ON printer_1m(bucket);
+CREATE INDEX IF NOT EXISTS idx_r1m_bucket ON range_1m(bucket);
+CREATE INDEX IF NOT EXISTS idx_p1h_bucket ON printer_1h(bucket);
+CREATE INDEX IF NOT EXISTS idx_r1h_bucket ON range_1h(bucket);
+

@@ -15,7 +15,7 @@ let selectedRange = '1h';
 let historyData = { printer: [], btc: [], eth: [], hedge: [] };
 let pollTimer = null;
 let lastHistoryLoad = 0; // timestamp of last history API call
-const HISTORY_REFRESH_INTERVAL = 5 * 60 * 1000; // Refresh history every 5 minutes max
+const HISTORY_REFRESH_INTERVAL = 15 * 60 * 1000; // Refresh history every 15 minutes (Optimized for D1 usage)
 
 // ============================================
 // Logic
