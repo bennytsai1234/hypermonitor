@@ -125,7 +125,7 @@ async function processSignal(data) {
 
 
   if (absDelta < MARKET_THRESHOLD) {
-    // --- Case A: Small Delta (< 500萬) → Maker Strategy ---
+    // --- Case A: Small Delta (< 500萬) → Limit Strategy (6m Candle Price) ---
 
     // 1. Fetch recent 1m candles
     let klines = [];
@@ -158,33 +158,33 @@ async function processSignal(data) {
       }
 
       if (side === 'buy') {
-        // Buy: Post at Lower of (Current, 6m Low)
+        // Buy: Limit at Lower of (Current, 6m Low)
         if (price < blockLow) {
           targetPrice = price;
-          strategyNote = `(Curr ${price} < 6m Low ${blockLow} → PostOnly@Curr)`;
+          strategyNote = `(Curr ${price} < 6m Low ${blockLow} → Limit@Curr)`;
         } else {
           targetPrice = blockLow;
-          strategyNote = `(Maker @ 6m Low ${blockLow})`;
+          strategyNote = `(Limit @ 6m Low ${blockLow})`;
         }
       } else {
-        // Sell: Post at Higher of (Current, 6m High)
+        // Sell: Limit at Higher of (Current, 6m High)
         if (price > blockHigh) {
           targetPrice = price;
-          strategyNote = `(Curr ${price} > 6m High ${blockHigh} → PostOnly@Curr)`;
+          strategyNote = `(Curr ${price} > 6m High ${blockHigh} → Limit@Curr)`;
         } else {
           targetPrice = blockHigh;
-          strategyNote = `(Maker @ 6m High ${blockHigh})`;
+          strategyNote = `(Limit @ 6m High ${blockHigh})`;
         }
       }
       log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
     } else {
-      log(`⚠️ No complete 6m candle found. Fallback to PostOnly @ current.`);
+      log(`⚠️ No complete 6m candle found. Fallback to Limit @ current.`);
       targetPrice = price;
     }
 
-    // Strategy A: Post Only
-    orderType = 'LIMIT (Post Only)';
-    orderOpts = { price: targetPrice, postOnly: true };
+    // Strategy A: Standard Limit Order (Not Post-Only)
+    orderType = 'LIMIT';
+    orderOpts = { price: targetPrice }; // Removed postOnly: true
 
   } else {
     // --- Case B: Large Delta (>= 500萬) → Market Strategy ---
