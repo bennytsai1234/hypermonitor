@@ -108,7 +108,7 @@ async function processSignal(data) {
   const side = deltaH > 0 ? 'buy' : 'sell';
 
   // Strategy Thresholds
-  const MARKET_THRESHOLD = 5000000; // 500萬
+  const MARKET_THRESHOLD = 3000000; // 300萬
   const absDelta = Math.abs(deltaH);
 
   let orderType = '';
@@ -118,14 +118,14 @@ async function processSignal(data) {
 
   // ============================================
   // Hybrid Strategy
-  // < 500萬: Maker (Limit - Post Only) via 6m Candle
-  // >= 500萬: Market (Immediate)
+  // < 300萬: Limit via 6m Candle
+  // >= 300萬: Market (Immediate)
   // ============================================
 
 
 
   if (absDelta < MARKET_THRESHOLD) {
-    // --- Case A: Small Delta (< 500萬) → Limit Strategy (6m Candle Price) ---
+    // --- Case A: Small Delta (< 300萬) → Limit Strategy (6m Candle Price) ---
 
     // 1. Fetch recent 1m candles
     let klines = [];
@@ -195,10 +195,10 @@ async function processSignal(data) {
     orderOpts = { price: targetPrice }; // Removed postOnly: true
 
   } else {
-    // --- Case B: Large Delta (>= 500萬) → Market Strategy ---
+    // --- Case B: Large Delta (>= 300萬) → Market Strategy ---
     orderType = 'MARKET';
     targetPrice = price; // For estimation
-    strategyNote = `(🔥 Big Signal >= 500w → Immediate Entry)`;
+    strategyNote = `(🔥 Big Signal >= 300w → Immediate Entry)`;
     orderOpts = { type: 'market' }; // API uses lowercase 'market' for OKX
   }
 
