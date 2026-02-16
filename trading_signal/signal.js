@@ -12,6 +12,7 @@
  */
 const CONFIG = require('./config');
 const okx = require('./okx-api');
+const nodemailer = require('nodemailer');
 
 // ============================================
 // State
@@ -21,6 +22,7 @@ let accumulatedOrderUSD = 0;     // Accumulated order value (for when delta is t
 let instrumentInfo = null;       // Cached instrument info (ctVal, lotSz, etc.)
 let leverageSet = false;         // Whether leverage has been configured
 let totalTraded = 0;             // Total USD traded this session
+let lastEmailTime = 0;           // Throttle email sending
 
 // ============================================
 // Logging
@@ -28,6 +30,44 @@ let totalTraded = 0;             // Total USD traded this session
 function log(msg) {
   const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
   console.log(`[${now}] ${msg}`);
+}
+
+// ============================================
+// Email Notification
+// ============================================
+async function sendEmail(subject, text) {
+  if (!CONFIG.GMAIL_USER || !CONFIG.GMAIL_APP_PASSWORD) return;
+
+  // Throttle to avoid spamming (e.g., max 1 email per minute per type?)
+  // For critical alerts like > 20M, maybe we want every occurrence.
+  // But let's add a small throttle just in case.
+  if (Date.now() - lastEmailTime < 60000) {
+      log('⚠️ Email alert throttled (max 1 per minute).');
+      return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: CONFIG.GMAIL_USER,
+      pass: CONFIG.GMAIL_APP_PASSWORD,
+    },
+  });
+
+  const mailOptions = {
+    from: CONFIG.GMAIL_USER,
+    to: 'bennytsai0711@gmail.com',
+    subject: `🚨 Hyper Alert: ${subject}`,
+    text: text,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    log(`📧 Email sent: ${info.response}`);
+    lastEmailTime = Date.now();
+  } catch (error) {
+    log(`❌ Email failed: ${error.message}`);
+  }
 }
 
 // ============================================
@@ -72,15 +112,22 @@ async function processSignal(data) {
   const deltaH = currentNet - previousNet;
   previousNet = currentNet;
 
+  const NOTIFY_THRESHOLD = 20000000; // 2000萬
+  if (Math.abs(deltaH) > NOTIFY_THRESHOLD) {
+      const msg = `Market Pressure Delta > 2000萬!\nValue: ${formatUSD(deltaH)}\nTime: ${new Date().toLocaleString()}\nSentiment: ${sentiment}`;
+      // Run in background so trading is not blocked
+      sendEmail('Significant Market Move', msg).catch(console.error);
+  }
+
   // Check minimum threshold
   if (Math.abs(deltaH) < CONFIG.MIN_DELTA) {
     return;
   }
 
-  // Check maximum threshold (User rule: > 8000萬 skip)
-  const MAX_DELTA = 80000000;
+  // Check maximum threshold (Updated to 4000萬)
+  const MAX_DELTA = 40000000;
   if (Math.abs(deltaH) > MAX_DELTA) {
-    log(`⚠️ Delta ${formatUSD(deltaH)} > ${formatUSD(MAX_DELTA)} (Too volatile). Skipped.`);
+    log(`⚠️ Delta ${formatUSD(deltaH)} > ${formatUSD(MAX_DELTA)} (Skip Trade).`);
     return;
   }
 

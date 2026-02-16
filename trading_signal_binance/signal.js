@@ -78,8 +78,8 @@ async function processSignal(data) {
     return;
   }
 
-  // Check maximum threshold (User rule: > 8000萬 skip)
-  const MAX_DELTA = 80000000;
+  // Check maximum threshold (User rule: > 4000萬 skip)
+  const MAX_DELTA = 40000000;
   if (Math.abs(deltaH) > MAX_DELTA) {
     log(`⚠️ Delta ${formatUSD(deltaH)} > ${formatUSD(MAX_DELTA)} (Too volatile). Skipped.`);
     return;
