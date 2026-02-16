@@ -118,45 +118,48 @@ function renderChart(history) {
     // Prepare Dataset based on currentChart type
     let datasets = [];
 
-    // Dynamic Button Label (Based on LATEST data)
-    if (history.length > 0) {
-        const lastLong = toNum(history[history.length-1].long_vol_num ?? history[history.length-1].longVolNum ?? history[history.length-1].long_vol);
-        const lastShort = toNum(history[history.length-1].short_vol_num ?? history[history.length-1].shortVolNum ?? history[history.length-1].short_vol);
-        const lastNet = lastLong - lastShort;
+    // Dynamic Button Highlight (Optional polish: remove 'active' from net_long if net_short implies dominance?)
+    // Actually, keep it simple. User chooses what to view.
 
-        const netBtn = document.querySelector('.switch-btn[data-chart="net"]');
-        if (netBtn) {
-            // Update text based on polarity
-            netBtn.textContent = lastNet >= 0 ? '淨多壓' : '淨空壓';
-            // Hint color even when inactive
-            if (!netBtn.classList.contains('active')) {
-                netBtn.style.color = lastNet >= 0 ? 'var(--green)' : 'var(--red)';
-                netBtn.style.borderColor = lastNet >= 0 ? 'rgba(0,255,157,0.3)' : 'rgba(255,46,46,0.3)';
-                netBtn.style.borderWidth = '1px';
-                netBtn.style.borderStyle = 'solid';
-            } else {
-                netBtn.style = ''; // Reset inline styles when active (handled by CSS)
-            }
-        }
-    }
-
-    if (currentChart === 'net') {
+    if (currentChart === 'net_long') {
         const nets = history.map((d, i) => longs[i] - shorts[i]);
         datasets.push({
-            label: '淨壓力', // Base label
+            label: '淨多壓 (Net Long Pressure)',
             data: nets,
-            borderColor: '#00FF9D', // Base color
+            borderColor: '#00FF9D',
             backgroundColor: 'rgba(0, 255, 157, 0.05)',
             borderWidth: 2,
             tension: 0,
             pointRadius: 0,
             fill: {
                 target: 'origin',
-                above: 'rgba(0, 255, 157, 0.1)',
-                below: 'rgba(255, 46, 46, 0.1)'
+                above: 'rgba(0, 255, 157, 0.1)',   // Positive (Long is stronger) = Green
+                below: 'rgba(255, 46, 46, 0.1)'    // Negative (Short is stronger) = Red
             },
             segment: {
+                 // If value < 0 (Red dominant), line is Red. Else Green.
                 borderColor: ctx => ctx.p0.parsed.y < 0 ? '#FF2E2E' : '#00FF9D',
+            }
+        });
+    } else if (currentChart === 'net_short') {
+        // Net Short = Shorts - Longs
+        const nets = history.map((d, i) => shorts[i] - longs[i]);
+        datasets.push({
+            label: '淨空壓 (Net Short Pressure)',
+            data: nets,
+            borderColor: '#FF2E2E',
+            backgroundColor: 'rgba(255, 46, 46, 0.05)',
+            borderWidth: 2,
+            tension: 0,
+            pointRadius: 0,
+            fill: {
+                target: 'origin',
+                above: 'rgba(255, 46, 46, 0.1)',    // Positive (Short is stronger) = Red
+                below: 'rgba(0, 255, 157, 0.1)'    // Negative (Long is stronger) = Green
+            },
+            segment: {
+                // If value < 0 (Long dominant), line is Green. Else Red.
+                borderColor: ctx => ctx.p0.parsed.y < 0 ? '#00FF9D' : '#FF2E2E',
             }
         });
     } else if (currentChart === 'long') {
@@ -224,11 +227,15 @@ function renderChart(history) {
                         label: (ctx) => {
                              let label = ctx.dataset.label;
                              // Dynamic tooltip label for Net Pressure
-                             if (currentChart === 'net') {
+                             if (currentChart === 'net_long') {
                                  const val = ctx.parsed.y;
                                  label = val >= 0 ? '淨多壓' : '淨空壓';
+                             } else if (currentChart === 'net_short') {
+                                 const val = ctx.parsed.y;
+                                 // For Net Short chart: Positive = Net Short, Negative = Net Long
+                                 label = val >= 0 ? '淨空壓' : '淨多壓';
                              }
-                             return `${label}: ${formatVolume(ctx.parsed.y)}`;
+                             return `${label}: ${formatVolume(ctx.parsed.y)}`; // Always show magnitude? Or signed? Let's use signed but context aware. Actually formatted signed is fine. Original code uses formatVolume directly. Let's stick to signed formatVolume for consistency.
                         }
                     }
                 }
