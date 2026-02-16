@@ -118,10 +118,32 @@ function renderChart(history) {
     // Prepare Dataset based on currentChart type
     let datasets = [];
 
+    // Dynamic Button Label (Based on LATEST data)
+    if (history.length > 0) {
+        const lastLong = toNum(history[history.length-1].long_vol_num ?? history[history.length-1].longVolNum ?? history[history.length-1].long_vol);
+        const lastShort = toNum(history[history.length-1].short_vol_num ?? history[history.length-1].shortVolNum ?? history[history.length-1].short_vol);
+        const lastNet = lastLong - lastShort;
+
+        const netBtn = document.querySelector('.switch-btn[data-chart="net"]');
+        if (netBtn) {
+            // Update text based on polarity
+            netBtn.textContent = lastNet >= 0 ? '淨多壓' : '淨空壓';
+            // Hint color even when inactive
+            if (!netBtn.classList.contains('active')) {
+                netBtn.style.color = lastNet >= 0 ? 'var(--green)' : 'var(--red)';
+                netBtn.style.borderColor = lastNet >= 0 ? 'rgba(0,255,157,0.3)' : 'rgba(255,46,46,0.3)';
+                netBtn.style.borderWidth = '1px';
+                netBtn.style.borderStyle = 'solid';
+            } else {
+                netBtn.style = ''; // Reset inline styles when active (handled by CSS)
+            }
+        }
+    }
+
     if (currentChart === 'net') {
         const nets = history.map((d, i) => longs[i] - shorts[i]);
         datasets.push({
-            label: '淨壓力 (Net Pressure)',
+            label: '淨壓力', // Base label
             data: nets,
             borderColor: '#00FF9D', // Base color
             backgroundColor: 'rgba(0, 255, 157, 0.05)',
@@ -200,7 +222,13 @@ function renderChart(history) {
                            return `${padTime(d.getMonth()+1)}/${padTime(d.getDate())} ${padTime(d.getHours())}:${padTime(d.getMinutes())}`;
                        },
                         label: (ctx) => {
-                             return `${ctx.dataset.label}: ${formatVolume(ctx.parsed.y)}`;
+                             let label = ctx.dataset.label;
+                             // Dynamic tooltip label for Net Pressure
+                             if (currentChart === 'net') {
+                                 const val = ctx.parsed.y;
+                                 label = val >= 0 ? '淨多壓' : '淨空壓';
+                             }
+                             return `${label}: ${formatVolume(ctx.parsed.y)}`;
                         }
                     }
                 }
