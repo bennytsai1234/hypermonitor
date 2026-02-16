@@ -4,10 +4,13 @@ import { parseTimestamp, toNum, padTime, formatVolume } from './js/utils.js';
 
 let chartInstance = null;
 let currentRange = '1h';
+let currentChart = 'net'; // 'net', 'long', 'short'
+let globalHistory = []; // Cache loaded data
 
 // Initial Boot
 document.addEventListener('DOMContentLoaded', () => {
     initDropdown();
+    initChartSwitcher();
     const btn = document.getElementById('refresh-btn');
     if(btn) btn.addEventListener('click', loadData);
 
@@ -50,6 +53,28 @@ function initDropdown() {
     });
 }
 
+// Chart Switcher Logic
+function initChartSwitcher() {
+    const btns = document.querySelectorAll('.switch-btn');
+    btns.forEach(btn => {
+        btn.addEventListener('click', () => {
+             const type = btn.dataset.chart;
+             if (type === currentChart) return;
+
+             currentChart = type;
+
+             // Update UI
+             btns.forEach(b => b.classList.remove('active'));
+             btn.classList.add('active');
+
+             // Re-render chart using cached data
+             if (globalHistory.length > 0) {
+                 renderChart(globalHistory);
+             }
+        });
+    });
+}
+
 async function loadData() {
     const btn = document.getElementById('refresh-btn');
     if(btn) {
@@ -58,18 +83,14 @@ async function loadData() {
     }
 
     try {
-        // Fetch "All" data (printer)
         const data = await fetchHistory(currentRange);
-
-        // The user specifically wants to "display the change in total net pressure"
-        // and "change in long orders and short orders".
-        // Use 'printer' array from the response which contains overall market data.
         const history = data.printer || [];
 
         if (history.length === 0) {
             console.warn("No data returned for range:", currentRange);
         }
 
+        globalHistory = history; // Cache
         renderChart(history);
     } catch (e) {
         console.error("Failed to load data", e);
@@ -90,17 +111,55 @@ function renderChart(history) {
     const ctx = canvas.getContext('2d');
 
     // Parse Data
-    // Ensure we handle both snake_case (API usually) and camelCase if transformed
     const labels = history.map(d => parseTimestamp(d.timestamp || d.time_bucket));
     const longs = history.map(d => toNum(d.long_vol_num ?? d.longVolNum ?? d.long_vol));
     const shorts = history.map(d => toNum(d.short_vol_num ?? d.shortVolNum ?? d.short_vol));
 
-    // Net Pressure = Longs - Shorts (Positive = Bullish Pressure, Negative = Bearish Pressure)
-    // Or Shorts - Longs?
-    // In the original PWA, Bearish = Red = (Short - Long). Bullish = Green = (Long - Short).
-    // Here we want a continuous line. Let's use (Long - Short).
-    // So > 0 is Bullish (Green), < 0 is Bearish (Red).
-    const nets = history.map((d, i) => longs[i] - shorts[i]);
+    // Prepare Dataset based on currentChart type
+    let datasets = [];
+
+    if (currentChart === 'net') {
+        const nets = history.map((d, i) => longs[i] - shorts[i]);
+        datasets.push({
+            label: '淨壓力 (Net Pressure)',
+            data: nets,
+            borderColor: '#00FF9D', // Base color
+            backgroundColor: 'rgba(0, 255, 157, 0.05)',
+            borderWidth: 2,
+            tension: 0,
+            pointRadius: 0,
+            fill: {
+                target: 'origin',
+                above: 'rgba(0, 255, 157, 0.1)',
+                below: 'rgba(255, 46, 46, 0.1)'
+            },
+            segment: {
+                borderColor: ctx => ctx.p0.parsed.y < 0 ? '#FF2E2E' : '#00FF9D',
+            }
+        });
+    } else if (currentChart === 'long') {
+        datasets.push({
+            label: '多單 (Longs)',
+            data: longs,
+            borderColor: '#00FF9D',
+            backgroundColor: 'rgba(0, 255, 157, 0.05)',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0,
+            fill: true
+        });
+    } else if (currentChart === 'short') {
+        datasets.push({
+            label: '空單 (Shorts)',
+            data: shorts,
+            borderColor: '#FF2E2E',
+            backgroundColor: 'rgba(255, 46, 46, 0.05)',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0,
+            fill: true
+        });
+    }
 
     if (chartInstance) {
         chartInstance.destroy();
@@ -110,45 +169,7 @@ function renderChart(history) {
         type: 'line',
         data: {
             labels: labels,
-            datasets: [
-                {
-                    label: '淨壓力 (Net Pressure)',
-                    data: nets,
-                    borderColor: '#00FF9D',
-                    backgroundColor: 'rgba(0, 255, 157, 0.05)',
-                    borderWidth: 2,
-                    tension: 0.2,
-                    fill: {
-                        target: 'origin',
-                        above: 'rgba(0, 255, 157, 0.05)',   // Area will be red above the origin
-                        below: 'rgba(255, 46, 46, 0.05)'    // And blue below the origin
-                    },
-                    segment: {
-                        borderColor: ctx => ctx.p0.parsed.y < 0 ? '#FF2E2E' : '#00FF9D',
-                    },
-                    order: 1
-                },
-                {
-                    label: '多單 (Longs)',
-                    data: longs,
-                    borderColor: 'rgba(0, 255, 157, 0.4)',
-                    borderWidth: 1,
-                    pointRadius: 0,
-                    tension: 0.2,
-                    order: 2,
-                    hidden: false // Show by default
-                },
-                {
-                    label: '空單 (Shorts)',
-                    data: shorts,
-                    borderColor: 'rgba(255, 46, 46, 0.4)',
-                    borderWidth: 1,
-                    pointRadius: 0,
-                    tension: 0.2,
-                    order: 3,
-                    hidden: false // Show by default
-                }
-            ]
+            datasets: datasets
         },
         options: {
             responsive: true,
@@ -157,10 +178,13 @@ function renderChart(history) {
                 mode: 'index',
                 intersect: false,
             },
+            // Disable animations for snappier switching
+            animation: {
+                duration: 300
+            },
             plugins: {
                 legend: {
-                    display: true,
-                    labels: { color: '#999', font: { size: 10 } }
+                    display: false // Hide legend to save space, tile is clear
                 },
                 tooltip: {
                     backgroundColor: 'rgba(10, 10, 10, 0.9)',
@@ -171,12 +195,12 @@ function renderChart(history) {
                     padding: 10,
                     callbacks: {
                         title: (ctx) => {
-                            if(!ctx || !ctx[0]) return '';
-                            const d = new Date(ctx[0].parsed.x);
-                            return `${padTime(d.getMonth()+1)}/${padTime(d.getDate())} ${padTime(d.getHours())}:${padTime(d.getMinutes())}`;
-                        },
+                           if(!ctx || !ctx[0]) return '';
+                           const d = new Date(ctx[0].parsed.x);
+                           return `${padTime(d.getMonth()+1)}/${padTime(d.getDate())} ${padTime(d.getHours())}:${padTime(d.getMinutes())}`;
+                       },
                         label: (ctx) => {
-                            return `${ctx.dataset.label}: ${formatVolume(ctx.parsed.y)}`;
+                             return `${ctx.dataset.label}: ${formatVolume(ctx.parsed.y)}`;
                         }
                     }
                 }
