@@ -103,7 +103,7 @@ async function processSignal(data) {
   const side = deltaH > 0 ? 'BUY' : 'SELL';
 
   // Strategy Thresholds
-  const MARKET_THRESHOLD = 5000000; // 500萬
+  const MARKET_THRESHOLD = 4000000; // 400萬
   const absDelta = Math.abs(deltaH);
 
   let orderType = '';
@@ -114,14 +114,14 @@ async function processSignal(data) {
 
   // ============================================
   // Hybrid Strategy
-  // < 500萬: Maker (Limit - Post Only) via 6m Candle
-  // >= 500萬: Market (Immediate)
+  // < 400萬: Maker (Limit - Post Only) via 6m Candle
+  // >= 400萬: Market (Immediate)
   // ============================================
 
 
 
   if (absDelta < MARKET_THRESHOLD) {
-    // --- Case A: Small Delta (< 500萬) → Limit Strategy (6m Candle Price) ---
+    // --- Case A: Small Delta (< 400萬) → Limit Strategy (6m Candle Price) ---
 
     // 1. Fetch recent 1m candles
     let klines = [];
@@ -187,10 +187,10 @@ async function processSignal(data) {
     orderOpts = { price: targetPrice }; // Removed postOnly: true
 
   } else {
-    // --- Case B: Large Delta (>= 500萬) → Market Strategy ---
+    // --- Case B: Large Delta (>= 400萬) → Market Strategy ---
     orderType = 'MARKET';
     targetPrice = price; // For estimation
-    strategyNote = `(🔥 Big Signal >= 500w → Immediate Entry)`;
+    strategyNote = `(🔥 Big Signal >= 400w → Immediate Entry)`;
     orderOpts = { type: 'MARKET' };
   }
 
@@ -255,7 +255,7 @@ async function main() {
   log(`   Formula: margin = delta × ${CONFIG.RATIO}, position = margin × ${CONFIG.LEVERAGE}x`);
   log(`   Example: 100萬 delta → $${(1000000 * CONFIG.RATIO).toFixed(0)} margin → $${(1000000 * CONFIG.RATIO * CONFIG.LEVERAGE).toFixed(0)} position`);
   log(`   Min Delta: ${formatUSD(CONFIG.MIN_DELTA)}`);
-  log(`   Order Type: Hybrid (≥500w Market, <500w Maker 6m)`);
+  log(`   Order Type: Hybrid (≥400w Market, <400w Maker 6m)`);
   log(`   Mode: ${CONFIG.DRY_RUN ? '🔕 DRY RUN' : (CONFIG.BINANCE_TESTNET ? '🧪 TESTNET' : '🔴 LIVE')}`);
   log('');
 
