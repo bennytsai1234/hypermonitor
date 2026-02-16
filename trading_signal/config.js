@@ -25,6 +25,10 @@ const CONFIG = {
   POLL_INTERVAL: parseInt(process.env.POLL_INTERVAL || '10') * 1000,
   DRY_RUN: process.argv.includes('--dry-run'),
   ONCE: process.argv.includes('--once'),
+
+  // Email Notification
+  GMAIL_USER: process.env.GMAIL_USER || '',
+  GMAIL_APP_PASSWORD: process.env.GMAIL_APP_PASSWORD || '',
 };
 
 module.exports = CONFIG;
