@@ -76,9 +76,13 @@ export default {
 							last.wallet_count !== d.walletCount
 						);
 
+						// Hard throttle: Force 20s interval to prevent exceeding D1 Write limits (100k/day)
+						if (diffSeconds < 20) {
+							shouldWrite = false;
+						}
 						// Condition 2: Force write every 60s (Heartbeat) to keep aggregation continuous
 						// If data is same AND less than 60s since last write -> Skip
-						if (!dataChanged && diffSeconds < 60) {
+						else if (!dataChanged && diffSeconds < 60) {
 							shouldWrite = false;
 						}
 					}
@@ -110,8 +114,14 @@ export default {
 
 							const changed = (last.long_vol !== data.longVol || last.short_vol !== data.shortVol);
 
+							// Hard throttle: Force 20s interval to protect D1 Write limits (100k/day)
+							if (diff < 20) {
+								write = false;
+							}
 							// Skip if same data AND recent (<60s)
-							if (!changed && diff < 60) write = false;
+							else if (!changed && diff < 60) {
+								write = false;
+							}
 						}
 
 						if (write) {
