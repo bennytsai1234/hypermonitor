@@ -56,32 +56,79 @@ export default {
 				const d: any = await request.json();
 
 				if (url.pathname === '/update-printer') {
-					await env.DB.prepare(
-						`INSERT INTO printer_metrics (wallet_count, profit_count, loss_count, long_vol_num, short_vol_num, net_vol_num, sentiment, long_display, short_display, net_display) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-					).bind(
-						d.walletCount, d.profitCount, d.lossCount,
-						d.longVolNum, d.shortVolNum, d.netVolNum,
-						d.sentiment, d.longDisplay, d.shortDisplay, d.netDisplay
-					).run();
+					// 1. Deduplication with Heartbeat
+					// Get the last record's data AND timestamp
+					const last: any = await env.DB.prepare(
+						"SELECT timestamp, long_vol_num, short_vol_num, net_vol_num, wallet_count FROM printer_metrics ORDER BY id DESC LIMIT 1"
+					).first();
+
+					let shouldWrite = true;
+
+					if (last) {
+						const lastTime = new Date(last.timestamp + (last.timestamp.endsWith('Z') ? '' : 'Z')).getTime(); // Ensure UTC parsing
+						const now = Date.now();
+						const diffSeconds = (now - lastTime) / 1000;
+
+						// Condition 1: Data changed?
+						const dataChanged = (
+							last.long_vol_num !== d.longVolNum ||
+							last.short_vol_num !== d.shortVolNum ||
+							last.wallet_count !== d.walletCount
+						);
+
+						// Condition 2: Force write every 60s (Heartbeat) to keep aggregation continuous
+						// If data is same AND less than 60s since last write -> Skip
+						if (!dataChanged && diffSeconds < 60) {
+							shouldWrite = false;
+						}
+					}
+
+					if (shouldWrite) {
+						await env.DB.prepare(
+							`INSERT INTO printer_metrics (wallet_count, profit_count, loss_count, long_vol_num, short_vol_num, net_vol_num, sentiment, long_display, short_display, net_display) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+						).bind(
+							d.walletCount, d.profitCount, d.lossCount,
+							d.longVolNum, d.shortVolNum, d.netVolNum,
+							d.sentiment, d.longDisplay, d.shortDisplay, d.netDisplay
+						).run();
+					} else {
+						return new Response(JSON.stringify({ success: true, skipped: true }), { headers: corsHeaders });
+					}
 				} else if (url.pathname === '/update-range') {
-					// Use batch() for atomic multi-insert
 					const stmts: D1PreparedStatement[] = [];
 					const insertSQL = `INSERT INTO range_metrics (symbol, long_vol, short_vol, total_vol, net_vol, long_display, short_display, total_display, net_display) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-					if (d.btc) {
-						stmts.push(env.DB.prepare(insertSQL).bind(
-							'btc', d.btc.longVol, d.btc.shortVol, d.btc.totalVol, d.btc.netVol,
-							d.btc.longDisplay, d.btc.shortDisplay, d.btc.totalDisplay, d.btc.netDisplay
-						));
-					}
-					if (d.eth) {
-						stmts.push(env.DB.prepare(insertSQL).bind(
-							'eth', d.eth.longVol, d.eth.shortVol, d.eth.totalVol, d.eth.netVol,
-							d.eth.longDisplay, d.eth.shortDisplay, d.eth.totalDisplay, d.eth.netDisplay
-						));
-					}
+					// Helper to check if we should write for a symbol
+					const checkAndPrepare = async (symbol: string, data: any) => {
+						const last: any = await env.DB.prepare(`SELECT timestamp, long_vol, short_vol FROM range_metrics WHERE symbol=? ORDER BY id DESC LIMIT 1`).bind(symbol).first();
+						let write = true;
+
+						if (last) {
+							const lastTime = new Date(last.timestamp + (last.timestamp.endsWith('Z') ? '' : 'Z')).getTime();
+							const now = Date.now();
+							const diff = (now - lastTime) / 1000;
+
+							const changed = (last.long_vol !== data.longVol || last.short_vol !== data.shortVol);
+
+							// Skip if same data AND recent (<60s)
+							if (!changed && diff < 60) write = false;
+						}
+
+						if (write) {
+							stmts.push(env.DB.prepare(insertSQL).bind(
+								symbol, data.longVol, data.shortVol, data.totalVol, data.netVol,
+								data.longDisplay, data.shortDisplay, data.totalDisplay, data.netDisplay
+							));
+						}
+					};
+
+					if (d.btc) await checkAndPrepare('btc', d.btc);
+					if (d.eth) await checkAndPrepare('eth', d.eth);
+
 					if (stmts.length > 0) {
 						await env.DB.batch(stmts);
+					} else {
+						return new Response(JSON.stringify({ success: true, skipped: true }), { headers: corsHeaders });
 					}
 				}
 
@@ -200,7 +247,12 @@ export default {
 		// Use waitUntil to ensure it completes even if response is sent
 		ctx.waitUntil((async () => {
 			await aggregateData(env.DB);
-			await cleanupOldData(env.DB);
+
+			// Run cleanup only once per hour (approx)
+			const date = new Date(event.scheduledTime);
+			if (date.getMinutes() === 0) {
+				await cleanupOldData(env.DB);
+			}
 		})());
 	},
 };
@@ -210,10 +262,8 @@ async function aggregateData(db: D1Database): Promise<void> {
 	// A. 1-Minute Aggregation (Raw -> 1m)
 	// Query raw data in minute buckets.
 	// To minimize complexity, we aggregate "unprocessed" minutes.
-	// Simple approach: Aggregate last 15 minutes to cover potential gaps/late arrivals, using INSERT OR REPLACE or UPSERT.
-
-	const now = new Date();
-	const rangeStart = `-${15} minutes`; // Look back 15 mins
+	// Reduced lookback to 5 minutes to save read ops (was 15).
+	const rangeStart = `-${5} minutes`; // Look back 5 mins
 
 	const pQuery = `
 		INSERT OR REPLACE INTO printer_1m (bucket, avg_long_vol_num, avg_short_vol_num, avg_net_vol_num, max_wallet_count, last_sentiment, sample_count)
