@@ -60,6 +60,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Hyperliquid 實時監控',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.green,
+        brightness: Brightness.dark,
+        useMaterial3: true,
+      ),
       home: const DashboardScreen(),
     );
   }

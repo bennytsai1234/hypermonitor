@@ -1,0 +1,11 @@
+name = "hyper-monitor-worker-test"
+main = "src/index.ts"
+compatibility_date = "2024-02-14"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hyper-monitor-db-test"
+database_id = "3d5ddb71-d185-4b37-928a-22e884fd97d2"
+
+[vars]
+# API_KEY = "your-test-api-key" (if needed)

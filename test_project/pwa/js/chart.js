@@ -61,15 +61,7 @@ export function renderChart(canvas, historyData, currentAsset, allData, selected
               }
 
               if (newPoint) {
-                  // --- [PROTECTION] Prevent drops to zero ---
-                  // If the new point has 0 volume, it's likely an uninitialized state.
-                  // Abort the push to keep the chart clean.
-                  const isZero = (toNum(newPoint.long_vol_num || newPoint.long_vol) === 0 &&
-                                  toNum(newPoint.short_vol_num || newPoint.short_vol) === 0);
-
-                  if (!isZero) {
-                      history.push(newPoint);
-                  }
+                  history.push(newPoint);
               }
           }
       } catch (e) {

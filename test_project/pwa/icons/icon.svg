@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00FF9D" />
+      <stop offset="100%" stop-color="#00C8FF" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="15" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <circle cx="256" cy="256" r="256" fill="#050505" />
+  <circle cx="256" cy="256" r="248" fill="none" stroke="#222" stroke-width="16" />
+
+  <!-- Lightning Bolt -->
+  <path d="M300 216 H360 L180 432 L240 248 H170 L300 80 V216 Z" fill="url(#g)" filter="url(#glow)" stroke="#fff" stroke-width="4" transform="translate(10, 20) scale(0.9)"/>
+</svg>

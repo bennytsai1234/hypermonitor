@@ -249,7 +249,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         backgroundColor: bgDark,
         body: Stack(children: [
           if (defaultTargetPlatform == TargetPlatform.windows)
-            Positioned(width: 1, height: 1, child: Opacity(opacity: 0.0, child: CoinglassScraper(onPrinterData: _onPrinterScraped, onRangeData: _onRangeScraped))),
+            Positioned.fill(child: Opacity(opacity: 0.0, child: IgnorePointer(child: CoinglassScraper(onPrinterData: _onPrinterScraped, onRangeData: _onRangeScraped)))),
 
           if (_showRainbow)
             IgnorePointer(child: AnimatedBuilder(
@@ -371,7 +371,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       );
     }
   }
-    final ranges = ["1h", "2h", "3h", "4h", "5h", "1d", "2d", "3d", "4d", "5d", "1w", "1m", "3m", "1y"];
+  Widget _buildRangeSelector() {
+    final ranges = ["1h", "4h", "1d", "1w"];
     return Container(
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(color: Colors.white.withAlpha(5), borderRadius: BorderRadius.circular(6)),
