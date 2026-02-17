@@ -25,18 +25,7 @@ async function getMaxTimestamp(db: D1Database, table: string): Promise<string | 
 
 // --- Helper: Build time filter clause ---
 // --- Helper: Parsing range for aggregated queries ---
-function parseRange(range: string): { table: '1m' | '1h', limit: number, since: string } {
-	switch (range) {
-		case '1h':  return { table: '1m', limit: 60,   since: '-1 hour' };
-		case '4h':  return { table: '1m', limit: 240,  since: '-4 hours' };
-		case '12h': return { table: '1m', limit: 720,  since: '-12 hours' };
-		case '1d':  return { table: '1m', limit: 1440, since: '-1 day' };
-		case '3d':  return { table: '1h', limit: 72,   since: '-3 days' };
-		case '1w':  return { table: '1h', limit: 168,  since: '-7 days' };
-		case '1m':  return { table: '1h', limit: 744,  since: '-1 month' };
-		default:    return { table: '1m', limit: 60,   since: '-1 hour' };
-	}
-}
+
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -93,11 +82,17 @@ export default {
 
 					if (shouldWrite) {
 						await env.DB.prepare(
-							`INSERT INTO printer_metrics (wallet_count, profit_count, loss_count, long_vol_num, short_vol_num, net_vol_num, sentiment, long_display, short_display, net_display) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+							`INSERT INTO printer_metrics (
+								wallet_count, profit_count, loss_count, long_vol_num, short_vol_num, net_vol_num, sentiment, long_display, short_display, net_display,
+								smart_wallet_count, smart_profit_count, smart_loss_count, smart_long_vol_num, smart_short_vol_num, smart_net_vol_num, smart_sentiment, smart_long_display, smart_short_display, smart_net_display
+							) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)`
 						).bind(
 							d.walletCount, d.profitCount, d.lossCount,
 							d.longVolNum, d.shortVolNum, d.netVolNum,
-							d.sentiment, d.longDisplay, d.shortDisplay, d.netDisplay
+							d.sentiment,
+							d.smartWalletCount || 0, d.smartProfitCount || 0, d.smartLossCount || 0,
+							d.smartLongVolNum || 0, d.smartShortVolNum || 0, d.smartNetVolNum || 0,
+							d.smartSentiment || ""
 						).run();
 
 						// [L1 Cache Update] Update memory immediately
@@ -110,9 +105,16 @@ export default {
 							short_vol_num: d.shortVolNum,
 							net_vol_num: d.netVolNum,
 							sentiment: d.sentiment,
-							long_display: d.longDisplay,
-							short_display: d.shortDisplay,
-							net_display: d.netDisplay,
+							// Display fields removed (frontend handles formatting)
+
+							// Smart Money
+							smart_wallet_count: d.smartWalletCount || 0,
+							smart_profit_count: d.smartProfitCount || 0,
+							smart_loss_count: d.smartLossCount || 0,
+							smart_long_vol_num: d.smartLongVolNum || 0,
+							smart_short_vol_num: d.smartShortVolNum || 0,
+							smart_net_vol_num: d.smartNetVolNum || 0,
+							smart_sentiment: d.smartSentiment || "",
 							timestamp: new Date().toISOString()
 						});
 						lastCacheUpdate = Date.now();
@@ -121,7 +123,7 @@ export default {
 					}
 				} else if (url.pathname === '/update-range') {
 					const stmts: D1PreparedStatement[] = [];
-					const insertSQL = `INSERT INTO range_metrics (symbol, long_vol, short_vol, total_vol, net_vol, long_display, short_display, total_display, net_display) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+					const insertSQL = `INSERT INTO range_metrics (symbol, long_vol, short_vol, total_vol, net_vol, long_display, short_display, total_display, net_display) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)`;
 
 					// Helper to check if we should write for a symbol
 					const checkAndPrepare = async (symbol: string, data: any) => {
@@ -147,8 +149,7 @@ export default {
 
 						if (write) {
 							stmts.push(env.DB.prepare(insertSQL).bind(
-								symbol, data.longVol, data.shortVol, data.totalVol, data.netVol,
-								data.longDisplay, data.shortDisplay, data.totalDisplay, data.netDisplay
+								symbol, data.longVol, data.shortVol, data.totalVol, data.netVol
 							));
 
 							// [L1 Cache Update]
@@ -172,33 +173,95 @@ export default {
 				return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
 			}
 
-			// --- GET: /history (Optimized) ---
+			// --- GET: /history (Dynamic Downsampling from Raw Metrics) ---
 			if (url.pathname === '/history') {
-				const range = url.searchParams.get('range') || '1h';
-				const { table, since } = parseRange(range);
+				const range = url.searchParams.get('range') || '1h'; // 1h, 4h, 24h, 7d
+				let since: string;
+				let bufferSeconds: number; // Group events within this buffer to avoid too many points
 
-				// Tables: printer_1m / printer_1h
-				const pTable = `printer_${table}`;
-				const rTable = `range_${table}`;
+				// Determine time range and grouping buffer
+				switch (range) {
+					case '4h':
+						since = '-4 hours';
+						bufferSeconds = 60; // 1 min grouping
+						break;
+					case '24h':
+						since = '-24 hours';
+						bufferSeconds = 300; // 5 min grouping
+						break;
+					case '7d':
+						since = '-7 days';
+						bufferSeconds = 3600; // 1 hour grouping
+						break;
+					case '30d':
+						since = '-30 days';
+						bufferSeconds = 14400; // 4 hour grouping
+						break;
+					case '1h':
+					default:
+						since = '-1 hour';
+						bufferSeconds = 10; // 10s grouping (high res)
+						break;
+				}
+
+				// Query Raw Metrics with dynamic downsampling (using strftime to group)
+				// Note: D1/SQLite strftime('%s') returns seconds. dividing by bufferSeconds sends to integer bucket.
+				const queryP = `
+					SELECT
+						MAX(timestamp) as bucket,
+						AVG(long_vol_num) as avg_long_vol_num,
+						AVG(short_vol_num) as avg_short_vol_num,
+						AVG(net_vol_num) as avg_net_vol_num,
+						MAX(wallet_count) as max_wallet_count,
+						MAX(sentiment) as last_sentiment,
+						AVG(smart_long_vol_num) as avg_long_vol_smart,
+						AVG(smart_short_vol_num) as avg_short_vol_smart,
+						AVG(smart_net_vol_num) as avg_net_vol_smart,
+						MAX(smart_wallet_count) as max_wallet_smart,
+						MAX(smart_sentiment) as last_sentiment_smart
+					FROM printer_metrics
+					WHERE timestamp > datetime('now', ?)
+					GROUP BY CAST(strftime('%s', timestamp) / ? AS INTEGER)
+					ORDER BY bucket ASC
+				`;
+
+				const queryR = `
+					SELECT
+						MAX(timestamp) as bucket,
+						symbol,
+						AVG(long_vol) as avg_long_vol,
+						AVG(short_vol) as avg_short_vol,
+						AVG(total_vol) as avg_total_vol,
+						AVG(net_vol) as avg_net_vol
+					FROM range_metrics
+					WHERE timestamp > datetime('now', ?)
+					GROUP BY symbol, CAST(strftime('%s', timestamp) / ? AS INTEGER)
+					ORDER BY bucket ASC
+				`;
 
 				// Parallel Query
 				const [pRes, rRes] = await env.DB.batch([
-					env.DB.prepare(`SELECT * FROM ${pTable} WHERE bucket > datetime('now', ?) ORDER BY bucket ASC`).bind(since),
-					env.DB.prepare(`SELECT * FROM ${rTable} WHERE bucket > datetime('now', ?) ORDER BY bucket ASC`).bind(since)
+					env.DB.prepare(queryP).bind(since, bufferSeconds),
+					env.DB.prepare(queryR).bind(since, bufferSeconds)
 				]);
 
 				const pRows = pRes.results as any[];
 				const rRows = rRes.results as any[];
 
-				// Format for Frontend
-				// Map database columns back to API expected fields
+				// Map database columns back to API expected fields (Backward Compatible)
 				const printer = pRows.map(r => ({
 					timestamp: r.bucket,
 					long_vol_num: r.avg_long_vol_num,
 					short_vol_num: r.avg_short_vol_num,
 					net_vol_num: r.avg_net_vol_num,
 					wallet_count: r.max_wallet_count,
-					sentiment: r.last_sentiment
+					sentiment: r.last_sentiment,
+					// Smart Money
+					smart_long_vol_num: r.avg_long_vol_smart,
+					smart_short_vol_num: r.avg_short_vol_smart,
+					smart_net_vol_num: r.avg_net_vol_smart,
+					smart_wallet_count: r.max_wallet_smart,
+					smart_sentiment: r.last_sentiment_smart
 				}));
 
 				const btcData = rRows.filter(r => r.symbol === 'btc').map(r => ({
@@ -220,7 +283,7 @@ export default {
 				}));
 
 				// [L2 Cache] Cache history for 60s (Browser) / 120s (CDN)
-				// Since historical data (aggregated) updates slowly, we can cache it aggressively
+				// Since historical data (aggregated/downsampled) updates slowly, we can cache it aggressively
 				return new Response(JSON.stringify({
 					printer, btc: btcData, eth: ethData
 				}), {
@@ -231,47 +294,63 @@ export default {
 				});
 			}
 
-			// --- GET: /latest (Optimized with L1 Memory Cache) ---
+			// --- GET: /latest (Optimized with L1 Memory Cache + ETag) ---
 			if (url.pathname === '/latest') {
 				// 1. Check L1 Memory Cache
-				// If we have data and it's fresh (<15s), return it directly.
-				// This bypasses D1 entirely for frequent polling.
 				const now = Date.now();
-				if (latestCache && (now - lastCacheUpdate < 15000)) {
-					return new Response(JSON.stringify(latestCache), {
+				let result = latestCache;
+
+				// If cache is stale or missing, fetch from DB
+				if (!result || (now - lastCacheUpdate >= 10000)) {
+					const [pResult, btcResult, ethResult] = await env.DB.batch([
+						env.DB.prepare("SELECT * FROM printer_metrics ORDER BY timestamp DESC, id DESC LIMIT 1"),
+						env.DB.prepare("SELECT * FROM range_metrics WHERE symbol='btc' ORDER BY timestamp DESC, id DESC LIMIT 1"),
+						env.DB.prepare("SELECT * FROM range_metrics WHERE symbol='eth' ORDER BY timestamp DESC, id DESC LIMIT 1"),
+					]);
+
+					const p = pResult.results[0] as any;
+					const btc = btcResult.results[0] as any;
+					const eth = ethResult.results[0] as any;
+
+					if (!p) return new Response(JSON.stringify({ error: "No data" }), { status: 404, headers: corsHeaders });
+
+					result = {
+						...p,
+						btc: btc ? { ...btc, symbol: 'BTC' } : null,
+						eth: eth ? { ...eth, symbol: 'ETH' } : null
+					};
+
+					// Update L1 Cache
+					latestCache = result;
+					lastCacheUpdate = now;
+				}
+
+				// 2. Generate ETag (Hash of content)
+				const jsonStr = JSON.stringify(result);
+				const hashBuffer = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(jsonStr));
+				const hashArray = Array.from(new Uint8Array(hashBuffer));
+				const etag = '"' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('') + '"';
+
+				// 3. Check If-None-Match
+				const ifNoneMatch = request.headers.get('If-None-Match');
+				if (ifNoneMatch === etag) {
+					return new Response(null, {
+						status: 304,
 						headers: {
 							...corsHeaders,
-							'X-Cache-Status': 'HIT-RAM'
+							'ETag': etag,
+							'Cache-Control': 'no-cache' // Force revalidation
 						}
 					});
 				}
 
-				// 2. Fallback to D1 (Cache Miss or Stale)
-				// Use batch() to parallelize all 3 queries
-				const [pResult, btcResult, ethResult] = await env.DB.batch([
-					env.DB.prepare("SELECT * FROM printer_metrics ORDER BY timestamp DESC LIMIT 1"),
-					env.DB.prepare("SELECT * FROM range_metrics WHERE symbol='btc' ORDER BY timestamp DESC LIMIT 1"),
-					env.DB.prepare("SELECT * FROM range_metrics WHERE symbol='eth' ORDER BY timestamp DESC LIMIT 1"),
-				]);
-
-				const p = pResult.results[0] as any;
-				const btc = btcResult.results[0] as any;
-				const eth = ethResult.results[0] as any;
-
-				const result = {
-					...p,
-					btc: btc ? { ...btc, symbol: 'BTC' } : null,
-					eth: eth ? { ...eth, symbol: 'ETH' } : null
-				};
-
-				// Update L1 Cache
-				latestCache = result;
-				lastCacheUpdate = now;
-
-				return new Response(JSON.stringify(result), {
+				// 4. Return Data (200 OK)
+				return new Response(jsonStr, {
 					headers: {
 						...corsHeaders,
-						'X-Cache-Status': 'MISS-DB'
+						'ETag': etag,
+						'Cache-Control': 'no-cache', // Force revalidation
+						'X-Cache-Status': (now - lastCacheUpdate < 10000) ? 'HIT-RAM' : 'MISS-DB'
 					}
 				});
 			}
@@ -299,9 +378,15 @@ export default {
 
 			// --- GET: /cleanup — Manual trigger for data purge ---
 			if (url.pathname === '/cleanup') {
-				await aggregateData(env.DB);
-				await cleanupOldData(env.DB);
-				return new Response(JSON.stringify({ success: true, message: "Aggregation and cleanup completed" }), { headers: corsHeaders });
+				const sixMonthsAgo = new Date();
+				sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+				const cutoff = sixMonthsAgo.toISOString();
+
+				await env.DB.batch([
+					env.DB.prepare(`DELETE FROM printer_metrics WHERE timestamp < ?`).bind(cutoff),
+					env.DB.prepare(`DELETE FROM range_metrics WHERE timestamp < ?`).bind(cutoff)
+				]);
+				return new Response(JSON.stringify({ success: true, message: "Manual cleanup completed (older than 6 months)" }), { headers: corsHeaders });
 			}
 
 			return new Response("OK", { status: 200 });
@@ -310,116 +395,20 @@ export default {
 		}
 	},
 
-	// --- Cron: Scheduled Task (Aggregation + Cleanup) ---
-	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-		// Run aggregation first, then cleanup
-		// Use waitUntil to ensure it completes even if response is sent
-		ctx.waitUntil((async () => {
-			await aggregateData(env.DB);
+	// --- CRON: Cleanup Old Data (Retention: 6 Months) ---
+	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+		// Only run at midnight to save costs
+		const date = new Date(event.scheduledTime);
+		if (date.getHours() !== 0 || date.getMinutes() > 10) return;
 
-			// Run cleanup only once per hour (approx)
-			const date = new Date(event.scheduledTime);
-			if (date.getMinutes() === 0) {
-				await cleanupOldData(env.DB);
-			}
-		})());
+		const sixMonthsAgo = new Date();
+		sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+		const cutoff = sixMonthsAgo.toISOString();
+
+		await env.DB.batch([
+			env.DB.prepare(`DELETE FROM printer_metrics WHERE timestamp < ?`).bind(cutoff),
+			env.DB.prepare(`DELETE FROM range_metrics WHERE timestamp < ?`).bind(cutoff)
+		]);
 	},
 };
 
-// --- Core: Aggregation Logic ---
-async function aggregateData(db: D1Database): Promise<void> {
-	// A. 1-Minute Aggregation (Raw -> 1m)
-	// Query raw data in minute buckets.
-	// To minimize complexity, we aggregate "unprocessed" minutes.
-	// Reduced lookback to 5 minutes to save read ops (was 15).
-	const rangeStart = `-${5} minutes`; // Look back 5 mins
-
-	const pQuery = `
-		INSERT OR REPLACE INTO printer_1m (bucket, avg_long_vol_num, avg_short_vol_num, avg_net_vol_num, max_wallet_count, last_sentiment, sample_count)
-		SELECT
-			strftime('%Y-%m-%d %H:%M:00', timestamp) as bucket,
-			AVG(long_vol_num),
-			AVG(short_vol_num),
-			AVG(net_vol_num),
-			MAX(wallet_count),
-			MAX(sentiment), -- Simple string aggregation
-			COUNT(*)
-		FROM printer_metrics
-		WHERE timestamp > datetime('now', ?) AND timestamp < strftime('%Y-%m-%d %H:%M:00', 'now')
-		GROUP BY bucket
-	`;
-
-	const rQuery = `
-		INSERT OR REPLACE INTO range_1m (bucket, symbol, avg_long_vol, avg_short_vol, avg_total_vol, avg_net_vol, sample_count)
-		SELECT
-			strftime('%Y-%m-%d %H:%M:00', timestamp) as bucket,
-			symbol,
-			AVG(long_vol),
-			AVG(short_vol),
-			AVG(total_vol),
-			AVG(net_vol),
-			COUNT(*)
-		FROM range_metrics
-		WHERE timestamp > datetime('now', ?) AND timestamp < strftime('%Y-%m-%d %H:%M:00', 'now')
-		GROUP BY bucket, symbol
-	`;
-
-	await db.batch([
-		db.prepare(pQuery).bind(rangeStart),
-		db.prepare(rQuery).bind(rangeStart)
-	]);
-
-	// B. 1-Hour Aggregation (1m -> 1h)
-	// Aggregate from printer_1m to printer_1h
-	const p1hQuery = `
-		INSERT OR REPLACE INTO printer_1h (bucket, avg_long_vol_num, avg_short_vol_num, avg_net_vol_num, max_wallet_count, last_sentiment, sample_count)
-		SELECT
-			strftime('%Y-%m-%d %H:00:00', bucket) as h_bucket,
-			AVG(avg_long_vol_num),
-			AVG(avg_short_vol_num),
-			AVG(avg_net_vol_num),
-			MAX(max_wallet_count),
-			MAX(last_sentiment),
-			SUM(sample_count)
-		FROM printer_1m
-		WHERE bucket > datetime('now', '-3 hours') AND bucket < strftime('%Y-%m-%d %H:00:00', 'now')
-		GROUP BY h_bucket
-	`;
-
-    const r1hQuery = `
-		INSERT OR REPLACE INTO range_1h (bucket, symbol, avg_long_vol, avg_short_vol, avg_total_vol, avg_net_vol, sample_count)
-		SELECT
-			strftime('%Y-%m-%d %H:00:00', bucket) as h_bucket,
-			symbol,
-			AVG(avg_long_vol),
-			AVG(avg_short_vol),
-			AVG(avg_total_vol),
-			AVG(avg_net_vol),
-			SUM(sample_count)
-		FROM range_1m
-		WHERE bucket > datetime('now', '-3 hours') AND bucket < strftime('%Y-%m-%d %H:00:00', 'now')
-		GROUP BY h_bucket, symbol
-	`;
-
-	await db.batch([
-		db.prepare(p1hQuery),
-		db.prepare(r1hQuery)
-	]);
-}
-
-// --- Cleanup: Retention Policy ---
-async function cleanupOldData(db: D1Database): Promise<void> {
-	// Raw data: Keep 24 hours (for debugging and /latest high fidelity)
-	const rawCutoff = '-1 day';
-	// Aggregated data: Keep 1 year
-	const aggCutoff = '-1 year';
-
-	await db.batch([
-		db.prepare("DELETE FROM printer_metrics WHERE timestamp < datetime('now', ?)").bind(rawCutoff),
-		db.prepare("DELETE FROM range_metrics WHERE timestamp < datetime('now', ?)").bind(rawCutoff),
-		db.prepare("DELETE FROM printer_1m WHERE bucket < datetime('now', ?)").bind(aggCutoff),
-		db.prepare("DELETE FROM range_1m WHERE bucket < datetime('now', ?)").bind(aggCutoff),
-		db.prepare("DELETE FROM printer_1h WHERE bucket < datetime('now', ?)").bind(aggCutoff),
-		db.prepare("DELETE FROM range_1h WHERE bucket < datetime('now', ?)").bind(aggCutoff)
-	]);
-}
