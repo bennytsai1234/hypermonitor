@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-02-17
+
+### Optimization
+- **[Critical] Database Usage Reduction**: Corrected excessive read/write operations causing limits to be exceeded (65M reads/day).
+  - **Worker Aggregation**: Reduced lookback window from 15 mins to 5 mins (3x reduction in reads per aggregation).
+  - **Worker Cleanup**: Restricted expensive cleanup task to run only once per hour instead of every minute (60x reduction in table scans).
+  - **Worker Write Throttle**: Implemented strict 20s interval enforcement on `update-printer` and `update-ranges` endpoints. This halves the write frequency (from ~86k/day to ~43k/day at full load) for existing deployed clients that cannot be updated.
+
 ## [1.2.0] - 2026-02-13
 
 ### Added
