@@ -1,4 +1,3 @@
--- 資料表 A：超級印鈔機全體數據 (100% 欄位補齊)
 CREATE TABLE IF NOT EXISTS printer_metrics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -11,7 +10,18 @@ CREATE TABLE IF NOT EXISTS printer_metrics (
     sentiment TEXT,       -- 情緒字串
     long_display TEXT,    -- 格式化顯示 (如 $5.92億)
     short_display TEXT,
-    net_display TEXT
+    net_display TEXT,
+    -- Smart Money ($10w - $100w)
+    smart_wallet_count INTEGER,
+    smart_profit_count INTEGER,
+    smart_loss_count INTEGER,
+    smart_long_vol_num REAL,
+    smart_short_vol_num REAL,
+    smart_net_vol_num REAL,
+    smart_sentiment TEXT,
+    smart_long_display TEXT,
+    smart_short_display TEXT,
+    smart_net_display TEXT
 );
 
 -- 資料表 B：BTC/ETH 24h 範圍數據
@@ -35,57 +45,6 @@ CREATE INDEX IF NOT EXISTS idx_range_time ON range_metrics(timestamp);
 -- 複合索引：加速 WHERE symbol=? AND timestamp>? 的查詢
 CREATE INDEX IF NOT EXISTS idx_range_symbol_time ON range_metrics(symbol, timestamp);
 
--- ==========================================
--- 1分鐘聚合表 (1m Aggregation)
--- ==========================================
-CREATE TABLE IF NOT EXISTS printer_1m (
-    bucket DATETIME PRIMARY KEY,
-    avg_long_vol_num REAL,
-    avg_short_vol_num REAL,
-    avg_net_vol_num REAL,
-    max_wallet_count INTEGER,
-    last_sentiment TEXT,
-    sample_count INTEGER
-);
 
-CREATE TABLE IF NOT EXISTS range_1m (
-    bucket DATETIME,
-    symbol TEXT, -- 'btc', 'eth'
-    avg_long_vol REAL,
-    avg_short_vol REAL,
-    avg_total_vol REAL,
-    avg_net_vol REAL,
-    sample_count INTEGER,
-    PRIMARY KEY (bucket, symbol)
-);
 
--- ==========================================
--- 1小時聚合表 (1h Aggregation)
--- ==========================================
-CREATE TABLE IF NOT EXISTS printer_1h (
-    bucket DATETIME PRIMARY KEY,
-    avg_long_vol_num REAL,
-    avg_short_vol_num REAL,
-    avg_net_vol_num REAL,
-    max_wallet_count INTEGER,
-    last_sentiment TEXT,
-    sample_count INTEGER
-);
-
-CREATE TABLE IF NOT EXISTS range_1h (
-    bucket DATETIME,
-    symbol TEXT,
-    avg_long_vol REAL,
-    avg_short_vol REAL,
-    avg_total_vol REAL,
-    avg_net_vol REAL,
-    sample_count INTEGER,
-    PRIMARY KEY (bucket, symbol)
-);
-
--- Indexes for Aggregated Tables
-CREATE INDEX IF NOT EXISTS idx_p1m_bucket ON printer_1m(bucket);
-CREATE INDEX IF NOT EXISTS idx_r1m_bucket ON range_1m(bucket);
-CREATE INDEX IF NOT EXISTS idx_p1h_bucket ON printer_1h(bucket);
-CREATE INDEX IF NOT EXISTS idx_r1h_bucket ON range_1h(bucket);
 
