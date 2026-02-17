@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Worker Aggregation**: Reduced lookback window from 15 mins to 5 mins (3x reduction in reads per aggregation).
   - **Worker Cleanup**: Restricted expensive cleanup task to run only once per hour instead of every minute (60x reduction in table scans).
   - **Worker Write Throttle**: Implemented strict 10s interval enforcement. Adjusted from 20s to 10s as user has multiple scraper instances, which naturally distributes the load. This prevents double-writing within the same 10s window.
+  - **Worker Caching (Zero-Read)**:
+    - **L1 Memory Cache**: Worker now serves `/latest` directly from RAM variable (`latestCache`) for 15s. This bypasses D1 entirely for high-frequency polling.
+    - **L2 Edge Cache**: `/history` endpoints now include `Cache-Control: public, max-age=60` headers, allowing CDN and browsers to cache heavy historical data.
 
 ## [1.2.0] - 2026-02-13
 
