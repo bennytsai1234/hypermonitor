@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-02-17
+
+### Refactor
+- **[Critical] Database & API Cleanup**: Removed all `*_display` string columns from D1 database and Worker API. All formatting logic moved to Frontend (PWA).
+  - **Storage Reduction**: Reduced database storage usage by stopping the storage of redundant formatted strings.
+  - **Bandwidth Optimization**: Reduced API payload size.
+- **Worker Optimization**: Removed unused aggregation tables (`printer_1m`, `range_1m`, etc.) from schema definition.
+
+### Added
+- **Smart Money Tracking**:
+  - **PWA**: Added "Smart Money" (聰明錢) button to asset selector.
+  - **Chart**: Visualized Smart Money net volume trends in the chart.
+  - **Data**: Integrated Smart Money volume data (`smart_long_vol_num`, `smart_short_vol_num`) into the frontend data flow.
+- **PWA Performance**:
+  - **Smart Refresh**: Stopped auto-refreshing history for long time ranges (24h, 7d) to conserve D1 read limits.
+  - **Optimized Options**: Simplified time range selector to 1h, 4h, 24h, 7d.
+
 ## [1.2.1] - 2026-02-17
 
 ### Optimization
