@@ -1,3 +1,7 @@
+// --- L1 Cache: Global Variables (Persist across requests in warm workers) ---
+let latestCache: any = null;
+let lastCacheUpdate = 0;
+
 export interface Env {
 	DB: D1Database;
 	API_KEY?: string;
@@ -95,6 +99,23 @@ export default {
 							d.longVolNum, d.shortVolNum, d.netVolNum,
 							d.sentiment, d.longDisplay, d.shortDisplay, d.netDisplay
 						).run();
+
+						// [L1 Cache Update] Update memory immediately
+						if (!latestCache) latestCache = {};
+						Object.assign(latestCache, {
+							wallet_count: d.walletCount,
+							profit_count: d.profitCount,
+							loss_count: d.lossCount,
+							long_vol_num: d.longVolNum,
+							short_vol_num: d.shortVolNum,
+							net_vol_num: d.netVolNum,
+							sentiment: d.sentiment,
+							long_display: d.longDisplay,
+							short_display: d.shortDisplay,
+							net_display: d.netDisplay,
+							timestamp: new Date().toISOString()
+						});
+						lastCacheUpdate = Date.now();
 					} else {
 						return new Response(JSON.stringify({ success: true, skipped: true }), { headers: corsHeaders });
 					}
@@ -129,6 +150,11 @@ export default {
 								symbol, data.longVol, data.shortVol, data.totalVol, data.netVol,
 								data.longDisplay, data.shortDisplay, data.totalDisplay, data.netDisplay
 							));
+
+							// [L1 Cache Update]
+							if (!latestCache) latestCache = {};
+							if (symbol === 'btc') latestCache.btc = { ...data, symbol: 'BTC' };
+							if (symbol === 'eth') latestCache.eth = { ...data, symbol: 'ETH' };
 						}
 					};
 
@@ -137,6 +163,7 @@ export default {
 
 					if (stmts.length > 0) {
 						await env.DB.batch(stmts);
+						lastCacheUpdate = Date.now();
 					} else {
 						return new Response(JSON.stringify({ success: true, skipped: true }), { headers: corsHeaders });
 					}
@@ -192,13 +219,34 @@ export default {
 					net_vol: r.avg_net_vol
 				}));
 
+				// [L2 Cache] Cache history for 60s (Browser) / 120s (CDN)
+				// Since historical data (aggregated) updates slowly, we can cache it aggressively
 				return new Response(JSON.stringify({
 					printer, btc: btcData, eth: ethData
-				}), { headers: corsHeaders });
+				}), {
+					headers: {
+						...corsHeaders,
+						'Cache-Control': 'public, max-age=60, s-maxage=120'
+					}
+				});
 			}
 
-			// --- GET: /latest ---
+			// --- GET: /latest (Optimized with L1 Memory Cache) ---
 			if (url.pathname === '/latest') {
+				// 1. Check L1 Memory Cache
+				// If we have data and it's fresh (<15s), return it directly.
+				// This bypasses D1 entirely for frequent polling.
+				const now = Date.now();
+				if (latestCache && (now - lastCacheUpdate < 15000)) {
+					return new Response(JSON.stringify(latestCache), {
+						headers: {
+							...corsHeaders,
+							'X-Cache-Status': 'HIT-RAM'
+						}
+					});
+				}
+
+				// 2. Fallback to D1 (Cache Miss or Stale)
 				// Use batch() to parallelize all 3 queries
 				const [pResult, btcResult, ethResult] = await env.DB.batch([
 					env.DB.prepare("SELECT * FROM printer_metrics ORDER BY timestamp DESC LIMIT 1"),
@@ -210,11 +258,22 @@ export default {
 				const btc = btcResult.results[0] as any;
 				const eth = ethResult.results[0] as any;
 
-				return new Response(JSON.stringify({
+				const result = {
 					...p,
 					btc: btc ? { ...btc, symbol: 'BTC' } : null,
 					eth: eth ? { ...eth, symbol: 'ETH' } : null
-				}), { headers: corsHeaders });
+				};
+
+				// Update L1 Cache
+				latestCache = result;
+				lastCacheUpdate = now;
+
+				return new Response(JSON.stringify(result), {
+					headers: {
+						...corsHeaders,
+						'X-Cache-Status': 'MISS-DB'
+					}
+				});
 			}
 
 			// --- GET: /stats — Database health check ---
