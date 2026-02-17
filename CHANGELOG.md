@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[Critical] Database Usage Reduction**: Corrected excessive read/write operations causing limits to be exceeded (65M reads/day).
   - **Worker Aggregation**: Reduced lookback window from 15 mins to 5 mins (3x reduction in reads per aggregation).
   - **Worker Cleanup**: Restricted expensive cleanup task to run only once per hour instead of every minute (60x reduction in table scans).
-  - **Worker Write Throttle**: Implemented strict 20s interval enforcement on `update-printer` and `update-ranges` endpoints. This halves the write frequency (from ~86k/day to ~43k/day at full load) for existing deployed clients that cannot be updated.
+  - **Worker Write Throttle**: Implemented strict 10s interval enforcement. Adjusted from 20s to 10s as user has multiple scraper instances, which naturally distributes the load. This prevents double-writing within the same 10s window.
 
 ## [1.2.0] - 2026-02-13
 
