@@ -154,7 +154,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       if (defaultTargetPlatform == TargetPlatform.windows) {
         if (winCtrl == null) return null;
         await winCtrl.reload();
-        await Future.delayed(const Duration(seconds: 2));
+        await Future.delayed(const Duration(seconds: 6));
         return await winCtrl.executeScript(js);
       } else {
         if (mobCtrl == null) return null;
@@ -192,40 +192,44 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
   static const _printerJs = r"""
     (function() {
-      const getRow = (key, texts) => {
-        let row = document.querySelector(`tr[data-row-key="${key}"]`);
-        if (!row) {
-          const rows = document.querySelectorAll('tr');
-          for (const r of rows) {
-            const t = r.innerText;
-            if (texts.some(txt => t.includes(txt))) {
-              row = r; break;
-            }
-          }
-        }
-        return row;
-      };
+      // Improved: Use data-row-key for precision (O(1) lookup vs O(n) text search)
+      const getRow = (key) => document.querySelector(`tr[data-row-key="${key}"]`);
 
       const parseRow = (row) => {
         if (!row) return null;
         const cells = row.querySelectorAll('td');
         if (cells.length < 8) return null;
-        const volDivs = cells[4].querySelectorAll('div.cg-style-3a6fvj, div.cg-style-zuy5by');
-        const plDivs = cells[7].querySelectorAll('div.cg-style-3a6fvj, div.cg-style-zuy5by');
-        const sentimentBtn = row.querySelector('button.tag-but');
+
+        const getLines = (idx) => cells[idx] ? cells[idx].innerText.trim().split('\n') : [];
+        const clean = (s) => s ? s.trim() : "0";
+
+        // DOM Index Mapping based on provided HTML:
+        // Index 2: Wallet Count
+        // Index 4: Long/Short Vol (colspan 2 container)
+        // Index 5: Net Vol (div.Number)
+        // Index 6: Profit/Loss Count (colspan 2 container)
+        // Index 7: Sentiment Button
+
+        const volLines = getLines(4);
+        const plLines = getLines(6);
+        const sentBtn = cells[7] ? cells[7].querySelector('button') : null;
+
         return {
-          walletCount: cells[2] ? cells[2].innerText.trim() : "0",
-          longVol: volDivs[0] ? volDivs[0].innerText.trim() : "0",
-          shortVol: volDivs[1] ? volDivs[1].innerText.trim() : "0",
-          netVol: cells[5] ? cells[5].innerText.trim() : "0",
-          profitCount: plDivs[0] ? plDivs[0].innerText.trim() : "0",
-          lossCount: plDivs[1] ? plDivs[1].innerText.trim() : "0",
-          sentiment: sentimentBtn ? sentimentBtn.innerText.trim() : ""
+          walletCount: clean(cells[2]?.innerText),
+          longVol: volLines[0] || "0",
+          shortVol: volLines[1] || "0",
+          netVol: clean(cells[5]?.innerText),
+          profitCount: plLines[0] || "0",
+          lossCount: plLines[1] || "0",
+          sentiment: sentBtn ? sentBtn.innerText.trim() : ""
         };
       };
 
-      const printerRow = getRow('Money_Printer', ['超级印钞', '超級印鈔']);
-      const smartRow = getRow('Smart_Money', ['聪明钱', '聰明錢']);
+      // Force scroll to ensure lazy rows are rendered
+      window.scrollTo(0, 500);
+
+      const printerRow = getRow('Money_Printer');
+      const smartRow = getRow('Smart_Money');
 
       const printerData = parseRow(printerRow);
       const smartData = parseRow(smartRow);
@@ -273,7 +277,41 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   HyperData? _parsePrinterJson(String raw) {
     try {
       final d = jsonDecode(_cleanJson(raw));
-      final s = d['smart'] ?? {};
+      final s = d['smart'];
+
+      // Fallback Logic: Reuse last known good Smart Money data if current scrape fails
+      bool useOldSmart = false;
+      if (s == null || (_toInt(s['walletCount']) == 0)) {
+         if (_lastHyperData != null && (_lastHyperData!.smartWalletCount ?? 0) > 0) {
+             useOldSmart = true;
+         }
+      }
+
+      int getSmartInt(String key) {
+         if (useOldSmart && _lastHyperData != null) {
+            if (key == 'walletCount') return _lastHyperData!.smartWalletCount ?? 0;
+            if (key == 'profitCount') return _lastHyperData!.smartProfitCount ?? 0;
+            if (key == 'lossCount') return _lastHyperData!.smartLossCount ?? 0;
+         }
+         return s != null ? _toInt(s[key]) : 0;
+      }
+
+      double getSmartVal(String key) {
+         if (useOldSmart && _lastHyperData != null) {
+            if (key == 'longVol') return _lastHyperData!.smartLongVolNum ?? 0.0;
+            if (key == 'shortVol') return _lastHyperData!.smartShortVolNum ?? 0.0;
+            if (key == 'netVol') return _lastHyperData!.smartNetVolNum ?? 0.0;
+         }
+         return s != null ? _parseValue(s[key]) : 0.0;
+      }
+
+      String getSmartStr(String key) {
+         if (useOldSmart && _lastHyperData != null) {
+             return _lastHyperData!.smartSentiment ?? "";
+         }
+         return s != null ? _toTC(s[key]) : "";
+      }
+
       return HyperData(
         timestamp: DateTime.now().toTaiwanTime(),
         walletCount: _toInt(d['walletCount']),
@@ -284,14 +322,13 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         shortVolNum: _parseValue(d['shortVol']),
         netVolNum: _parseValue(d['netVol']),
 
-        // Smart Money mapping
-        smartWalletCount: _toInt(s['walletCount']),
-        smartProfitCount: _toInt(s['profitCount']),
-        smartLossCount: _toInt(s['lossCount']),
-        smartSentiment: _toTC(s['sentiment']),
-        smartLongVolNum: _parseValue(s['longVol']),
-        smartShortVolNum: _parseValue(s['shortVol']),
-        smartNetVolNum: _parseValue(s['netVol']),
+        smartWalletCount: getSmartInt('walletCount'),
+        smartProfitCount: getSmartInt('profitCount'),
+        smartLossCount: getSmartInt('lossCount'),
+        smartSentiment: getSmartStr('sentiment'),
+        smartLongVolNum: getSmartVal('longVol'),
+        smartShortVolNum: getSmartVal('shortVol'),
+        smartNetVolNum: getSmartVal('netVol'),
 
         btc: _lastHyperData?.btc,
         eth: _lastHyperData?.eth,
@@ -343,12 +380,16 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
   @override
   Widget build(BuildContext context) => Stack(children: [
-    SizedBox(width: 1, height: 1, child: defaultTargetPlatform == TargetPlatform.windows
-      ? (_isWinAInit ? win.Webview(_winA) : Container())
-      : (_mobileA != null ? WebViewWidget(controller: _mobileA!) : Container())),
-    SizedBox(width: 1, height: 1, child: defaultTargetPlatform == TargetPlatform.windows
-      ? (_isWinBInit ? win.Webview(_winB) : Container())
-      : (_mobileB != null ? WebViewWidget(controller: _mobileB!) : Container())),
+    Positioned.fill(
+      child: defaultTargetPlatform == TargetPlatform.windows
+        ? (_isWinAInit ? win.Webview(_winA) : Container())
+        : (_mobileA != null ? WebViewWidget(controller: _mobileA!) : Container())
+    ),
+    Positioned.fill(
+      child: defaultTargetPlatform == TargetPlatform.windows
+        ? (_isWinBInit ? win.Webview(_winB) : Container())
+        : (_mobileB != null ? WebViewWidget(controller: _mobileB!) : Container())
+    ),
   ]);
 
   @override
