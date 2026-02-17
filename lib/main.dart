@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:window_manager/window_manager.dart';
 import 'ui/dashboard_screen.dart';
-import 'ui/mobile_dashboard_screen.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,17 +60,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    bool isMobile = defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
-
-    return MaterialApp(
-      title: 'Hyperliquid 實時監控',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.green,
-        brightness: Brightness.dark,
-        useMaterial3: true,
-      ),
-      home: isMobile ? const MobileDashboardScreen() : const DashboardScreen(),
+      home: const DashboardScreen(),
     );
   }
 }

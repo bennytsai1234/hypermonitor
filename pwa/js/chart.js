@@ -30,6 +30,12 @@ export function renderChart(canvas, historyData, currentAsset, allData, selected
                       long_vol_num: toNum(allData.long_vol_num),
                       short_vol_num: toNum(allData.short_vol_num)
                   };
+              } else if (currentAsset === 'smart') {
+                  newPoint = {
+                      timestamp: allData.timestamp,
+                      long_vol_num: toNum(allData.smart_long_vol_num ?? allData.smartLongVolNum),
+                      short_vol_num: toNum(allData.smart_short_vol_num ?? allData.smartShortVolNum)
+                  };
               } else if (currentAsset === 'hedge') {
                   // Sum up BTC + ETH
                   const btc = allData.btc || {};
@@ -103,6 +109,9 @@ export function renderChart(canvas, historyData, currentAsset, allData, selected
     if (currentAsset === 'all') {
         l = toNum(item.long_vol_num ?? item.longVolNum);
         s = toNum(item.short_vol_num ?? item.shortVolNum);
+    } else if (currentAsset === 'smart') {
+        l = toNum(item.smart_long_vol_num ?? item.smartLongVolNum);
+        s = toNum(item.smart_short_vol_num ?? item.smartShortVolNum);
     } else if (currentAsset === 'hedge') {
         l = toNum(item.long_vol_num);
         s = toNum(item.short_vol_num);

@@ -24,9 +24,14 @@ class ApiService {
           'shortVolNum': data.shortVolNum,
           'netVolNum': data.netVolNum,
           'sentiment': data.sentiment,
-          'longDisplay': data.longVolDisplay,
-          'shortDisplay': data.shortVolDisplay,
-          'netDisplay': data.netVolDisplay,
+          // Smart Money
+          'smartWalletCount': data.smartWalletCount,
+          'smartProfitCount': data.smartProfitCount,
+          'smartLossCount': data.smartLossCount,
+          'smartLongVolNum': data.smartLongVolNum,
+          'smartShortVolNum': data.smartShortVolNum,
+          'smartNetVolNum': data.smartNetVolNum,
+          'smartSentiment': data.smartSentiment,
         }),
       );
     } catch (e) {

@@ -35,6 +35,12 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   int _failCountA = 0;
   int _failCountB = 0;
 
+  // Deduplication state
+  String? _lastUploadedPrinter;
+  String? _lastUploadedRange;
+  DateTime _lastPrinterUploadTime = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastRangeUploadTime = DateTime.fromMillisecondsSinceEpoch(0);
+
   @override
   void initState() {
     super.initState();
@@ -84,21 +90,32 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   void _startScrapingLoop() {
     _doScrapes();
     _scrapeTimer?.cancel();
-    _scrapeTimer = Timer.periodic(const Duration(seconds: 20), (timer) => _doScrapes());
+    // Check frequently (10s) for changes, but only upload on change or heartbeat
+    _scrapeTimer = Timer.periodic(const Duration(seconds: 10), (timer) => _doScrapes());
   }
 
   Future<void> _doScrapes() async {
     bool canScrapeA = (defaultTargetPlatform == TargetPlatform.windows) ? _isWinAInit : true;
     bool canScrapeB = (defaultTargetPlatform == TargetPlatform.windows) ? _isWinBInit : true;
+    final now = DateTime.now();
 
     if (canScrapeA) {
       final printerResult = await _executeScrape(_winA, _mobileA, _printerJs);
       if (printerResult != null && printerResult != "null") {
         _failCountA = 0;
-        final data = _parsePrinterJson(printerResult);
-        if (data != null) {
-          debugPrint('[Scraper] ✅ Printer data scraped successfully');
-          widget.onPrinterData(data);
+
+        // Deduplication Logic
+        bool changed = (printerResult != _lastUploadedPrinter);
+        bool heartbeat = now.difference(_lastPrinterUploadTime).inSeconds > 60;
+
+        if (changed || heartbeat) {
+           final data = _parsePrinterJson(printerResult);
+           if (data != null) {
+             debugPrint('[Scraper] ✅ Printer data upload (Change: $changed, Heartbeat: $heartbeat)');
+             widget.onPrinterData(data);
+             _lastUploadedPrinter = printerResult;
+             _lastPrinterUploadTime = now;
+           }
         }
       } else {
         _failCountA++;
@@ -110,10 +127,19 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
       final rangeResult = await _executeScrape(_winB, _mobileB, _rangeJs);
       if (rangeResult != null && rangeResult != "null") {
         _failCountB = 0;
-        final data = _parseRangeJson(rangeResult);
-        if (data != null) {
-          debugPrint('[Scraper] ✅ Range data scraped successfully');
-          widget.onRangeData(data);
+
+        // Deduplication Logic
+        bool changed = (rangeResult != _lastUploadedRange);
+        bool heartbeat = now.difference(_lastRangeUploadTime).inSeconds > 60;
+
+        if (changed || heartbeat) {
+          final data = _parseRangeJson(rangeResult);
+          if (data != null) {
+            debugPrint('[Scraper] ✅ Range data upload (Change: $changed, Heartbeat: $heartbeat)');
+            widget.onRangeData(data);
+            _lastUploadedRange = rangeResult;
+            _lastRangeUploadTime = now;
+          }
         }
       } else {
         _failCountB++;
@@ -166,33 +192,57 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
 
   static const _printerJs = r"""
     (function() {
-      const rows = document.querySelectorAll('tr');
-      for (const row of rows) {
-        const text = row.innerText;
-        if (text.includes('超级印钞機') || text.includes('超級印鈔機') || text.includes('超级印钞机')) {
-          const cells = row.querySelectorAll('td');
-          if (cells.length < 8) continue;
-          const volDivs = cells[4].querySelectorAll('div.cg-style-3a6fvj, div.cg-style-zuy5by');
-          const plDivs = cells[7].querySelectorAll('div.cg-style-3a6fvj, div.cg-style-zuy5by');
-          const sentimentBtn = row.querySelector('button.tag-but');
-          return JSON.stringify({
-            found: true,
-            walletCount: cells[2].innerText.trim(),
-            longVol: volDivs[0] ? volDivs[0].innerText.trim() : "0",
-            shortVol: volDivs[1] ? volDivs[1].innerText.trim() : "0",
-            netVol: cells[5].innerText.trim(),
-            profitCount: plDivs[0] ? plDivs[0].innerText.trim() : "0",
-            lossCount: plDivs[1] ? plDivs[1].innerText.trim() : "0",
-            sentiment: sentimentBtn ? sentimentBtn.innerText.trim() : ""
-          });
+      const getRow = (key, texts) => {
+        let row = document.querySelector(`tr[data-row-key="${key}"]`);
+        if (!row) {
+          const rows = document.querySelectorAll('tr');
+          for (const r of rows) {
+            const t = r.innerText;
+            if (texts.some(txt => t.includes(txt))) {
+              row = r; break;
+            }
+          }
         }
-      }
-      return null;
+        return row;
+      };
+
+      const parseRow = (row) => {
+        if (!row) return null;
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 8) return null;
+        const volDivs = cells[4].querySelectorAll('div.cg-style-3a6fvj, div.cg-style-zuy5by');
+        const plDivs = cells[7].querySelectorAll('div.cg-style-3a6fvj, div.cg-style-zuy5by');
+        const sentimentBtn = row.querySelector('button.tag-but');
+        return {
+          walletCount: cells[2] ? cells[2].innerText.trim() : "0",
+          longVol: volDivs[0] ? volDivs[0].innerText.trim() : "0",
+          shortVol: volDivs[1] ? volDivs[1].innerText.trim() : "0",
+          netVol: cells[5] ? cells[5].innerText.trim() : "0",
+          profitCount: plDivs[0] ? plDivs[0].innerText.trim() : "0",
+          lossCount: plDivs[1] ? plDivs[1].innerText.trim() : "0",
+          sentiment: sentimentBtn ? sentimentBtn.innerText.trim() : ""
+        };
+      };
+
+      const printerRow = getRow('Money_Printer', ['超级印钞', '超級印鈔']);
+      const smartRow = getRow('Smart_Money', ['聪明钱', '聰明錢']);
+
+      const printerData = parseRow(printerRow);
+      const smartData = parseRow(smartRow);
+
+      if (!printerData && !smartData) return null;
+
+      return JSON.stringify({
+        found: true,
+        ...(printerData || {}),
+        smart: smartData
+      });
     })();
   """;
 
   static const _rangeJs = r"""
     (function() {
+      // Range logic remains same, searching for BTC/ETH rows
       const allDivs = document.querySelectorAll('div[class*="cg-style-g99dwx"]');
       let data = { btc: null, eth: null };
       for (const row of allDivs) {
@@ -200,9 +250,13 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         let symbol = "";
         if (text.includes('BTC') && !text.includes('WBTC')) symbol = "btc";
         else if (text.includes('ETH') && !text.includes('WETH')) symbol = "eth";
+
         if (symbol) {
-          const amounts = row.querySelectorAll('div.cg-style-3a6fvj, div.cg-style-zuy5by, div.Number');
+          const amounts = row.querySelectorAll('div[class*="cg-style-3a6fvj"], div[class*="cg-style-zuy5by"], div.Number');
           if (amounts.length >= 2) {
+             // Usually: Long, Short, ..., Total
+             // Or sometimes: Long, Short, Net
+             // We take first two as L/S, last as Total/Net
             data[symbol] = {
               symbol: symbol.toUpperCase(),
               long: amounts[0].innerText.trim(),
@@ -219,6 +273,7 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
   HyperData? _parsePrinterJson(String raw) {
     try {
       final d = jsonDecode(_cleanJson(raw));
+      final s = d['smart'] ?? {};
       return HyperData(
         timestamp: DateTime.now().toTaiwanTime(),
         walletCount: _toInt(d['walletCount']),
@@ -228,9 +283,16 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         longVolNum: _parseValue(d['longVol']),
         shortVolNum: _parseValue(d['shortVol']),
         netVolNum: _parseValue(d['netVol']),
-        longVolDisplay: _toTC(d['longVol']),
-        shortVolDisplay: _toTC(d['shortVol']),
-        netVolDisplay: _toTC(d['netVol']),
+
+        // Smart Money mapping
+        smartWalletCount: _toInt(s['walletCount']),
+        smartProfitCount: _toInt(s['profitCount']),
+        smartLossCount: _toInt(s['lossCount']),
+        smartSentiment: _toTC(s['sentiment']),
+        smartLongVolNum: _parseValue(s['longVol']),
+        smartShortVolNum: _parseValue(s['shortVol']),
+        smartNetVolNum: _parseValue(s['netVol']),
+
         btc: _lastHyperData?.btc,
         eth: _lastHyperData?.eth,
       );
@@ -249,9 +311,6 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
         longVolNum: _lastHyperData?.longVolNum ?? 0,
         shortVolNum: _lastHyperData?.shortVolNum ?? 0,
         netVolNum: _lastHyperData?.netVolNum ?? 0,
-        longVolDisplay: _lastHyperData?.longVolDisplay ?? "",
-        shortVolDisplay: _lastHyperData?.shortVolDisplay ?? "",
-        netVolDisplay: _lastHyperData?.netVolDisplay ?? "",
         btc: d['btc'] != null ? _toCoinPos(d['btc']) : _lastHyperData?.btc,
         eth: d['eth'] != null ? _toCoinPos(d['eth']) : _lastHyperData?.eth,
       );
@@ -265,15 +324,12 @@ class _CoinglassScraperState extends State<CoinglassScraper> {
     final t = _parseValue(d['total']);
     return CoinPosition(
       symbol: d['symbol'], longVol: l, shortVol: s, totalVol: t, netVol: l - s,
-      longDisplay: _toTC(d['long']), shortDisplay: _toTC(d['short']), totalDisplay: _toTC(d['total']),
-      netDisplay: _formatNet(l - s),
     );
   }
 
   String _toTC(String s) => s.replaceAll('超级', '超級').replaceAll('印钞机', '印鈔機').replaceAll('亿', '億').replaceAll('万', '萬').replaceAll('涨', '漲').replaceAll('强', '強').replaceAll('势', '勢').replaceAll('态', '態');
   int _toInt(dynamic v) => int.tryParse(v.toString().replaceAll(',', '').replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
   String _cleanJson(String s) => (s.startsWith('"') && s.endsWith('"')) ? s.substring(1, s.length - 1).replaceAll(r'\"', '"') : s;
-  String _formatNet(double v) => (v >= 0 ? "+" : "") + (v.abs() >= 1e8 ? "${(v / 1e8).toStringAsFixed(2)}億" : "${(v / 1e4).toStringAsFixed(0)}萬");
 
   double _parseValue(String raw) {
     try {

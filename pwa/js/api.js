@@ -65,7 +65,7 @@ export async function fetchHistory(range) {
       });
     }
 
-    const result = { printer: data.printer || [], btc, eth, hedge };
+    const result = { printer: data.printer || [], smart: data.printer || [], btc, eth, hedge };
     try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {}
     return result;
   } catch (e) {
@@ -77,6 +77,6 @@ export async function fetchHistory(range) {
 function loadCachedHistory(cacheKey) {
   try {
     const cached = sessionStorage.getItem(cacheKey);
-    return cached ? JSON.parse(cached) : { printer: [], btc: [], eth: [], hedge: [] };
-  } catch(e) { return { printer: [], btc: [], eth: [], hedge: [] }; }
+    return cached ? JSON.parse(cached) : { printer: [], smart: [], btc: [], eth: [], hedge: [] };
+  } catch(e) { return { printer: [], smart: [], btc: [], eth: [], hedge: [] }; }
 }

@@ -12,7 +12,7 @@ import { renderUI, calculateAllDeltas, toggleMute, showApp, getDom, initUi, upda
 let allData = null;
 let currentAsset = 'all';
 let selectedRange = '1h';
-let historyData = { printer: [], btc: [], eth: [], hedge: [] };
+let historyData = { printer: [], smart: [], btc: [], eth: [], hedge: [] };
 let pollTimer = null;
 let lastHistoryLoad = 0; // timestamp of last history API call
 const HISTORY_REFRESH_INTERVAL = 15 * 60 * 1000; // Refresh history every 15 minutes (Optimized for D1 usage)
@@ -41,8 +41,10 @@ async function refreshAll() {
   // Parallel Fetching: Start both requests at the same time
   const latestPromise = pollLatest();
   let historyPromise = Promise.resolve();
-  // Only refresh history if enough time has passed
-  if (Date.now() - lastHistoryLoad > HISTORY_REFRESH_INTERVAL) {
+  // Only refresh history if enough time has passed AND range is short (1h, 4h)
+  // Long ranges (24h, 7d) do not auto-refresh to save D1 Read limits
+  const isShortRange = ['1h', '4h'].includes(selectedRange);
+  if (isShortRange && (Date.now() - lastHistoryLoad > HISTORY_REFRESH_INTERVAL)) {
     historyPromise = loadHistory().catch(console.warn);
   }
   // Wait for BOTH to complete (ensures chart has data on first load)

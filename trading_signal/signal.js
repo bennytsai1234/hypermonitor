@@ -71,19 +71,46 @@ async function sendEmail(subject, text) {
 }
 
 // ============================================
-// Fetch Latest Data from Worker
+// Fetch Latest Data from Worker (Optimized with ETag)
 // ============================================
+let cachedEtag = null;
+let cachedData = null;
+
 async function fetchLatest() {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(`${CONFIG.WORKER_URL}/latest`, { signal: controller.signal });
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // Faster timeout (2s)
+
+    const headers = {};
+    if (cachedEtag) headers['If-None-Match'] = cachedEtag;
+
+    const res = await fetch(`${CONFIG.WORKER_URL}/latest`, {
+      signal: controller.signal,
+      headers: headers
+    });
     clearTimeout(timeoutId);
 
+    // 304: Data unchanged, use cache
+    if (res.status === 304) {
+      if (cachedData) return cachedData; // Return cached object
+    }
+
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+
+    // 200: New data
+    const data = await res.json();
+
+    // Update cache
+    const newEtag = res.headers.get('ETag');
+    if (newEtag) cachedEtag = newEtag;
+    cachedData = data;
+
+    return data;
   } catch (e) {
-    log(`❌ Fetch latest failed: ${e.message}`);
+    // If request failed entirely, maybe return cached data if fresh enough?
+    // For now, log error and return null to be safe.
+    if (e.name === 'AbortError') log(`⏱️ Fetch timeout (2s)`);
+    else log(`❌ Fetch latest failed: ${e.message}`);
     return null;
   }
 }
@@ -92,16 +119,28 @@ async function fetchLatest() {
 // Core Signal Logic
 // ============================================
 async function processSignal(data) {
-  // Use 全體 (ALL) data: long_vol - short_vol = net direction
-  const longVol = parseFloat(data.long_vol_num) || 0;
-  const shortVol = parseFloat(data.short_vol_num) || 0;
+  // Select Data Source based on Configuration
+  const useSmart = CONFIG.SIGNAL_SOURCE === 'smart';
+  let longVol, shortVol, sentiment, sourceName;
+
+  if (useSmart) {
+    sourceName = '🧠 Smart Money';
+    longVol = parseFloat(data.smart_long_vol_num) || 0;
+    shortVol = parseFloat(data.smart_short_vol_num) || 0;
+    sentiment = data.smart_sentiment || '';
+  } else {
+    sourceName = '🖨️ Super Money';
+    longVol = parseFloat(data.long_vol_num) || 0;
+    shortVol = parseFloat(data.short_vol_num) || 0;
+    sentiment = data.sentiment || '';
+  }
+
   const currentNet = longVol - shortVol;  // 正=多頭佔優, 負=空頭佔優
-  const sentiment = data.sentiment || '';
 
   // First run: just record, don't trade
   if (previousNet === null) {
     previousNet = currentNet;
-    log(`📊 Initial 全體: 多${formatUSD(longVol)} 空${formatUSD(shortVol)} 淨${formatUSD(currentNet)} (${sentiment})`);
+    log(`📊 Initial [${sourceName}]: Long ${formatUSD(longVol)} Short ${formatUSD(shortVol)} Net ${formatUSD(currentNet)} (${sentiment})`);
     return;
   }
 

@@ -76,7 +76,18 @@ Agent 注意：在執行任何指令前，請先讀取並適配以下專案特�
 
 ---
 
-## 🐞 Debug Log (2025-02-06 ~ 2026-02-11)
+## � 安全禁令 (Critical Safety Rules) [2026-02-17 Added]
+1.  **嚴禁對生產環境資料庫進行寫入測試**：
+    *   AI Agent 禁止使用 `INSERT` / `UPDATE` / `DELETE` 指令直接操作生產資料庫 (`printer_metrics`, `range_metrics`) 進行「測試」。
+    *   測試數據必須寫入專門的測試表，或在 `POST` 請求中標記 `is_test: true`（需後端支援）。
+2.  **嚴禁在生產 API 上模擬業務數據**：
+    *   禁止使用 `curl` 或 `Invoke-RestMethod` 向生產環境的 API 端點 (`/update-printer`, `/update-range`) 發送虛構的業務數據（如假的情緒、假的成交量）。
+    *   這會導致連動的交易機器人 (Bot) 與前端 (PWA) 誤判，引發嚴重後果。
+    *   **唯一例外**：使用者明確要求「請發送一筆測試數據以驗證...」且已知曉風險。
+
+---
+
+## �🐞 Debug Log (2025-02-06 ~ 2026-02-11)
 - **Issue (2025-02-06)**: Scraper returning `null`.
   - **Fix**: Replaced RegEx with `jsonDecode` and focused on targeted scraping.
 

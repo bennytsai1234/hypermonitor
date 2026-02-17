@@ -11,6 +11,7 @@ class TrendChart extends StatelessWidget {
   final bool isBTC;
   final bool isETH;
   final bool isCombined;
+  final bool isSmart;
 
   const TrendChart({
     super.key,
@@ -21,6 +22,7 @@ class TrendChart extends StatelessWidget {
     this.isBTC = false,
     this.isETH = false,
     this.isCombined = false,
+    this.isSmart = false,
   });
 
   @override
@@ -40,7 +42,10 @@ class TrendChart extends StatelessWidget {
     double getNet(HyperData d) {
       double l = 0.0;
       double s = 0.0;
-      if (isPrinter) {
+      if (isSmart) {
+        l = d.smartLongVolNum ?? 0;
+        s = d.smartShortVolNum ?? 0;
+      } else if (isPrinter) {
         l = d.longVolNum;
         s = d.shortVolNum;
       } else if (isCombined) {

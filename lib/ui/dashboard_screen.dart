@@ -43,6 +43,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   String? _lastEthLongDelta; String? _lastEthShortDelta; String? _lastEthNetDelta;
   String? _lastCombinedLongDelta; String? _lastCombinedShortDelta; String? _lastCombinedNetDelta;
   String? _lastPrinterLongDelta; String? _lastPrinterShortDelta; String? _lastPrinterNetDelta;
+  String? _lastSmartLongDelta; String? _lastSmartShortDelta; String? _lastSmartNetDelta;
+  bool _showSmartMoney = false;
 
   @override
   void initState() {
@@ -99,7 +101,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       combinedHistory.add(HyperData(
         timestamp: btcList[i].timestamp,
         walletCount: 0, profitCount: 0, lossCount: 0,
-        longVolDisplay: "", shortVolDisplay: "", netVolDisplay: "",
         sentiment: _currentData?.sentiment ?? "中性",
         longVolNum: 0, shortVolNum: 0, netVolNum: 0,
         btc: btcList[i].btc,
@@ -152,6 +153,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final nD = check(oldPN, newPN);
     if (lD != null || sD != null || nD != null) {
       _lastPrinterLongDelta = lD; _lastPrinterShortDelta = sD; _lastPrinterNetDelta = nD;
+      changed = true;
+    }
+
+    // Smart Money
+    final slD = check(old.smartLongVolNum ?? 0, newData.smartLongVolNum ?? 0);
+    final ssD = check(old.smartShortVolNum ?? 0, newData.smartShortVolNum ?? 0);
+    final double oldSN = isBearish ? ((old.smartShortVolNum ?? 0) - (old.smartLongVolNum ?? 0)) : ((old.smartLongVolNum ?? 0) - (old.smartShortVolNum ?? 0));
+    final double newSN = isBearish ? ((newData.smartShortVolNum ?? 0) - (newData.smartLongVolNum ?? 0)) : ((newData.smartLongVolNum ?? 0) - (newData.smartShortVolNum ?? 0));
+    final snD = check(oldSN, newSN);
+    if (slD != null || ssD != null || snD != null) {
+      _lastSmartLongDelta = slD; _lastSmartShortDelta = ssD; _lastSmartNetDelta = snD;
       changed = true;
     }
 
@@ -254,17 +266,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               _buildHeader(cardBg),
               const SizedBox(height: 12),
               Expanded(child: Row(children: [
-                Expanded(child: _buildColumn(title: "全體印鈔機", icon: Icons.public, accent: Colors.white, bg: cardBg, children: [
-                  MetricCard(label: isBearish ? "全體淨空壓" : "全體淨多壓", value: _formatVolume(pNet), delta: _lastPrinterNetDelta, color: sColor, cardBg: Colors.white.withAlpha(5), highlightValue: true, useColorBorder: true),
-                  const SizedBox(height: 8),
-                  MetricCard(label: "全體總多單", value: _currentData!.longVolDisplay, delta: _lastPrinterLongDelta, color: textGreen, cardBg: Colors.white.withAlpha(2), isSmall: true),
-                  const SizedBox(height: 6),
-                  MetricCard(label: "全體總空單", value: _currentData!.shortVolDisplay, delta: _lastPrinterShortDelta, color: textRed, cardBg: Colors.white.withAlpha(2), isSmall: true),
-                  const SizedBox(height: 10),
-                  TugOfWarBar(label: "持倉比例", leftVal: _currentData!.longVolNum, rightVal: _currentData!.shortVolNum, leftColor: textGreen, rightColor: textRed, leftLabel: "多", rightLabel: "空", cardBg: Colors.transparent),
-                  const SizedBox(height: 10),
-                  Expanded(child: _buildChart("全體資金流向", _historyMap['printer']!, isPrinter: true)),
-                ])),
+                Expanded(child: _buildMainColumn(cardBg, sColor, textGreen, textRed, isBearish)),
                 const SizedBox(width: 10),
                 Expanded(child: _buildColumn(title: "核心對沖", icon: Icons.layers, accent: Colors.blueAccent, bg: cardBg, children: [
                   MetricCard(label: isBearish ? "對沖淨空壓" : "對沖淨多壓", value: _formatVolume(cNet), delta: _lastCombinedNetDelta, color: sColor, cardBg: Colors.white.withAlpha(5), highlightValue: true, useColorBorder: true),
@@ -324,8 +326,51 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       ],
     ),
   );
-
-  Widget _buildRangeSelector() {
+  Widget _buildMainColumn(Color bg, Color sColor, Color green, Color red, bool isBearish) {
+    if (_showSmartMoney) {
+      // Smart Money Mode
+      final pNet = isBearish ? ((_currentData!.smartShortVolNum ?? 0) - (_currentData!.smartLongVolNum ?? 0)) : ((_currentData!.smartLongVolNum ?? 0) - (_currentData!.smartShortVolNum ?? 0));
+      return _buildColumn(
+        title: "聰明錢流向",
+        icon: Icons.psychology,
+        accent: const Color(0xFFFFD700),
+        bg: bg,
+        onTitleTap: () => setState(() => _showSmartMoney = !_showSmartMoney),
+        children: [
+          MetricCard(label: isBearish ? "聰明錢淨空" : "聰明錢淨多", value: _formatVolume(pNet), delta: _lastSmartNetDelta, color: sColor, cardBg: Colors.white.withAlpha(5), highlightValue: true, useColorBorder: true),
+          const SizedBox(height: 8),
+          MetricCard(label: "聰明錢多單", value: _currentData!.smartLongVolDisplay ?? "-", delta: _lastSmartLongDelta, color: green, cardBg: Colors.white.withAlpha(2), isSmall: true),
+          const SizedBox(height: 6),
+          MetricCard(label: "聰明錢空單", value: _currentData!.smartShortVolDisplay ?? "-", delta: _lastSmartShortDelta, color: red, cardBg: Colors.white.withAlpha(2), isSmall: true),
+          const SizedBox(height: 10),
+          TugOfWarBar(label: "持倉比例", leftVal: _currentData!.smartLongVolNum ?? 0, rightVal: _currentData!.smartShortVolNum ?? 0, leftColor: green, rightColor: red, leftLabel: "多", rightLabel: "空", cardBg: Colors.transparent),
+          const SizedBox(height: 10),
+          Expanded(child: _buildChart("聰明錢流向", _historyMap['printer']!, isSmart: true)),
+        ],
+      );
+    } else {
+      // Printer Mode
+      final pNet = isBearish ? (_currentData!.shortVolNum - _currentData!.longVolNum) : (_currentData!.longVolNum - _currentData!.shortVolNum);
+      return _buildColumn(
+        title: "全體印鈔機",
+        icon: Icons.public,
+        accent: Colors.white,
+        bg: bg,
+        onTitleTap: () => setState(() => _showSmartMoney = !_showSmartMoney),
+        children: [
+          MetricCard(label: isBearish ? "全體淨空壓" : "全體淨多壓", value: _formatVolume(pNet), delta: _lastPrinterNetDelta, color: sColor, cardBg: Colors.white.withAlpha(5), highlightValue: true, useColorBorder: true),
+          const SizedBox(height: 8),
+          MetricCard(label: "全體總多單", value: _currentData!.longVolDisplay, delta: _lastPrinterLongDelta, color: green, cardBg: Colors.white.withAlpha(2), isSmall: true),
+          const SizedBox(height: 6),
+          MetricCard(label: "全體總空單", value: _currentData!.shortVolDisplay, delta: _lastPrinterShortDelta, color: red, cardBg: Colors.white.withAlpha(2), isSmall: true),
+          const SizedBox(height: 10),
+          TugOfWarBar(label: "持倉比例", leftVal: _currentData!.longVolNum, rightVal: _currentData!.shortVolNum, leftColor: green, rightColor: red, leftLabel: "多", rightLabel: "空", cardBg: Colors.transparent),
+          const SizedBox(height: 10),
+          Expanded(child: _buildChart("全體資金流向", _historyMap['printer']!, isPrinter: true)),
+        ],
+      );
+    }
+  }
     final ranges = ["1h", "2h", "3h", "4h", "5h", "1d", "2d", "3d", "4d", "5d", "1w", "1m", "3m", "1y"];
     return Container(
       padding: const EdgeInsets.all(2),
@@ -346,7 +391,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildChart(String title, List<HyperData> data, {bool isPrinter = false, bool isCombined = false, bool isBTC = false, bool isETH = false}) {
+  Widget _buildChart(String title, List<HyperData> data, {bool isPrinter = false, bool isCombined = false, bool isBTC = false, bool isETH = false, bool isSmart = false}) {
     if (_isLoadingHistory) return const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)));
     return TrendChart(
       title: title,
@@ -355,7 +400,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       isPrinter: isPrinter,
       isCombined: isCombined,
       isBTC: isBTC,
-      isETH: isETH
+      isETH: isETH,
+      isSmart: isSmart,
     );
   }
 
@@ -376,11 +422,31 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     ]);
   }
 
-  Widget _buildColumn({required String title, required IconData icon, required Color accent, required Color bg, required List<Widget> children}) => Container(
+  Widget _buildColumn({required String title, required IconData icon, required Color accent, required Color bg, required List<Widget> children, VoidCallback? onTitleTap}) => Container(
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white10)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(children: [Icon(icon, color: accent, size: 14), const SizedBox(width: 8), Text(title, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900))]),
+      GestureDetector(
+        onTap: onTitleTap,
+        behavior: HitTestBehavior.opaque,
+        child: Row(children: [
+          Icon(icon, color: accent, size: 14),
+          const SizedBox(width: 8),
+          Text(title, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
+          if (onTitleTap != null) ...[
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white10,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: const Text("切換", style: TextStyle(color: Colors.white54, fontSize: 9)),
+            ),
+          ],
+        ]),
+      ),
       const Divider(height: 16, color: Colors.white10),
       ...children,
     ]),

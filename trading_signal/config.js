@@ -15,6 +15,7 @@ const CONFIG = {
   OKX_DEMO: process.env.OKX_DEMO === 'true',
 
   // Trading Parameters
+  SIGNAL_SOURCE: process.env.SIGNAL_SOURCE || 'printer', // Options: 'printer' | 'smart'
   INST_ID: process.env.INST_ID || 'BTC-USDT-SWAP',
   LEVERAGE: parseInt(process.env.LEVERAGE || '10'),
   RATIO: parseFloat(process.env.RATIO || '0.00001'),  // 1/100,000

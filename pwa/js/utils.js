@@ -71,6 +71,13 @@ export function extractData(rawData, assetType) {
         // Legacy fallback if root object uses _num suffix
         if (long === 0) long = toNum(rawData.long_vol_num ?? rawData.longVolNum);
         if (short === 0) short = toNum(rawData.short_vol_num ?? rawData.shortVolNum);
+    } else if (assetType === 'smart') {
+        long = toNum(rawData.smart_long_vol_num ?? rawData.smartLongVolNum);
+        short = toNum(rawData.smart_short_vol_num ?? rawData.smartShortVolNum);
+        if (long === 0 && short === 0 && rawData.smart) {
+             long = getVol(rawData.smart, 'long');
+             short = getVol(rawData.smart, 'short');
+        }
     } else if (assetType === 'hedge') {
         const bLong = getVol(rawData.btc, 'long');
         const bShort = getVol(rawData.btc, 'short');

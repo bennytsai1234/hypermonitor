@@ -1,13 +1,29 @@
+class HyperFormatter {
+  static String format(double val) {
+    if (val == 0) return "--";
+    final abs = val.abs();
+    if (abs >= 100000000) {
+      return "${(val / 100000000).toStringAsFixed(2)}億";
+    } else if (abs >= 10000) {
+      return "${(val / 10000).toStringAsFixed(0)}萬";
+    }
+    return val.toStringAsFixed(0);
+  }
+
+  // Format with explicit sign (+) for positive values
+  static String formatNet(double val) {
+    if (val == 0) return "--";
+    final prefix = val > 0 ? "+" : "";
+    return "$prefix${format(val)}";
+  }
+}
+
 class CoinPosition {
   final String symbol;
   final double longVol;
   final double shortVol;
   final double totalVol;
-  final double netVol; 
-  final String longDisplay;
-  final String shortDisplay;
-  final String totalDisplay;
-  final String netDisplay;
+  final double netVol;
 
   CoinPosition({
     required this.symbol,
@@ -15,11 +31,12 @@ class CoinPosition {
     required this.shortVol,
     required this.totalVol,
     required this.netVol,
-    required this.longDisplay,
-    required this.shortDisplay,
-    required this.totalDisplay,
-    required this.netDisplay,
   });
+
+  String get longDisplay => HyperFormatter.format(longVol);
+  String get shortDisplay => HyperFormatter.format(shortVol);
+  String get totalDisplay => HyperFormatter.format(totalVol);
+  String get netDisplay => HyperFormatter.formatNet(netVol);
 
   Map<String, dynamic> toJson() => {
     'symbol': symbol,
@@ -27,10 +44,6 @@ class CoinPosition {
     'shortVol': shortVol,
     'totalVol': totalVol,
     'netVol': netVol,
-    'longDisplay': longDisplay,
-    'shortDisplay': shortDisplay,
-    'totalDisplay': totalDisplay,
-    'netDisplay': netDisplay,
   };
 
   factory CoinPosition.fromJson(Map<String, dynamic> j) => CoinPosition(
@@ -39,10 +52,6 @@ class CoinPosition {
     shortVol: (j['short_vol'] ?? j['shortVol'] ?? 0.0).toDouble(),
     totalVol: (j['total_vol'] ?? j['totalVol'] ?? 0.0).toDouble(),
     netVol: (j['net_vol'] ?? j['netVol'] ?? 0.0).toDouble(),
-    longDisplay: j['long_display'] ?? j['longDisplay'] ?? "",
-    shortDisplay: j['short_display'] ?? j['shortDisplay'] ?? "",
-    totalDisplay: j['total_display'] ?? j['totalDisplay'] ?? "",
-    netDisplay: j['net_display'] ?? j['netDisplay'] ?? "",
   );
 }
 
@@ -68,16 +77,24 @@ extension TaiwanTime on DateTime {
 
 class HyperData {
   final DateTime timestamp;
+  // Super Money Printer
   final int walletCount;
   final int profitCount;
   final int lossCount;
-  final String longVolDisplay;
-  final String shortVolDisplay;
-  final String netVolDisplay;
   final String sentiment;
   final double longVolNum;
   final double shortVolNum;
   final double netVolNum;
+
+  // Smart Money ($10w - $100w)
+  final int? smartWalletCount;
+  final int? smartProfitCount;
+  final int? smartLossCount;
+  final String? smartSentiment;
+  final double? smartLongVolNum;
+  final double? smartShortVolNum;
+  final double? smartNetVolNum;
+
   final CoinPosition? btc;
   final CoinPosition? eth;
 
@@ -86,38 +103,59 @@ class HyperData {
     required this.walletCount,
     required this.profitCount,
     required this.lossCount,
-    required this.longVolDisplay,
-    required this.shortVolDisplay,
-    required this.netVolDisplay,
     required this.sentiment,
     required this.longVolNum,
     required this.shortVolNum,
     required this.netVolNum,
+    this.smartWalletCount,
+    this.smartProfitCount,
+    this.smartLossCount,
+    this.smartSentiment,
+    this.smartLongVolNum,
+    this.smartShortVolNum,
+    this.smartNetVolNum,
     this.btc,
     this.eth,
   });
 
+  String get longVolDisplay => HyperFormatter.format(longVolNum);
+  String get shortVolDisplay => HyperFormatter.format(shortVolNum);
+  String get netVolDisplay => HyperFormatter.formatNet(netVolNum);
+
+  String? get smartLongVolDisplay => smartLongVolNum != null ? HyperFormatter.format(smartLongVolNum!) : null;
+  String? get smartShortVolDisplay => smartShortVolNum != null ? HyperFormatter.format(smartShortVolNum!) : null;
+  String? get smartNetVolDisplay => smartNetVolNum != null ? HyperFormatter.formatNet(smartNetVolNum!) : null;
+
   factory HyperData.fromJson(Map<String, dynamic> j) {
     String ts = j['timestamp'] ?? DateTime.now().toIso8601String();
     if (!ts.contains('T')) ts = ts.replaceFirst(' ', 'T');
-    
-    // 如果伺服器傳回的字串沒有時區資訊，強制加上 Z (UTC)，避免被誤判為本地時間
+
     if (!ts.endsWith('Z') && !ts.contains(RegExp(r'[+-]\d{2}:?\d{2}'))) {
       ts += 'Z';
     }
+
+    // Extract Smart Money data if present (either from j['smart'] or prefix fields)
+    final s = j['smart'] ?? {};
 
     return HyperData(
       timestamp: DateTime.parse(ts).toTaiwanTime(),
       walletCount: (j['wallet_count'] ?? j['walletCount'] ?? 0).toInt(),
       profitCount: (j['profit_count'] ?? j['profitCount'] ?? 0).toInt(),
       lossCount: (j['loss_count'] ?? j['lossCount'] ?? 0).toInt(),
-      longVolDisplay: j['long_display'] ?? j['longVolDisplay'] ?? "",
-      shortVolDisplay: j['short_display'] ?? j['shortVolDisplay'] ?? "",
-      netVolDisplay: j['net_display'] ?? j['netVolDisplay'] ?? "",
       sentiment: j['sentiment'] ?? "",
       longVolNum: (j['long_vol_num'] ?? j['longVolNum'] ?? 0.0).toDouble(),
       shortVolNum: (j['short_vol_num'] ?? j['shortVolNum'] ?? 0.0).toDouble(),
       netVolNum: (j['net_vol_num'] ?? j['netVolNum'] ?? 0.0).toDouble(),
+
+      // Smart Money mapping
+      smartWalletCount: (s['walletCount'] ?? j['smart_wallet_count'] ?? 0).toInt(),
+      smartProfitCount: (s['profitCount'] ?? j['smart_profit_count'] ?? 0).toInt(),
+      smartLossCount: (s['lossCount'] ?? j['smart_loss_count'] ?? 0).toInt(),
+      smartSentiment: s['sentiment'] ?? j['smart_sentiment'] ?? "",
+      smartLongVolNum: (s['longVolNum'] ?? j['smart_long_vol_num'] ?? 0.0).toDouble(),
+      smartShortVolNum: (s['short_vol_num'] ?? j['smart_short_vol_num'] ?? 0.0).toDouble(),
+      smartNetVolNum: (s['net_vol_num'] ?? j['smart_net_vol_num'] ?? 0.0).toDouble(),
+
       btc: j['btc'] != null ? CoinPosition.fromJson(j['btc']) : null,
       eth: j['eth'] != null ? CoinPosition.fromJson(j['eth']) : null,
     );

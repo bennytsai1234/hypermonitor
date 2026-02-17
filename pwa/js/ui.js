@@ -40,7 +40,7 @@ export function initUi() {
 
 // State for alerts
 const lastDeltas = {
-  all: { net: null }, hedge: { net: null },
+  all: { net: null }, smart: { net: null }, hedge: { net: null },
   btc: { net: null }, eth: { net: null }
 };
 
@@ -216,7 +216,7 @@ export function calculateAllDeltas(oldData, newData) {
         lastDeltas[type].net = `${sign}$${fmt}`;
     };
 
-    ['all', 'hedge', 'btc', 'eth'].forEach(processAsset);
+    ['all', 'smart', 'hedge', 'btc', 'eth'].forEach(processAsset);
 
     if (hasSignificant) {
       triggerAlert(shouldPlayAudio);
@@ -249,7 +249,7 @@ export function renderUI(allData, currentAsset, renderChartCallback) {
     dom.sentimentBadge.className = sClass;
 
     // 2. Net Card
-    const assetNames = { all: '全體', hedge: '核心', btc: 'BTC', eth: 'ETH' };
+    const assetNames = { all: '全體', smart: '聰明錢', hedge: '核心', btc: 'BTC', eth: 'ETH' };
     const name = assetNames[currentAsset];
     const typeLabel = bearish ? '淨空壓' : '淨多壓';
     dom.netLabel.textContent = `${name}${typeLabel}`;

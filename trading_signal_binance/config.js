@@ -18,6 +18,7 @@ module.exports = {
   BINANCE_TESTNET: process.env.BINANCE_TESTNET === 'true',
 
   // Trading parameters
+  SIGNAL_SOURCE: process.env.SIGNAL_SOURCE || 'printer', // Options: 'printer' | 'smart'
   INST_ID: process.env.INST_ID || 'BTCUSDT',
   LEVERAGE: parseInt(process.env.LEVERAGE || '20'),
   // Margin ratio: delta × RATIO = margin amount
