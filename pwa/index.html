@@ -44,7 +44,31 @@
         <div class="sk-card sk-chart"></div>
       </div>
     </div>
+    <div id="loading-fallback" class="hidden" style="position:fixed;bottom:40px;left:0;right:0;text-align:center;color:#888;font-size:12px;padding:0 20px;">
+      載入時間過長？請檢查網路連線或更新瀏覽器。<br>
+      <span style="font-size:10px;opacity:0.6;">(推薦使用 Chrome, Edge 或 Safari)</span>
+    </div>
   </div>
+
+  <noscript>
+    <div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;z-index:9999;">
+      <div>
+        <h1 style="color:#00FF9D;">需要啟用 JavaScript</h1>
+        <p>請在瀏覽器設定中啟用 JavaScript 以使用監控面板。</p>
+      </div>
+    </div>
+  </noscript>
+
+  <script>
+    setTimeout(function() {
+      var app = document.getElementById('app');
+      var fallback = document.getElementById('loading-fallback');
+      if (app && app.classList.contains('hidden') && fallback) {
+        fallback.classList.remove('hidden');
+      }
+    }, 5000);
+  </script>
+
 
   <!-- Main App -->
   <div id="app" class="hidden">

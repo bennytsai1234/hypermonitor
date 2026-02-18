@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hyper-monitor-v31-smart-money';
+const CACHE_NAME = 'hyper-monitor-v32-smart-money';
 const ASSETS = [
   '/',
   '/index.html',
