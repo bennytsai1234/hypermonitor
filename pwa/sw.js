@@ -48,8 +48,10 @@ self.addEventListener('fetch', (e) => {
         if (res.ok) cache.put(e.request, res.clone());
         return res;
       }).catch(() => null);
-      // Return cached immediately, fallback to network
-      return cached || fetchPromise;
+
+      // Return cached immediately, fallback to network fetch if not in cache
+      return cached || fetchPromise || fetch(e.request);
     })
   );
 });
+
