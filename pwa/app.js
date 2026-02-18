@@ -70,7 +70,8 @@ function initListeners() {
   // Asset Switcher
   dom.assetBtns.forEach(btn => {
       btn.addEventListener('click', () => {
-          document.querySelector('.asset-btn.active')?.classList.remove('active');
+          const activeBtn = document.querySelector('.asset-btn.active');
+          if (activeBtn) activeBtn.classList.remove('active');
           btn.classList.add('active');
           currentAsset = btn.dataset.asset;
           render();

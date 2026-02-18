@@ -60,9 +60,10 @@ export async function fetchHistory(range) {
       const e = eth[i];
       hedge.push({
         timestamp: b.timestamp,
-        long_vol_num: (b.long_vol ?? 0) + (e.long_vol ?? 0),
-        short_vol_num: (b.short_vol ?? 0) + (e.short_vol ?? 0),
+        long_vol_num: (b.long_vol !== undefined && b.long_vol !== null ? b.long_vol : 0) + (e.long_vol !== undefined && e.long_vol !== null ? e.long_vol : 0),
+        short_vol_num: (b.short_vol !== undefined && b.short_vol !== null ? b.short_vol : 0) + (e.short_vol !== undefined && e.short_vol !== null ? e.short_vol : 0),
       });
+
     }
 
     const result = { printer: data.printer || [], smart: data.printer || [], btc, eth, hedge };

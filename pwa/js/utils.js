@@ -62,18 +62,19 @@ export function extractData(rawData, assetType) {
     // Helper to safely get volume (handles camelCase and snake_case)
     const getVol = (obj, type) => {
         if (!obj) return 0;
-        return toNum(obj[`${type}Vol`] ?? obj[`${type}_vol`] ?? 0);
+        const val = obj[type + 'Vol'] !== undefined ? obj[type + 'Vol'] : (obj[type + '_vol'] !== undefined ? obj[type + '_vol'] : 0);
+        return toNum(val);
     };
 
     if (assetType === 'all') {
         long = getVol(rawData, 'long');
         short = getVol(rawData, 'short');
         // Legacy fallback if root object uses _num suffix
-        if (long === 0) long = toNum(rawData.long_vol_num ?? rawData.longVolNum);
-        if (short === 0) short = toNum(rawData.short_vol_num ?? rawData.shortVolNum);
+        if (long === 0) long = toNum(rawData.long_vol_num !== undefined ? rawData.long_vol_num : rawData.longVolNum);
+        if (short === 0) short = toNum(rawData.short_vol_num !== undefined ? rawData.short_vol_num : rawData.shortVolNum);
     } else if (assetType === 'smart') {
-        long = toNum(rawData.smart_long_vol_num ?? rawData.smartLongVolNum);
-        short = toNum(rawData.smart_short_vol_num ?? rawData.smartShortVolNum);
+        long = toNum(rawData.smart_long_vol_num !== undefined ? rawData.smart_long_vol_num : rawData.smartLongVolNum);
+        short = toNum(rawData.smart_short_vol_num !== undefined ? rawData.smart_short_vol_num : rawData.smartShortVolNum);
         if (long === 0 && short === 0 && rawData.smart) {
              long = getVol(rawData.smart, 'long');
              short = getVol(rawData.smart, 'short');
