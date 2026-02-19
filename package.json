@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Headless scraper for Hyperliquid data monitoring via CoinGlass",
   "main": "scripts/headless_scraper.js",
+  "bin": "scripts/headless_scraper.js",
   "scripts": {
     "start": "node scripts/headless_scraper.js",
     "build": "pkg . --out-path dist"
