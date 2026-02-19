@@ -232,7 +232,7 @@ async function startService() {
     console.log('🚀 Starting Headless Scraper Service (FORCE RELOAD MODE)...');
 
     const browser = await puppeteer.launch({
-        headless: "new",
+        headless: true,
         executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
