@@ -111,7 +111,7 @@ function isDifferent(oldData, newData) {
 // --- Helper: Data Cleaning (Matches Dart Logic) ---
 function parseValue(raw) {
     if (!raw) return 0.0;
-    let clean = raw.toString().replace(/[\$¥,]/g, '').trim();
+    let clean = raw.toString().replace(/[\u0024\u00A5,]/g, '').trim();
     let multiplier = 1.0;
 
     if (clean.includes('億') || clean.includes('B') || clean.includes('亿')) {
