@@ -11,7 +11,7 @@
 const Service = require('node-windows').Service;
 const path = require('path');
 
-const scriptPath = path.resolve(__dirname, 'headless_scraper.js');
+const scriptPath = path.resolve(__dirname, '../src/headless_scraper.js');
 
 const svc = new Service({
     name: 'HyperliquidScraper',

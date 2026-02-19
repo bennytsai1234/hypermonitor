@@ -2,10 +2,10 @@
   "name": "hyperliquid-scraper",
   "version": "1.0.0",
   "description": "Headless scraper for Hyperliquid data monitoring via CoinGlass",
-  "main": "scripts/headless_scraper.js",
-  "bin": "scripts/headless_scraper.js",
+  "main": "src/headless_scraper.js",
+  "bin": "src/headless_scraper.js",
   "scripts": {
-    "start": "node scripts/headless_scraper.js",
+    "start": "node src/headless_scraper.js",
     "build": "pkg . --out-path dist"
   },
   "engines": {
@@ -15,7 +15,7 @@
     "targets": ["node18-win-x64"],
     "assets": [],
     "outputPath": "dist",
-    "scripts": "scripts/headless_scraper.js"
+    "scripts": "src/headless_scraper.js"
   },
   "dependencies": {
     "puppeteer": "^24.3.0"
