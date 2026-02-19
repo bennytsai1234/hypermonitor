@@ -38,17 +38,18 @@ async function loadHistory() {
 }
 
 async function refreshAll() {
-  // Parallel Fetching: Start both requests at the same time
+  // 1. Fetch Latest Data ASAP (Critical for UI)
   const latestPromise = pollLatest();
-  let historyPromise = Promise.resolve();
+
+  // 2. Fetch History in background (Secondary)
   // Only refresh history if enough time has passed AND range is short (1h, 4h)
-  // Long ranges (24h, 7d) do not auto-refresh to save D1 Read limits
   const isShortRange = ['1h', '4h'].includes(selectedRange);
   if (isShortRange && (Date.now() - lastHistoryLoad > HISTORY_REFRESH_INTERVAL)) {
-    historyPromise = loadHistory().catch(console.warn);
+    loadHistory().catch(console.warn);
   }
-  // Wait for BOTH to complete (ensures chart has data on first load)
-  await Promise.all([latestPromise, historyPromise]);
+
+  // 3. Await ONLY latest data for "interactive" state
+  await latestPromise;
 }
 
 function render() {

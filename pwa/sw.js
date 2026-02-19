@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hyper-monitor-v32-smart-money';
+const CACHE_NAME = 'hyper-monitor-v33-optimized';
 const ASSETS = [
   '/',
   '/index.html',
@@ -12,7 +12,9 @@ const ASSETS = [
   '/manifest.json',
   '/alert.mp3',
   '/icons/icon.svg',
-  '/timer.worker.js'
+  '/timer.worker.js',
+  '/js/vendor/chart.umd.min.js',
+  '/js/vendor/chartjs-adapter-date-fns.bundle.min.js'
 ];
 
 // Install: cache shell assets
