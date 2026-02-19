@@ -4,13 +4,16 @@ const puppeteer = require('puppeteer');
 const CONFIG = {
     intervalMs: 10000, // Scrape every 10 seconds
     heartbeatMs: 60000, // Force upload every 60 seconds (Heartbeat)
+    restartDelayMs: 5000, // Wait 5s before restarting after a crash
+    // Chrome path: read from environment variable first, fall back to default
+    chromePath: process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     urls: {
         printer: 'https://www.coinglass.com/zh/hl',
         range: 'https://www.coinglass.com/zh/hl/range/9' // Adjust ID if needed
     },
     endpoints: {
-        printer: 'https://hyper-monitor-worker.bennytsai0711.workers.dev/update-printer',
-        range: 'https://hyper-monitor-worker.bennytsai0711.workers.dev/update-range'
+        printer: process.env.PRINTER_ENDPOINT || 'https://hyper-monitor-worker.bennytsai0711.workers.dev/update-printer',
+        range:   process.env.RANGE_ENDPOINT   || 'https://hyper-monitor-worker.bennytsai0711.workers.dev/update-range'
     }
 };
 
@@ -20,11 +23,15 @@ let state = {
     range: { lastData: null, lastUpload: 0 }
 };
 
+// --- Global browser reference (for graceful shutdown) ---
+let activeBrowser = null;
+let isShuttingDown = false;
+
 // --- Scraping Logic (Optimized) ---
 const SCRIPTS = {
     printer: `
     (function() {
-      const getRow = (key) => document.querySelector(\`tr[data-row-key="\${key}"]\`);
+      const getRow = (key) => document.querySelector(\`tr[data-row-key="${key}"]\`);
 
       const parseRow = (row) => {
         if (!row) return null;
@@ -143,9 +150,8 @@ async function uploadData(type, data) {
         const p = data;
         let s = data.smart || {};
 
-        // --- [NEW] Global Data Protection (Sanity Checks) ---
+        // --- Global Data Protection (Sanity Checks) ---
         // If the main printer data is suspiciously zero, do NOT upload.
-        // This prevents the PWA from seeing 0 and triggering false alarms.
         const printerWallet = parseIntClean(p.walletCount);
         const printerLong = parseValue(p.longVol);
 
@@ -155,8 +161,6 @@ async function uploadData(type, data) {
         }
 
         // [Smart Money Fallback]
-        // If current smart data is missing or empty (walletCount == 0),
-        // try to reuse the last known good smart data from state.
         const smartWallet = parseIntClean(s.walletCount);
         if (smartWallet === 0 && currentState.lastData && currentState.lastData.smart) {
              const lastSmart = currentState.lastData.smart;
@@ -229,27 +233,60 @@ async function uploadData(type, data) {
 
 // --- Main Engine ---
 async function startService() {
-    console.log('🚀 Starting Headless Scraper Service (FORCE RELOAD MODE)...');
+    if (isShuttingDown) return;
 
-    const browser = await puppeteer.launch({
-        headless: true,
-        executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    console.log('🚀 Starting Headless Scraper Service...');
+    console.log(`   Chrome: ${CONFIG.chromePath}`);
+    console.log(`   Printer Endpoint: ${CONFIG.endpoints.printer}`);
+    console.log(`   Range Endpoint:   ${CONFIG.endpoints.range}`);
+
+    let browser;
+    try {
+        browser = await puppeteer.launch({
+            headless: true,
+            executablePath: CONFIG.chromePath,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        activeBrowser = browser;
+    } catch (e) {
+        console.error(`💥 Failed to launch browser: ${e.message}`);
+        scheduleRestart();
+        return;
+    }
+
+    // Auto-restart when browser disconnects unexpectedly
+    browser.on('disconnected', () => {
+        if (!isShuttingDown) {
+            console.warn(`⚠️  Browser disconnected unexpectedly. Restarting in ${CONFIG.restartDelayMs / 1000}s...`);
+            activeBrowser = null;
+            scheduleRestart();
+        }
     });
 
-    const pagePrinter = await browser.newPage();
-    const pageRange = await browser.newPage();
+    let pagePrinter, pageRange;
+    try {
+        pagePrinter = await browser.newPage();
+        pageRange = await browser.newPage();
 
-    await pagePrinter.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-    await pageRange.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+        await pagePrinter.setUserAgent(ua);
+        await pageRange.setUserAgent(ua);
+    } catch (e) {
+        console.error(`💥 Failed to open pages: ${e.message}`);
+        await tryCloseBrowser(browser);
+        scheduleRestart();
+        return;
+    }
 
     async function runIteration() {
+        if (isShuttingDown) return;
+
         const time = new Date().toLocaleTimeString();
 
         // 1. Process Printer
         try {
             await pagePrinter.goto(CONFIG.urls.printer, { waitUntil: 'networkidle2', timeout: 60000 });
-            await new Promise(r => setTimeout(r, 6000)); // Still need to wait 6s for the values to pop up
+            await new Promise(r => setTimeout(r, 6000));
 
             const rawPrinter = await pagePrinter.evaluate(SCRIPTS.printer);
             if (rawPrinter) {
@@ -274,11 +311,57 @@ async function startService() {
             console.error(`[${time}] Range Error:`, e.message);
         }
 
-        setTimeout(runIteration, 100);
+        if (!isShuttingDown) {
+            setTimeout(runIteration, 100);
+        }
     }
 
     // Start the recursive loop
     runIteration();
 }
 
+// --- Restart Scheduler ---
+function scheduleRestart() {
+    if (isShuttingDown) return;
+    console.log(`🔄 Scheduling restart in ${CONFIG.restartDelayMs / 1000} seconds...`);
+    setTimeout(startService, CONFIG.restartDelayMs);
+}
+
+// --- Graceful Shutdown ---
+async function tryCloseBrowser(browser) {
+    try {
+        if (browser && browser.isConnected()) {
+            await browser.close();
+        }
+    } catch (_) {
+        // Ignore errors during close
+    }
+}
+
+async function shutdown(signal) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    console.log(`\n🛑 Received ${signal}. Shutting down gracefully...`);
+    await tryCloseBrowser(activeBrowser);
+    console.log('✅ Browser closed. Exiting.');
+    process.exit(0);
+}
+
+process.on('SIGINT',  () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+// --- Global error handler (prevent crashes) ---
+process.on('uncaughtException', (err) => {
+    console.error('💥 Uncaught Exception:', err.message);
+    if (!isShuttingDown) {
+        scheduleRestart();
+    }
+});
+
+process.on('unhandledRejection', (reason) => {
+    console.error('💥 Unhandled Rejection:', reason);
+    // Do NOT restart on every unhandled rejection; the reconnect handler will catch browser crashes
+});
+
+// --- Entry Point ---
 startService();
