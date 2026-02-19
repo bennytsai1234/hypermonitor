@@ -1,3 +1,6 @@
+// Suppress Node 18 ExperimentalWarning for the built-in Fetch API
+process.on('warning', (w) => { if (w.name === 'ExperimentalWarning' && w.message.includes('Fetch')) return; console.warn(w); });
+
 const puppeteer = require('puppeteer');
 
 // --- Configuration ---
