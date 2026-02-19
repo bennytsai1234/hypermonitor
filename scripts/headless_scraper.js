@@ -29,77 +29,63 @@ let isShuttingDown = false;
 
 // --- Scraping Logic (Optimized) ---
 const SCRIPTS = {
-    printer: `
-    (function() {
-      const getRow = (key) => document.querySelector(\`tr[data-row-key="${key}"]\`);
-
-      const parseRow = (row) => {
-        if (!row) return null;
-        const cells = row.querySelectorAll('td');
-        if (cells.length < 8) return null;
-
-        const getLines = (idx) => cells[idx] ? cells[idx].innerText.trim().split('\\n') : [];
-        const clean = (s) => s ? s.trim() : "0";
-
-        const volLines = getLines(4);
-        const plLines = getLines(6);
-        const sentBtn = cells[7] ? cells[7].querySelector('button') : null;
-
-        return {
-          walletCount: clean(cells[2]?.innerText),
-          longVol: volLines[0] || "0",
-          shortVol: volLines[1] || "0",
-          netVol: clean(cells[5]?.innerText),
-          profitCount: plLines[0] || "0",
-          lossCount: plLines[1] || "0",
-          sentiment: sentBtn ? sentBtn.innerText.trim() : ""
-        };
-      };
-
-      // Force scroll just in case
-      window.scrollTo(0, 500);
-
-      const printerRow = getRow('Money_Printer');
-      const smartRow = getRow('Smart_Money');
-
-      if (!printerRow && !smartRow) return null;
-
-      const printerData = parseRow(printerRow);
-      const smartData = parseRow(smartRow);
-
-      return JSON.stringify({
-        found: true,
-        ...(printerData || {}),
-        smart: smartData
-      });
-    })();
-    `,
-    range: `
-    (function() {
-      const allDivs = document.querySelectorAll('div[class*="cg-style-g99dwx"]');
-      let data = { btc: null, eth: null };
-      for (const row of allDivs) {
-        const text = row.innerText;
-        let symbol = "";
-        if (text.includes('BTC') && !text.includes('WBTC')) symbol = "btc";
-        else if (text.includes('ETH') && !text.includes('WETH')) symbol = "eth";
-
-        if (symbol) {
-          const amounts = row.querySelectorAll('div[class*="cg-style-3a6fvj"], div[class*="cg-style-zuy5by"], div[class*="Number"]');
-          if (amounts.length >= 2) {
-            data[symbol] = {
-              symbol: symbol.toUpperCase(),
-              long: amounts[0].innerText.trim(),
-              short: amounts[1].innerText.trim(),
-              total: amounts[amounts.length - 1].innerText.trim()
-            };
-          }
-        }
-      }
-      return JSON.stringify(data);
-    })();
-    `
+    printer: [
+        '(function() {',
+        '  const getRow = (key) => document.querySelector(\'tr[data-row-key="\' + key + \'"]\');',
+        '  const parseRow = (row) => {',
+        '    if (!row) return null;',
+        '    const cells = row.querySelectorAll(\'td\');',
+        '    if (cells.length < 8) return null;',
+        '    const getLines = (idx) => cells[idx] ? cells[idx].innerText.trim().split(\'\\n\') : [];',
+        '    const clean = (s) => s ? s.trim() : "0";',
+        '    const volLines = getLines(4);',
+        '    const plLines = getLines(6);',
+        '    const sentBtn = cells[7] ? cells[7].querySelector(\'button\') : null;',
+        '    return {',
+        '      walletCount: clean(cells[2] && cells[2].innerText),',
+        '      longVol: volLines[0] || "0",',
+        '      shortVol: volLines[1] || "0",',
+        '      netVol: clean(cells[5] && cells[5].innerText),',
+        '      profitCount: plLines[0] || "0",',
+        '      lossCount: plLines[1] || "0",',
+        '      sentiment: sentBtn ? sentBtn.innerText.trim() : ""',
+        '    };',
+        '  };',
+        '  window.scrollTo(0, 500);',
+        '  const printerRow = getRow("Money_Printer");',
+        '  const smartRow = getRow("Smart_Money");',
+        '  if (!printerRow && !smartRow) return null;',
+        '  const printerData = parseRow(printerRow);',
+        '  const smartData = parseRow(smartRow);',
+        '  return JSON.stringify({ found: true, ...(printerData || {}), smart: smartData });',
+        '})();'
+    ].join('\n'),
+    range: [
+        '(function() {',
+        '  const allDivs = document.querySelectorAll(\'div[class*="cg-style-g99dwx"]\');',
+        '  let data = { btc: null, eth: null };',
+        '  for (const row of allDivs) {',
+        '    const text = row.innerText;',
+        '    let symbol = "";',
+        '    if (text.includes("BTC") && !text.includes("WBTC")) symbol = "btc";',
+        '    else if (text.includes("ETH") && !text.includes("WETH")) symbol = "eth";',
+        '    if (symbol) {',
+        '      const amounts = row.querySelectorAll(\'div[class*="cg-style-3a6fvj"], div[class*="cg-style-zuy5by"], div[class*="Number"]\');',
+        '      if (amounts.length >= 2) {',
+        '        data[symbol] = {',
+        '          symbol: symbol.toUpperCase(),',
+        '          long: amounts[0].innerText.trim(),',
+        '          short: amounts[1].innerText.trim(),',
+        '          total: amounts[amounts.length - 1].innerText.trim()',
+        '        };',
+        '      }',
+        '    }',
+        '  }',
+        '  return JSON.stringify(data);',
+        '})();'
+    ].join('\n')
 };
+
 
 // --- Comparison Logic ---
 function isDifferent(oldData, newData) {
