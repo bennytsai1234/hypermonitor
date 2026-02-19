@@ -233,6 +233,7 @@ async function startService() {
 
     const browser = await puppeteer.launch({
         headless: "new",
+        executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
