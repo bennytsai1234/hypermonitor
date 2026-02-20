@@ -2,7 +2,7 @@
 echo [DEPLOY] Starting deployment to Cloudflare Pages...
 echo.
 
-cd /d "%~dp0\.."
+cd /d "%~dp0..\.."
 echo [INFO] Current directory: %CD%
 
 REM Check if wrangler is installed
