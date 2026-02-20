@@ -1,12 +1,14 @@
 @echo off
+setlocal
 chcp 65001 >nul
-echo ╔══════════════════════════════════════════════════════╗
-echo ║  Hyperliquid Scraper - Install Windows Service      ║
-echo ║  ⚠️  REQUIRES ADMINISTRATOR PRIVILEGES              ║
-echo ╚══════════════════════════════════════════════════════╝
+
+echo =========================================================
+echo   Hyperliquid Scraper - Windows Service Installer
+echo   Requires Administrator Privileges
+echo =========================================================
 echo.
 
-:: Auto-elevate to Administrator
+:: 1. Auto-elevate to Administrator
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo [INFO] Requesting Administrator privileges...
@@ -14,26 +16,39 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-cd /d "%~dp0..\.."
-
-echo [1/2] Installing node-windows dependency...
-call npm install node-windows
+:: 2. Set strict working directory (Root of project)
+set "PROJECT_ROOT=%~dp0..\.."
+cd /d "%PROJECT_ROOT%"
 if %errorlevel% neq 0 (
-    echo [ERROR] Failed to install node-windows. Aborting.
+    echo [ERROR] Failed to navigate to project root: %PROJECT_ROOT%
     pause
     exit /b 1
 )
 
+:: 3. Install dependencies quietly (only show errors)
+echo [1/2] Installing dependencies (node-windows)...
+call npm install node-windows --silent
+if %errorlevel% neq 0 (
+    echo [ERROR] Failed to install dependencies. Please check if Node.js/npm is installed.
+    pause
+    exit /b 1
+)
+
+:: 4. Register the Service
 echo.
-echo [2/2] Registering Windows Service...
+echo [2/2] Registering and starting the service...
 node scripts/service/install_service.js
 if %errorlevel% neq 0 (
-    echo [ERROR] Service installation failed.
+    echo [ERROR] Service installation failed. See logs above.
     pause
     exit /b 1
 )
 
 echo.
-echo ✅ Done! Open services.msc to verify the HyperliquidScraper service.
+echo =========================================================
+echo   [SUCCESS] The service has been installed and started!
+echo   You can verify it by opening 'services.msc'
+echo   and looking for 'HyperliquidScraper'.
+echo =========================================================
 echo.
 pause

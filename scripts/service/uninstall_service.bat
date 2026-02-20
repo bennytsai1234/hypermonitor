@@ -1,12 +1,14 @@
 @echo off
+setlocal
 chcp 65001 >nul
-echo ╔══════════════════════════════════════════════════════╗
-echo ║  Hyperliquid Scraper - Uninstall Windows Service    ║
-echo ║  ⚠️  REQUIRES ADMINISTRATOR PRIVILEGES              ║
-echo ╚══════════════════════════════════════════════════════╝
+
+echo =========================================================
+echo   Hyperliquid Scraper - Windows Service Uninstaller
+echo   Requires Administrator Privileges
+echo =========================================================
 echo.
 
-:: Auto-elevate to Administrator
+:: 1. Auto-elevate to Administrator
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo [INFO] Requesting Administrator privileges...
@@ -14,17 +16,27 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-cd /d "%~dp0..\.."
+:: 2. Set strict working directory (Root of project)
+set "PROJECT_ROOT=%~dp0..\.."
+cd /d "%PROJECT_ROOT%"
+if %errorlevel% neq 0 (
+    echo [ERROR] Failed to navigate to project root: %PROJECT_ROOT%
+    pause
+    exit /b 1
+)
 
-echo Removing Windows Service...
+:: 3. Remove the Service
+echo [1/1] Removing the Windows Service...
 node scripts/service/uninstall_service.js
 if %errorlevel% neq 0 (
-    echo [ERROR] Service removal failed.
+    echo [ERROR] Service removal failed. See logs above.
     pause
     exit /b 1
 )
 
 echo.
-echo ✅ Done! HyperliquidScraper has been removed from Windows Services.
+echo =========================================================
+echo   [SUCCESS] HyperliquidScraper has been removed!
+echo =========================================================
 echo.
 pause
