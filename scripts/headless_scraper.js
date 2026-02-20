@@ -144,7 +144,7 @@ async function uploadData(type, data) {
         const printerWallet = parseIntClean(p.walletCount);
         const printerLong = parseValue(p.longVol);
 
-        if ((printerWallet === 0 || printerLong === 0) && currentState.lastData) {
+        if (printerWallet === 0 || printerLong === 0) {
             console.warn(`🛑 [PRINTER] Data anomaly detected (Wallet: ${p.walletCount}, Vol: ${p.longVol}). Aborting upload to protect database.`);
             return;
         }
@@ -179,6 +179,12 @@ async function uploadData(type, data) {
             smartNetVolNum: parseValue(s.netVol)
         };
     } else if (type === 'range') {
+        const btcLong = data.btc ? parseValue(data.btc.long) : 0;
+        if (btcLong === 0) {
+            console.warn(`🛑 [RANGE] Data anomaly detected (BTC Long Vol: 0). Aborting upload to protect database.`);
+            return;
+        }
+
         payload = {
             btc: data.btc ? {
                 symbol: 'BTC',
