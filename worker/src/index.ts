@@ -50,9 +50,9 @@ export default {
 
 				if (url.pathname === '/update-printer') {
 					// 1. Deduplication with Heartbeat
-					// Get the last record's data AND timestamp
+					// Get the last record's data AND timestamp (Indexed for O(1) reads)
 					const last: any = await env.DB.prepare(
-						"SELECT timestamp, long_vol_num, short_vol_num, net_vol_num, wallet_count FROM printer_metrics ORDER BY id DESC LIMIT 1"
+						"SELECT timestamp, long_vol_num, short_vol_num, net_vol_num, wallet_count FROM printer_metrics ORDER BY timestamp DESC LIMIT 1"
 					).first();
 
 					let shouldWrite = true;
@@ -125,9 +125,9 @@ export default {
 					const stmts: D1PreparedStatement[] = [];
 					const insertSQL = `INSERT INTO range_metrics (symbol, long_vol, short_vol, total_vol, net_vol, long_display, short_display, total_display, net_display) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)`;
 
-					// Helper to check if we should write for a symbol
+					// Helper to check if we should write for a symbol (Indexed for O(1) reads)
 					const checkAndPrepare = async (symbol: string, data: any) => {
-						const last: any = await env.DB.prepare(`SELECT timestamp, long_vol, short_vol FROM range_metrics WHERE symbol=? ORDER BY id DESC LIMIT 1`).bind(symbol).first();
+						const last: any = await env.DB.prepare(`SELECT timestamp, long_vol, short_vol FROM range_metrics WHERE symbol=? ORDER BY timestamp DESC LIMIT 1`).bind(symbol).first();
 						let write = true;
 
 						if (last) {
