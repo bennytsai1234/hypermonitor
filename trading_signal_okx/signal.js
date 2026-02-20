@@ -137,6 +137,15 @@ async function processSignal(data) {
 
   const currentNet = longVol - shortVol;  // 正=多頭佔優, 負=空頭佔優
 
+  // --- DATA ANOMALY GUARD ---
+  // If the fetched volume is suspiciously low (e.g. 0), it means the scraping failed
+  // or Coinglass didn't render it properly. We must ignore this tick to prevent
+  // artificial huge delta spikes when it recovers.
+  if (Math.abs(longVol) < 1000000 && Math.abs(shortVol) < 1000000) {
+      log(`🛑 Data Anomaly Filtered: Long ${formatUSD(longVol)}, Short ${formatUSD(shortVol)}. Skipping tick.`);
+      return;
+  }
+
   // First run: just record, don't trade
   if (previousNet === null) {
     previousNet = currentNet;
