@@ -300,8 +300,8 @@ export default {
 				const now = Date.now();
 				let result = latestCache;
 
-				// If cache is stale or missing, fetch from DB
-				if (!result || (now - lastCacheUpdate >= 10000)) {
+				// If cache is stale or missing core fields (due to partial update), fetch from DB
+				if (!result || !result.long_vol_num || (now - lastCacheUpdate >= 10000)) {
 					const [pResult, btcResult, ethResult] = await env.DB.batch([
 						env.DB.prepare("SELECT * FROM printer_metrics ORDER BY timestamp DESC, id DESC LIMIT 1"),
 						env.DB.prepare("SELECT * FROM range_metrics WHERE symbol='btc' ORDER BY timestamp DESC, id DESC LIMIT 1"),
