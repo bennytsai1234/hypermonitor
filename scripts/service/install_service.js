@@ -3,9 +3,9 @@
  *
  * Installs the Hyperliquid Headless Scraper as a Windows Service.
  * Run this script ONCE with Administrator privileges:
- *   node scripts/install_service.js
+ *   node scripts/service/install_service.js
  *
- * Or use the helper batch file: scripts/install_service.bat
+ * Or use the helper batch file: scripts/service/install_service.bat
  */
 
 const Service = require('node-windows').Service;
@@ -39,7 +39,7 @@ svc.on('install', () => {
 
 svc.on('alreadyinstalled', () => {
     console.log('⚠️  Service is already installed. Start it from services.msc');
-    console.log('   Or run: node scripts/uninstall_service.js first.');
+    console.log('   Or run: node scripts/service/uninstall_service.js first.');
 });
 
 svc.on('error', (err) => {

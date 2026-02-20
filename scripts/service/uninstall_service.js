@@ -3,9 +3,9 @@
  *
  * Removes the HyperliquidScraper Windows Service.
  * Run this script with Administrator privileges:
- *   node scripts/uninstall_service.js
+ *   node scripts/service/uninstall_service.js
  *
- * Or use the helper batch file: scripts/uninstall_service.bat
+ * Or use the helper batch file: scripts/service/uninstall_service.bat
  */
 
 const Service = require('node-windows').Service;
