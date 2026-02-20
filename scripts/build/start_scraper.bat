@@ -16,10 +16,23 @@ echo.
 REM 檢查是否安裝了 Node.js
 where node >nul 2>nul
 if %errorlevel% neq 0 (
-    color 0C
-    echo [ERROR] 找不到 Node.js！請先下載並安裝 Node.js: https://nodejs.org/
+    color 0E
+    echo [WARN] 找不到 Node.js！系統將嘗試為您「全自動下載並安裝」Node.js (LTS 版本)...
+    echo [INFO] 正在下載 Node.js 安裝檔，請稍候... (這可能需要幾分鐘)
+    powershell -Command "Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.11.1/node-v20.11.1-x64.msi' -OutFile '%TEMP%\nodejs.msi'"
+
+    echo [INFO] 下載完成！正在執行自動安裝 (請允許跳出的管理員權限要求)...
+    msiexec /i "%TEMP%\nodejs.msi" /quiet /norestart
+
+    echo [SUCCESS] Node.js 安裝完畢！
+    echo ===================================================
+    color 0A
+    echo.
+    echo [ACTION REQUIRED] 為了讓系統載入最新的 Node.js 環境變數，
+    echo 請「關閉這個視窗」，然後「重新點兩擊執行本腳本」一次即可！
+    echo.
     pause
-    exit /b 1
+    exit /b 0
 )
 
 REM 取得 Node 版本
