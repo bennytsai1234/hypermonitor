@@ -14,7 +14,7 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-cd /d "%~dp0.."
+cd /d "%~dp0..\.."
 
 echo [1/2] Installing node-windows dependency...
 call npm install node-windows
@@ -26,7 +26,7 @@ if %errorlevel% neq 0 (
 
 echo.
 echo [2/2] Registering Windows Service...
-node scripts/install_service.js
+node scripts/service/install_service.js
 if %errorlevel% neq 0 (
     echo [ERROR] Service installation failed.
     pause

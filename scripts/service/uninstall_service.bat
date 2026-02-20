@@ -14,10 +14,10 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-cd /d "%~dp0.."
+cd /d "%~dp0..\.."
 
 echo Removing Windows Service...
-node scripts/uninstall_service.js
+node scripts/service/uninstall_service.js
 if %errorlevel% neq 0 (
     echo [ERROR] Service removal failed.
     pause
