@@ -92,7 +92,9 @@ function initListeners() {
       const items = dd.querySelectorAll('.dropdown-item');
 
       // Restore from storage
-      const saved = localStorage.getItem('hyper_range') || '1h';
+      let saved = localStorage.getItem('hyper_range') || '1h';
+      if (saved === '1d') saved = '24h';
+      if (saved === '1w') saved = '7d';
       selectedRange = saved;
 
       // Update UI to match saved state
