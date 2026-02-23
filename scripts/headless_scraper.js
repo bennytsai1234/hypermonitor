@@ -16,7 +16,7 @@ const CONFIG = {
     },
     endpoints: {
         printer: process.env.PRINTER_ENDPOINT || 'https://hyper-monitor-worker.bennytsai0711.workers.dev/update-printer',
-        range:   process.env.RANGE_ENDPOINT   || 'https://hyper-monitor-worker.bennytsai0711.workers.dev/update-range'
+        range: process.env.RANGE_ENDPOINT || 'https://hyper-monitor-worker.bennytsai0711.workers.dev/update-range'
     }
 };
 
@@ -56,11 +56,18 @@ const SCRIPTS = {
         '  };',
         '  window.scrollTo(0, 500);',
         '  const printerRow = getRow("Money_Printer");',
-        '  const smartRow = getRow("Smart_Money");',
-        '  if (!printerRow && !smartRow) return null;',
-        '  const printerData = parseRow(printerRow);',
-        '  const smartData = parseRow(smartRow);',
-        '  return JSON.stringify({ found: true, ...(printerData || {}), smart: smartData });',
+        '  if (!printerRow) return null;',
+        '  return JSON.stringify({',
+        '    found: true,',
+        '    ...(parseRow(printerRow) || {}),',
+        '    smart: parseRow(getRow("Smart_Money")),',
+        '    grinder: parseRow(getRow("Grinder")),',
+        '    humble: parseRow(getRow("Humble_Earner")),',
+        '    exitLiq: parseRow(getRow("Exit_Liquidity")),',
+        '    semiRekt: parseRow(getRow("Semi_Rekt")),',
+        '    fullRekt: parseRow(getRow("Full_Rekt")),',
+        '    gigaRekt: parseRow(getRow("Giga_Rekt"))',
+        '  });',
         '})();'
     ].join('\n'),
     range: [
@@ -138,6 +145,12 @@ async function uploadData(type, data) {
     if (type === 'printer') {
         const p = data;
         let s = data.smart || {};
+        const gr = data.grinder || {};
+        const hu = data.humble || {};
+        const ex = data.exitLiq || {};
+        const sr = data.semiRekt || {};
+        const fr = data.fullRekt || {};
+        const gi = data.gigaRekt || {};
 
         // --- Global Data Protection (Sanity Checks) ---
         // If the main printer data is suspiciously zero, do NOT upload.
@@ -152,11 +165,11 @@ async function uploadData(type, data) {
         // [Smart Money Fallback]
         const smartWallet = parseIntClean(s.walletCount);
         if (smartWallet === 0 && currentState.lastData && currentState.lastData.smart) {
-             const lastSmart = currentState.lastData.smart;
-             if (parseIntClean(lastSmart.walletCount) > 0) {
-                 console.log(`[PRINTER] 🛡️ Smart Money missing/empty. Reusing last known good data.`);
-                 s = lastSmart;
-             }
+            const lastSmart = currentState.lastData.smart;
+            if (parseIntClean(lastSmart.walletCount) > 0) {
+                console.log(`[PRINTER] 🛡️ Smart Money missing/empty. Reusing last known good data.`);
+                s = lastSmart;
+            }
         }
 
         payload = {
@@ -176,7 +189,61 @@ async function uploadData(type, data) {
             smartSentiment: s.sentiment || "",
             smartLongVolNum: parseValue(s.longVol),
             smartShortVolNum: parseValue(s.shortVol),
-            smartNetVolNum: parseValue(s.netVol)
+            smartNetVolNum: parseValue(s.netVol),
+
+            // Grinder
+            grinderWalletCount: parseIntClean(gr.walletCount),
+            grinderProfitCount: parseIntClean(gr.profitCount),
+            grinderLossCount: parseIntClean(gr.lossCount),
+            grinderSentiment: gr.sentiment || "",
+            grinderLongVolNum: parseValue(gr.longVol),
+            grinderShortVolNum: parseValue(gr.shortVol),
+            grinderNetVolNum: parseValue(gr.netVol),
+
+            // Humble
+            humbleWalletCount: parseIntClean(hu.walletCount),
+            humbleProfitCount: parseIntClean(hu.profitCount),
+            humbleLossCount: parseIntClean(hu.lossCount),
+            humbleSentiment: hu.sentiment || "",
+            humbleLongVolNum: parseValue(hu.longVol),
+            humbleShortVolNum: parseValue(hu.shortVol),
+            humbleNetVolNum: parseValue(hu.netVol),
+
+            // Exit Liq
+            exitLiqWalletCount: parseIntClean(ex.walletCount),
+            exitLiqProfitCount: parseIntClean(ex.profitCount),
+            exitLiqLossCount: parseIntClean(ex.lossCount),
+            exitLiqSentiment: ex.sentiment || "",
+            exitLiqLongVolNum: parseValue(ex.longVol),
+            exitLiqShortVolNum: parseValue(ex.shortVol),
+            exitLiqNetVolNum: parseValue(ex.netVol),
+
+            // Semi Rekt
+            semiRektWalletCount: parseIntClean(sr.walletCount),
+            semiRektProfitCount: parseIntClean(sr.profitCount),
+            semiRektLossCount: parseIntClean(sr.lossCount),
+            semiRektSentiment: sr.sentiment || "",
+            semiRektLongVolNum: parseValue(sr.longVol),
+            semiRektShortVolNum: parseValue(sr.shortVol),
+            semiRektNetVolNum: parseValue(sr.netVol),
+
+            // Full Rekt
+            fullRektWalletCount: parseIntClean(fr.walletCount),
+            fullRektProfitCount: parseIntClean(fr.profitCount),
+            fullRektLossCount: parseIntClean(fr.lossCount),
+            fullRektSentiment: fr.sentiment || "",
+            fullRektLongVolNum: parseValue(fr.longVol),
+            fullRektShortVolNum: parseValue(fr.shortVol),
+            fullRektNetVolNum: parseValue(fr.netVol),
+
+            // Giga Rekt
+            gigaRektWalletCount: parseIntClean(gi.walletCount),
+            gigaRektProfitCount: parseIntClean(gi.profitCount),
+            gigaRektLossCount: parseIntClean(gi.lossCount),
+            gigaRektSentiment: gi.sentiment || "",
+            gigaRektLongVolNum: parseValue(gi.longVol),
+            gigaRektShortVolNum: parseValue(gi.shortVol),
+            gigaRektNetVolNum: parseValue(gi.netVol)
         };
     } else if (type === 'range') {
         const btcLong = data.btc ? parseValue(data.btc.long) : 0;
@@ -342,7 +409,7 @@ async function shutdown(signal) {
     process.exit(0);
 }
 
-process.on('SIGINT',  () => shutdown('SIGINT'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 // --- Global error handler (prevent crashes) ---
