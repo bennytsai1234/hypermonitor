@@ -28,7 +28,7 @@ export async function fetchLatest() {
     }
     const data = await res.json();
     setStatus('online');
-    try { localStorage.setItem(LATEST_CACHE_KEY, JSON.stringify(data)); } catch(e) {}
+    try { localStorage.setItem(LATEST_CACHE_KEY, JSON.stringify(data)); } catch (e) { }
     return data;
   } catch (e) {
     console.warn('Fetch latest failed:', e);
@@ -41,7 +41,7 @@ function loadCachedLatest() {
   try {
     const cached = localStorage.getItem(LATEST_CACHE_KEY);
     return cached ? JSON.parse(cached) : null;
-  } catch(e) { return null; }
+  } catch (e) { return null; }
 }
 
 export async function fetchHistory(range) {
@@ -66,8 +66,18 @@ export async function fetchHistory(range) {
 
     }
 
-    const result = { printer: data.printer || [], smart: data.printer || [], btc, eth, hedge };
-    try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {}
+    const result = {
+      printer: data.printer || [],
+      smart: data.printer || [],
+      grinder: data.printer || [],
+      humble: data.printer || [],
+      exitLiq: data.printer || [],
+      semiRekt: data.printer || [],
+      fullRekt: data.printer || [],
+      gigaRekt: data.printer || [],
+      btc, eth, hedge
+    };
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch (e) { }
     return result;
   } catch (e) {
     console.warn('Fetch history failed:', e);
@@ -78,6 +88,16 @@ export async function fetchHistory(range) {
 function loadCachedHistory(cacheKey) {
   try {
     const cached = sessionStorage.getItem(cacheKey);
-    return cached ? JSON.parse(cached) : { printer: [], smart: [], btc: [], eth: [], hedge: [] };
-  } catch(e) { return { printer: [], smart: [], btc: [], eth: [], hedge: [] }; }
+    return cached ? JSON.parse(cached) : {
+      printer: [], smart: [], grinder: [], humble: [],
+      exitLiq: [], semiRekt: [], fullRekt: [], gigaRekt: [],
+      btc: [], eth: [], hedge: []
+    };
+  } catch (e) {
+    return {
+      printer: [], smart: [], grinder: [], humble: [],
+      exitLiq: [], semiRekt: [], fullRekt: [], gigaRekt: [],
+      btc: [], eth: [], hedge: []
+    };
+  }
 }
