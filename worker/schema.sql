@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS range_metrics (
     short_vol REAL,
     total_vol REAL,
     net_vol REAL,
+    price REAL,           -- OKX 實時價格
     long_display TEXT,
     short_display TEXT,
     total_display TEXT,

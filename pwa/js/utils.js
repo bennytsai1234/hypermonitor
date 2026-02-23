@@ -51,48 +51,73 @@ export function padTime(n) { return String(n).padStart(2, '0'); }
 
 // State helper to extract data
 export function extractData(rawData, assetType) {
-    if (!rawData) return null;
+  if (!rawData) return null;
 
-    // Common fields
-    const sentiment = rawData.sentiment;
-    const timestamp = rawData.timestamp;
+  // Common fields
+  let sentiment = rawData.sentiment;
+  const timestamp = rawData.timestamp;
 
-    let long = 0, short = 0;
+  let long = 0, short = 0;
 
-    // Helper to safely get volume (handles camelCase and snake_case)
-    const getVol = (obj, type) => {
-        if (!obj) return 0;
-        const val = obj[type + 'Vol'] !== undefined ? obj[type + 'Vol'] : (obj[type + '_vol'] !== undefined ? obj[type + '_vol'] : 0);
-        return toNum(val);
-    };
+  // Helper to safely get volume (handles camelCase and snake_case)
+  const getVol = (obj, type) => {
+    if (!obj) return 0;
+    const val = obj[type + 'Vol'] !== undefined ? obj[type + 'Vol'] : (obj[type + '_vol'] !== undefined ? obj[type + '_vol'] : 0);
+    return toNum(val);
+  };
 
-    if (assetType === 'all') {
-        long = getVol(rawData, 'long');
-        short = getVol(rawData, 'short');
-        // Legacy fallback if root object uses _num suffix
-        if (long === 0) long = toNum(rawData.long_vol_num !== undefined ? rawData.long_vol_num : rawData.longVolNum);
-        if (short === 0) short = toNum(rawData.short_vol_num !== undefined ? rawData.short_vol_num : rawData.shortVolNum);
-    } else if (assetType === 'smart') {
-        long = toNum(rawData.smart_long_vol_num !== undefined ? rawData.smart_long_vol_num : rawData.smartLongVolNum);
-        short = toNum(rawData.smart_short_vol_num !== undefined ? rawData.smart_short_vol_num : rawData.smartShortVolNum);
-        if (long === 0 && short === 0 && rawData.smart) {
-             long = getVol(rawData.smart, 'long');
-             short = getVol(rawData.smart, 'short');
-        }
-    } else if (assetType === 'hedge') {
-        const bLong = getVol(rawData.btc, 'long');
-        const bShort = getVol(rawData.btc, 'short');
-        const eLong = getVol(rawData.eth, 'long');
-        const eShort = getVol(rawData.eth, 'short');
-        long = bLong + eLong;
-        short = bShort + eShort;
-    } else if (assetType === 'btc') {
-        long = getVol(rawData.btc, 'long');
-        short = getVol(rawData.btc, 'short');
-    } else if (assetType === 'eth') {
-        long = getVol(rawData.eth, 'long');
-        short = getVol(rawData.eth, 'short');
+  if (assetType === 'all') {
+    long = getVol(rawData, 'long');
+    short = getVol(rawData, 'short');
+    // Legacy fallback if root object uses _num suffix
+    if (long === 0) long = toNum(rawData.long_vol_num !== undefined ? rawData.long_vol_num : rawData.longVolNum);
+    if (short === 0) short = toNum(rawData.short_vol_num !== undefined ? rawData.short_vol_num : rawData.shortVolNum);
+  } else if (assetType === 'smart') {
+    long = toNum(rawData.smart_long_vol_num !== undefined ? rawData.smart_long_vol_num : rawData.smartLongVolNum);
+    short = toNum(rawData.smart_short_vol_num !== undefined ? rawData.smart_short_vol_num : rawData.smartShortVolNum);
+    if (rawData.smart_sentiment) sentiment = rawData.smart_sentiment;
+    if (long === 0 && short === 0 && rawData.smart) {
+      long = getVol(rawData.smart, 'long');
+      short = getVol(rawData.smart, 'short');
     }
+  } else if (assetType === 'hedge') {
+    const bLong = getVol(rawData.btc, 'long');
+    const bShort = getVol(rawData.btc, 'short');
+    const eLong = getVol(rawData.eth, 'long');
+    const eShort = getVol(rawData.eth, 'short');
+    long = bLong + eLong;
+    short = bShort + eShort;
+  } else if (assetType === 'btc') {
+    long = getVol(rawData.btc, 'long');
+    short = getVol(rawData.btc, 'short');
+  } else if (assetType === 'eth') {
+    long = getVol(rawData.eth, 'long');
+    short = getVol(rawData.eth, 'short');
+  } else if (assetType === 'grinder') {
+    long = toNum(rawData.grinder_long_vol_num);
+    short = toNum(rawData.grinder_short_vol_num);
+    if (rawData.grinder_sentiment) sentiment = rawData.grinder_sentiment;
+  } else if (assetType === 'humble') {
+    long = toNum(rawData.humble_long_vol_num);
+    short = toNum(rawData.humble_short_vol_num);
+    if (rawData.humble_sentiment) sentiment = rawData.humble_sentiment;
+  } else if (assetType === 'exitLiq') {
+    long = toNum(rawData.exit_liq_long_vol_num);
+    short = toNum(rawData.exit_liq_short_vol_num);
+    if (rawData.exit_liq_sentiment) sentiment = rawData.exit_liq_sentiment;
+  } else if (assetType === 'semiRekt') {
+    long = toNum(rawData.semi_rekt_long_vol_num);
+    short = toNum(rawData.semi_rekt_short_vol_num);
+    if (rawData.semi_rekt_sentiment) sentiment = rawData.semi_rekt_sentiment;
+  } else if (assetType === 'fullRekt') {
+    long = toNum(rawData.full_rekt_long_vol_num);
+    short = toNum(rawData.full_rekt_short_vol_num);
+    if (rawData.full_rekt_sentiment) sentiment = rawData.full_rekt_sentiment;
+  } else if (assetType === 'gigaRekt') {
+    long = toNum(rawData.giga_rekt_long_vol_num);
+    short = toNum(rawData.giga_rekt_short_vol_num);
+    if (rawData.giga_rekt_sentiment) sentiment = rawData.giga_rekt_sentiment;
+  }
 
-    return { sentiment, timestamp, long, short };
+  return { sentiment, timestamp, long, short };
 }

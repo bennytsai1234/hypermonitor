@@ -104,6 +104,21 @@ function isDifferent(oldData, newData) {
     return JSON.stringify(oldData) !== JSON.stringify(newData);
 }
 
+// --- OKX Price Fetcher ---
+async function fetchOkxPrice(symbol) {
+    try {
+        const url = `https://www.okx.com/api/v5/market/ticker?instId=${symbol}-USDT-SWAP`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data && data.code === '0' && data.data && data.data.length > 0) {
+            return parseFloat(data.data[0].last);
+        }
+    } catch (e) {
+        console.error(`[OKX] Error fetching price for ${symbol}: ${e.message}`);
+    }
+    return 0;
+}
+
 // --- Helper: Data Cleaning (Matches Dart Logic) ---
 function parseValue(raw) {
     if (!raw) return 0.0;
@@ -252,20 +267,25 @@ async function uploadData(type, data) {
             return;
         }
 
+        const btcPrice = await fetchOkxPrice('BTC');
+        const ethPrice = await fetchOkxPrice('ETH');
+
         payload = {
             btc: data.btc ? {
                 symbol: 'BTC',
                 longVol: parseValue(data.btc.long),
                 shortVol: parseValue(data.btc.short),
                 totalVol: parseValue(data.btc.total),
-                netVol: parseValue(data.btc.long) - parseValue(data.btc.short)
+                netVol: parseValue(data.btc.long) - parseValue(data.btc.short),
+                price: btcPrice
             } : null,
             eth: data.eth ? {
                 symbol: 'ETH',
                 longVol: parseValue(data.eth.long),
                 shortVol: parseValue(data.eth.short),
                 totalVol: parseValue(data.eth.total),
-                netVol: parseValue(data.eth.long) - parseValue(data.eth.short)
+                netVol: parseValue(data.eth.long) - parseValue(data.eth.short),
+                price: ethPrice
             } : null
         };
     }

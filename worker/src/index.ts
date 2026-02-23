@@ -183,7 +183,7 @@ export default {
 					}
 				} else if (url.pathname === '/update-range') {
 					const stmts: D1PreparedStatement[] = [];
-					const insertSQL = `INSERT INTO range_metrics (symbol, long_vol, short_vol, total_vol, net_vol, long_display, short_display, total_display, net_display) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)`;
+					const insertSQL = `INSERT INTO range_metrics (symbol, long_vol, short_vol, total_vol, net_vol, price, long_display, short_display, total_display, net_display) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)`;
 
 					// Helper to check if we should write for a symbol (Indexed for O(1) reads)
 					const checkAndPrepare = async (symbol: string, data: any) => {
@@ -209,7 +209,7 @@ export default {
 
 						if (write) {
 							stmts.push(env.DB.prepare(insertSQL).bind(
-								symbol, data.longVol, data.shortVol, data.totalVol, data.netVol
+								symbol, data.longVol, data.shortVol, data.totalVol, data.netVol, data.price || null
 							));
 
 							// [L1 Cache Update]
@@ -322,7 +322,8 @@ export default {
 						AVG(long_vol) as avg_long_vol,
 						AVG(short_vol) as avg_short_vol,
 						AVG(total_vol) as avg_total_vol,
-						AVG(net_vol) as avg_net_vol
+						AVG(net_vol) as avg_net_vol,
+						AVG(price) as avg_price
 					FROM range_metrics
 					WHERE timestamp > datetime('now', ?)
 					GROUP BY symbol, CAST(strftime('%s', timestamp) / ? AS INTEGER)
@@ -396,7 +397,8 @@ export default {
 					long_vol: r.avg_long_vol,
 					short_vol: r.avg_short_vol,
 					total_vol: r.avg_total_vol,
-					net_vol: r.avg_net_vol
+					net_vol: r.avg_net_vol,
+					price: r.avg_price
 				}));
 
 				const ethData = rRows.filter(r => r.symbol === 'eth').map(r => ({
@@ -405,7 +407,8 @@ export default {
 					long_vol: r.avg_long_vol,
 					short_vol: r.avg_short_vol,
 					total_vol: r.avg_total_vol,
-					net_vol: r.avg_net_vol
+					net_vol: r.avg_net_vol,
+					price: r.avg_price
 				}));
 
 				// [L2 Cache] Cache history for 60s (Browser) / 120s (CDN)

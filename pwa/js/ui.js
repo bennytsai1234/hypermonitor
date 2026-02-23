@@ -40,8 +40,10 @@ export function initUi() {
 
 // State for alerts
 const lastDeltas = {
-  all: { net: null }, smart: { net: null }, hedge: { net: null },
-  btc: { net: null }, eth: { net: null }
+    all: { net: null }, smart: { net: null }, hedge: { net: null },
+    btc: { net: null }, eth: { net: null },
+    grinder: { net: null }, humble: { net: null }, exitLiq: { net: null },
+    semiRekt: { net: null }, fullRekt: { net: null }, gigaRekt: { net: null }
 };
 
 let isMuted = localStorage.getItem('hyper_muted') === 'true';
@@ -92,7 +94,7 @@ function sendNotification(title, body) {
         });
         n.onclick = () => { window.focus(); n.close(); };
         setTimeout(() => n.close(), 10000);
-    } catch(e) { console.warn('Notification failed:', e); }
+    } catch (e) { console.warn('Notification failed:', e); }
 }
 
 // ============================================
@@ -117,7 +119,7 @@ export function toggleMute() {
     updateMuteIcon();
     if (!isMuted) {
         alertAudio.currentTime = 0;
-        alertAudio.play().catch(() => {});
+        alertAudio.play().catch(() => { });
     }
     // Request notification permission on first unmute (requires user gesture)
     if (!isMuted && notifPermission === 'default') {
@@ -142,24 +144,24 @@ export function getDom() { return dom; }
 // Alert System
 // ============================================
 export function triggerAlert(playAudio = true) {
-  if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-  dom.alertFlash.classList.remove('hidden');
-  setTimeout(() => dom.alertFlash.classList.add('hidden'), ALERT_DURATION);
-  dom.netCard.classList.add('updating');
-  setTimeout(() => dom.netCard.classList.remove('updating'), ALERT_DURATION);
-  if (playAudio && !isMuted) {
-      alertAudio.currentTime = 0;
-      alertAudio.play().catch(e => console.log('Audio play blocked:', e));
-  }
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    dom.alertFlash.classList.remove('hidden');
+    setTimeout(() => dom.alertFlash.classList.add('hidden'), ALERT_DURATION);
+    dom.netCard.classList.add('updating');
+    setTimeout(() => dom.netCard.classList.remove('updating'), ALERT_DURATION);
+    if (playAudio && !isMuted) {
+        alertAudio.currentTime = 0;
+        alertAudio.play().catch(e => console.log('Audio play blocked:', e));
+    }
 }
 
 function setDelta(el, value, isBearishMode) {
-  if (!value) { el.className = 'metric-delta'; el.textContent = ''; return; }
-  const isPositive = value.startsWith('+');
-  let isGood = isPositive;
-  if (isBearishMode) isGood = !isPositive;
-  el.textContent = value;
-  el.className = `metric-delta visible ${isGood ? 'positive' : 'negative'}`;
+    if (!value) { el.className = 'metric-delta'; el.textContent = ''; return; }
+    const isPositive = value.startsWith('+');
+    let isGood = isPositive;
+    if (isBearishMode) isGood = !isPositive;
+    el.textContent = value;
+    el.className = `metric-delta visible ${isGood ? 'positive' : 'negative'}`;
 }
 
 // ============================================
@@ -216,19 +218,19 @@ export function calculateAllDeltas(oldData, newData) {
         lastDeltas[type].net = `${sign}$${fmt}`;
     };
 
-    ['all', 'smart', 'hedge', 'btc', 'eth'].forEach(processAsset);
+    ['all', 'smart', 'hedge', 'btc', 'eth', 'grinder', 'humble', 'exitLiq', 'semiRekt', 'fullRekt', 'gigaRekt'].forEach(processAsset);
 
     if (hasSignificant) {
-      triggerAlert(shouldPlayAudio);
-      // Record change time
-      const now = new Date();
-      if (dom.lastChange) {
-        dom.lastChange.textContent = `變動: ${padTime(now.getHours())}:${padTime(now.getMinutes())}:${padTime(now.getSeconds())}`;
-      }
-      // Web Notification for 'all' changes when app is in background
-      if (shouldPlayAudio && notifBody) {
-        sendNotification('⚡ HyperMonitor 資金變動', notifBody);
-      }
+        triggerAlert(shouldPlayAudio);
+        // Record change time
+        const now = new Date();
+        if (dom.lastChange) {
+            dom.lastChange.textContent = `變動: ${padTime(now.getHours())}:${padTime(now.getMinutes())}:${padTime(now.getSeconds())}`;
+        }
+        // Web Notification for 'all' changes when app is in background
+        if (shouldPlayAudio && notifBody) {
+            sendNotification('⚡ HyperMonitor 資金變動', notifBody);
+        }
     }
 }
 
@@ -249,7 +251,11 @@ export function renderUI(allData, currentAsset, renderChartCallback) {
     dom.sentimentBadge.className = sClass;
 
     // 2. Net Card
-    const assetNames = { all: '全體', smart: '聰明錢', hedge: '核心', btc: 'BTC', eth: 'ETH' };
+    const assetNames = {
+        all: '全體', smart: '聰明錢', hedge: '核心', btc: 'BTC', eth: 'ETH',
+        grinder: '套利高手', humble: '螞蟻玩家', exitLiq: '合約小白',
+        semiRekt: '割肉俠', fullRekt: '扛單狂人', gigaRekt: '爆倉達人'
+    };
     const name = assetNames[currentAsset];
     const typeLabel = bearish ? '淨空壓' : '淨多壓';
     dom.netLabel.textContent = `${name}${typeLabel}`;

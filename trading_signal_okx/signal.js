@@ -42,8 +42,8 @@ async function sendEmail(subject, text) {
   // For critical alerts like > 20M, maybe we want every occurrence.
   // But let's add a small throttle just in case.
   if (Date.now() - lastEmailTime < 60000) {
-      log('⚠️ Email alert throttled (max 1 per minute).');
-      return;
+    log('⚠️ Email alert throttled (max 1 per minute).');
+    return;
   }
 
   const transporter = nodemailer.createTransport({
@@ -120,19 +120,59 @@ async function fetchLatest() {
 // ============================================
 async function processSignal(data) {
   // Select Data Source based on Configuration
-  const useSmart = CONFIG.SIGNAL_SOURCE === 'smart';
+  const src = CONFIG.SIGNAL_SOURCE;
   let longVol, shortVol, sentiment, sourceName;
 
-  if (useSmart) {
-    sourceName = '🧠 Smart Money';
-    longVol = parseFloat(data.smart_long_vol_num) || 0;
-    shortVol = parseFloat(data.smart_short_vol_num) || 0;
-    sentiment = data.smart_sentiment || '';
-  } else {
-    sourceName = '🖨️ Super Money';
-    longVol = parseFloat(data.long_vol_num) || 0;
-    shortVol = parseFloat(data.short_vol_num) || 0;
-    sentiment = data.sentiment || '';
+  switch (src) {
+    case 'smart':
+      sourceName = '🧠 Smart Money';
+      longVol = parseFloat(data.smart_long_vol_num) || 0;
+      shortVol = parseFloat(data.smart_short_vol_num) || 0;
+      sentiment = data.smart_sentiment || '';
+      break;
+    case 'grinder':
+      sourceName = '⚙️ 套利高手';
+      longVol = parseFloat(data.grinder_long_vol_num) || 0;
+      shortVol = parseFloat(data.grinder_short_vol_num) || 0;
+      sentiment = data.grinder_sentiment || '';
+      break;
+    case 'humble':
+      sourceName = '🐜 螞蟻玩家';
+      longVol = parseFloat(data.humble_long_vol_num) || 0;
+      shortVol = parseFloat(data.humble_short_vol_num) || 0;
+      sentiment = data.humble_sentiment || '';
+      break;
+    case 'exitLiq':
+      sourceName = '🤡 合約小白';
+      longVol = parseFloat(data.exit_liq_long_vol_num) || 0;
+      shortVol = parseFloat(data.exit_liq_short_vol_num) || 0;
+      sentiment = data.exit_liq_sentiment || '';
+      break;
+    case 'semiRekt':
+      sourceName = '🔪 割肉俠';
+      longVol = parseFloat(data.semi_rekt_long_vol_num) || 0;
+      shortVol = parseFloat(data.semi_rekt_short_vol_num) || 0;
+      sentiment = data.semi_rekt_sentiment || '';
+      break;
+    case 'fullRekt':
+      sourceName = '🩸 扛單狂人';
+      longVol = parseFloat(data.full_rekt_long_vol_num) || 0;
+      shortVol = parseFloat(data.full_rekt_short_vol_num) || 0;
+      sentiment = data.full_rekt_sentiment || '';
+      break;
+    case 'gigaRekt':
+      sourceName = '💀 爆倉達人';
+      longVol = parseFloat(data.giga_rekt_long_vol_num) || 0;
+      shortVol = parseFloat(data.giga_rekt_short_vol_num) || 0;
+      sentiment = data.giga_rekt_sentiment || '';
+      break;
+    case 'printer':
+    default:
+      sourceName = '🖨️ Super Money';
+      longVol = parseFloat(data.long_vol_num) || 0;
+      shortVol = parseFloat(data.short_vol_num) || 0;
+      sentiment = data.sentiment || '';
+      break;
   }
 
   const currentNet = longVol - shortVol;  // 正=多頭佔優, 負=空頭佔優
@@ -142,8 +182,8 @@ async function processSignal(data) {
   // or Coinglass didn't render it properly. We must ignore this tick to prevent
   // artificial huge delta spikes when it recovers.
   if (Math.abs(longVol) < 1000000 && Math.abs(shortVol) < 1000000) {
-      log(`🛑 Data Anomaly Filtered: Long ${formatUSD(longVol)}, Short ${formatUSD(shortVol)}. Skipping tick.`);
-      return;
+    log(`🛑 Data Anomaly Filtered: Long ${formatUSD(longVol)}, Short ${formatUSD(shortVol)}. Skipping tick.`);
+    return;
   }
 
   // First run: just record, don't trade
@@ -162,9 +202,9 @@ async function processSignal(data) {
 
   const NOTIFY_THRESHOLD = 20000000; // 2000萬
   if (Math.abs(deltaH) > NOTIFY_THRESHOLD) {
-      const msg = `Market Pressure Delta > 2000萬!\nValue: ${formatUSD(deltaH)}\nTime: ${new Date().toLocaleString()}\nSentiment: ${sentiment}`;
-      // Run in background so trading is not blocked
-      sendEmail('Significant Market Move', msg).catch(console.error);
+    const msg = `Market Pressure Delta > 2000萬!\nValue: ${formatUSD(deltaH)}\nTime: ${new Date().toLocaleString()}\nSentiment: ${sentiment}`;
+    // Run in background so trading is not blocked
+    sendEmail('Significant Market Move', msg).catch(console.error);
   }
 
   // Check minimum threshold
@@ -350,6 +390,7 @@ function sleep(ms) {
 async function main() {
   log('🚀 Hyper Trading Signal Engine starting...');
   log(`   Worker: ${CONFIG.WORKER_URL}`);
+  log(`   Source: ${CONFIG.SIGNAL_SOURCE || 'printer'}`);
   log(`   Instrument: ${CONFIG.INST_ID}`);
   log(`   Leverage: ${CONFIG.LEVERAGE}x`);
   log(`   Ratio: 1/${(1 / CONFIG.RATIO).toFixed(0)} (${formatUSD(1 / CONFIG.RATIO)} delta → $1 order)`);
