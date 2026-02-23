@@ -21,7 +21,55 @@ CREATE TABLE IF NOT EXISTS printer_metrics (
     smart_sentiment TEXT,
     smart_long_display TEXT,
     smart_short_display TEXT,
-    smart_net_display TEXT
+    smart_net_display TEXT,
+    -- Grinder ($1w - $10w)
+    grinder_wallet_count INTEGER,
+    grinder_profit_count INTEGER,
+    grinder_loss_count INTEGER,
+    grinder_long_vol_num REAL,
+    grinder_short_vol_num REAL,
+    grinder_net_vol_num REAL,
+    grinder_sentiment TEXT,
+    -- Humble Earner (0 - $1w)
+    humble_wallet_count INTEGER,
+    humble_profit_count INTEGER,
+    humble_loss_count INTEGER,
+    humble_long_vol_num REAL,
+    humble_short_vol_num REAL,
+    humble_net_vol_num REAL,
+    humble_sentiment TEXT,
+    -- Exit Liquidity (0 - -$1w)
+    exit_liq_wallet_count INTEGER,
+    exit_liq_profit_count INTEGER,
+    exit_liq_loss_count INTEGER,
+    exit_liq_long_vol_num REAL,
+    exit_liq_short_vol_num REAL,
+    exit_liq_net_vol_num REAL,
+    exit_liq_sentiment TEXT,
+    -- Semi Rekt (-$1w - -$10w)
+    semi_rekt_wallet_count INTEGER,
+    semi_rekt_profit_count INTEGER,
+    semi_rekt_loss_count INTEGER,
+    semi_rekt_long_vol_num REAL,
+    semi_rekt_short_vol_num REAL,
+    semi_rekt_net_vol_num REAL,
+    semi_rekt_sentiment TEXT,
+    -- Full Rekt (-$10w - -$100w)
+    full_rekt_wallet_count INTEGER,
+    full_rekt_profit_count INTEGER,
+    full_rekt_loss_count INTEGER,
+    full_rekt_long_vol_num REAL,
+    full_rekt_short_vol_num REAL,
+    full_rekt_net_vol_num REAL,
+    full_rekt_sentiment TEXT,
+    -- Giga Rekt (-$100w - ∞)
+    giga_rekt_wallet_count INTEGER,
+    giga_rekt_profit_count INTEGER,
+    giga_rekt_loss_count INTEGER,
+    giga_rekt_long_vol_num REAL,
+    giga_rekt_short_vol_num REAL,
+    giga_rekt_net_vol_num REAL,
+    giga_rekt_sentiment TEXT
 );
 
 -- 資料表 B：BTC/ETH 24h 範圍數據

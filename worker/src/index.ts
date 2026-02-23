@@ -84,15 +84,27 @@ export default {
 						await env.DB.prepare(
 							`INSERT INTO printer_metrics (
 								wallet_count, profit_count, loss_count, long_vol_num, short_vol_num, net_vol_num, sentiment, long_display, short_display, net_display,
-								smart_wallet_count, smart_profit_count, smart_loss_count, smart_long_vol_num, smart_short_vol_num, smart_net_vol_num, smart_sentiment, smart_long_display, smart_short_display, smart_net_display
-							) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)`
+								smart_wallet_count, smart_profit_count, smart_loss_count, smart_long_vol_num, smart_short_vol_num, smart_net_vol_num, smart_sentiment, smart_long_display, smart_short_display, smart_net_display,
+								grinder_wallet_count, grinder_profit_count, grinder_loss_count, grinder_long_vol_num, grinder_short_vol_num, grinder_net_vol_num, grinder_sentiment,
+								humble_wallet_count, humble_profit_count, humble_loss_count, humble_long_vol_num, humble_short_vol_num, humble_net_vol_num, humble_sentiment,
+								exit_liq_wallet_count, exit_liq_profit_count, exit_liq_loss_count, exit_liq_long_vol_num, exit_liq_short_vol_num, exit_liq_net_vol_num, exit_liq_sentiment,
+								semi_rekt_wallet_count, semi_rekt_profit_count, semi_rekt_loss_count, semi_rekt_long_vol_num, semi_rekt_short_vol_num, semi_rekt_net_vol_num, semi_rekt_sentiment,
+								full_rekt_wallet_count, full_rekt_profit_count, full_rekt_loss_count, full_rekt_long_vol_num, full_rekt_short_vol_num, full_rekt_net_vol_num, full_rekt_sentiment,
+								giga_rekt_wallet_count, giga_rekt_profit_count, giga_rekt_loss_count, giga_rekt_long_vol_num, giga_rekt_short_vol_num, giga_rekt_net_vol_num, giga_rekt_sentiment
+							) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 						).bind(
 							d.walletCount, d.profitCount, d.lossCount,
 							d.longVolNum, d.shortVolNum, d.netVolNum,
 							d.sentiment,
 							d.smartWalletCount || 0, d.smartProfitCount || 0, d.smartLossCount || 0,
 							d.smartLongVolNum || 0, d.smartShortVolNum || 0, d.smartNetVolNum || 0,
-							d.smartSentiment || ""
+							d.smartSentiment || "",
+							d.grinderWalletCount || 0, d.grinderProfitCount || 0, d.grinderLossCount || 0, d.grinderLongVolNum || 0, d.grinderShortVolNum || 0, d.grinderNetVolNum || 0, d.grinderSentiment || "",
+							d.humbleWalletCount || 0, d.humbleProfitCount || 0, d.humbleLossCount || 0, d.humbleLongVolNum || 0, d.humbleShortVolNum || 0, d.humbleNetVolNum || 0, d.humbleSentiment || "",
+							d.exitLiqWalletCount || 0, d.exitLiqProfitCount || 0, d.exitLiqLossCount || 0, d.exitLiqLongVolNum || 0, d.exitLiqShortVolNum || 0, d.exitLiqNetVolNum || 0, d.exitLiqSentiment || "",
+							d.semiRektWalletCount || 0, d.semiRektProfitCount || 0, d.semiRektLossCount || 0, d.semiRektLongVolNum || 0, d.semiRektShortVolNum || 0, d.semiRektNetVolNum || 0, d.semiRektSentiment || "",
+							d.fullRektWalletCount || 0, d.fullRektProfitCount || 0, d.fullRektLossCount || 0, d.fullRektLongVolNum || 0, d.fullRektShortVolNum || 0, d.fullRektNetVolNum || 0, d.fullRektSentiment || "",
+							d.gigaRektWalletCount || 0, d.gigaRektProfitCount || 0, d.gigaRektLossCount || 0, d.gigaRektLongVolNum || 0, d.gigaRektShortVolNum || 0, d.gigaRektNetVolNum || 0, d.gigaRektSentiment || ""
 						).run();
 
 						// [L1 Cache Update] Update memory immediately
@@ -115,6 +127,54 @@ export default {
 							smart_short_vol_num: d.smartShortVolNum || 0,
 							smart_net_vol_num: d.smartNetVolNum || 0,
 							smart_sentiment: d.smartSentiment || "",
+							// Grinder
+							grinder_wallet_count: d.grinderWalletCount || 0,
+							grinder_profit_count: d.grinderProfitCount || 0,
+							grinder_loss_count: d.grinderLossCount || 0,
+							grinder_long_vol_num: d.grinderLongVolNum || 0,
+							grinder_short_vol_num: d.grinderShortVolNum || 0,
+							grinder_net_vol_num: d.grinderNetVolNum || 0,
+							grinder_sentiment: d.grinderSentiment || "",
+							// Humble
+							humble_wallet_count: d.humbleWalletCount || 0,
+							humble_profit_count: d.humbleProfitCount || 0,
+							humble_loss_count: d.humbleLossCount || 0,
+							humble_long_vol_num: d.humbleLongVolNum || 0,
+							humble_short_vol_num: d.humbleShortVolNum || 0,
+							humble_net_vol_num: d.humbleNetVolNum || 0,
+							humble_sentiment: d.humbleSentiment || "",
+							// Exit Liq
+							exit_liq_wallet_count: d.exitLiqWalletCount || 0,
+							exit_liq_profit_count: d.exitLiqProfitCount || 0,
+							exit_liq_loss_count: d.exitLiqLossCount || 0,
+							exit_liq_long_vol_num: d.exitLiqLongVolNum || 0,
+							exit_liq_short_vol_num: d.exitLiqShortVolNum || 0,
+							exit_liq_net_vol_num: d.exitLiqNetVolNum || 0,
+							exit_liq_sentiment: d.exitLiqSentiment || "",
+							// Semi Rekt
+							semi_rekt_wallet_count: d.semiRektWalletCount || 0,
+							semi_rekt_profit_count: d.semiRektProfitCount || 0,
+							semi_rekt_loss_count: d.semiRektLossCount || 0,
+							semi_rekt_long_vol_num: d.semiRektLongVolNum || 0,
+							semi_rekt_short_vol_num: d.semiRektShortVolNum || 0,
+							semi_rekt_net_vol_num: d.semiRektNetVolNum || 0,
+							semi_rekt_sentiment: d.semiRektSentiment || "",
+							// Full Rekt
+							full_rekt_wallet_count: d.fullRektWalletCount || 0,
+							full_rekt_profit_count: d.fullRektProfitCount || 0,
+							full_rekt_loss_count: d.fullRektLossCount || 0,
+							full_rekt_long_vol_num: d.fullRektLongVolNum || 0,
+							full_rekt_short_vol_num: d.fullRektShortVolNum || 0,
+							full_rekt_net_vol_num: d.fullRektNetVolNum || 0,
+							full_rekt_sentiment: d.fullRektSentiment || "",
+							// Giga Rekt
+							giga_rekt_wallet_count: d.gigaRektWalletCount || 0,
+							giga_rekt_profit_count: d.gigaRektProfitCount || 0,
+							giga_rekt_loss_count: d.gigaRektLossCount || 0,
+							giga_rekt_long_vol_num: d.gigaRektLongVolNum || 0,
+							giga_rekt_short_vol_num: d.gigaRektShortVolNum || 0,
+							giga_rekt_net_vol_num: d.gigaRektNetVolNum || 0,
+							giga_rekt_sentiment: d.gigaRektSentiment || "",
 							timestamp: new Date().toISOString()
 						});
 						lastCacheUpdate = Date.now();
@@ -218,7 +278,37 @@ export default {
 						AVG(smart_short_vol_num) as avg_short_vol_smart,
 						AVG(smart_net_vol_num) as avg_net_vol_smart,
 						MAX(smart_wallet_count) as max_wallet_smart,
-						MAX(smart_sentiment) as last_sentiment_smart
+						MAX(smart_sentiment) as last_sentiment_smart,
+						AVG(grinder_long_vol_num) as avg_long_vol_grinder,
+						AVG(grinder_short_vol_num) as avg_short_vol_grinder,
+						AVG(grinder_net_vol_num) as avg_net_vol_grinder,
+						MAX(grinder_wallet_count) as max_wallet_grinder,
+						MAX(grinder_sentiment) as last_sentiment_grinder,
+						AVG(humble_long_vol_num) as avg_long_vol_humble,
+						AVG(humble_short_vol_num) as avg_short_vol_humble,
+						AVG(humble_net_vol_num) as avg_net_vol_humble,
+						MAX(humble_wallet_count) as max_wallet_humble,
+						MAX(humble_sentiment) as last_sentiment_humble,
+						AVG(exit_liq_long_vol_num) as avg_long_vol_exit_liq,
+						AVG(exit_liq_short_vol_num) as avg_short_vol_exit_liq,
+						AVG(exit_liq_net_vol_num) as avg_net_vol_exit_liq,
+						MAX(exit_liq_wallet_count) as max_wallet_exit_liq,
+						MAX(exit_liq_sentiment) as last_sentiment_exit_liq,
+						AVG(semi_rekt_long_vol_num) as avg_long_vol_semi_rekt,
+						AVG(semi_rekt_short_vol_num) as avg_short_vol_semi_rekt,
+						AVG(semi_rekt_net_vol_num) as avg_net_vol_semi_rekt,
+						MAX(semi_rekt_wallet_count) as max_wallet_semi_rekt,
+						MAX(semi_rekt_sentiment) as last_sentiment_semi_rekt,
+						AVG(full_rekt_long_vol_num) as avg_long_vol_full_rekt,
+						AVG(full_rekt_short_vol_num) as avg_short_vol_full_rekt,
+						AVG(full_rekt_net_vol_num) as avg_net_vol_full_rekt,
+						MAX(full_rekt_wallet_count) as max_wallet_full_rekt,
+						MAX(full_rekt_sentiment) as last_sentiment_full_rekt,
+						AVG(giga_rekt_long_vol_num) as avg_long_vol_giga_rekt,
+						AVG(giga_rekt_short_vol_num) as avg_short_vol_giga_rekt,
+						AVG(giga_rekt_net_vol_num) as avg_net_vol_giga_rekt,
+						MAX(giga_rekt_wallet_count) as max_wallet_giga_rekt,
+						MAX(giga_rekt_sentiment) as last_sentiment_giga_rekt
 					FROM printer_metrics
 					WHERE timestamp > datetime('now', ?)
 					GROUP BY CAST(strftime('%s', timestamp) / ? AS INTEGER)
@@ -261,7 +351,43 @@ export default {
 					smart_short_vol_num: r.avg_short_vol_smart,
 					smart_net_vol_num: r.avg_net_vol_smart,
 					smart_wallet_count: r.max_wallet_smart,
-					smart_sentiment: r.last_sentiment_smart
+					smart_sentiment: r.last_sentiment_smart,
+					// Grinder
+					grinder_long_vol_num: r.avg_long_vol_grinder,
+					grinder_short_vol_num: r.avg_short_vol_grinder,
+					grinder_net_vol_num: r.avg_net_vol_grinder,
+					grinder_wallet_count: r.max_wallet_grinder,
+					grinder_sentiment: r.last_sentiment_grinder,
+					// Humble
+					humble_long_vol_num: r.avg_long_vol_humble,
+					humble_short_vol_num: r.avg_short_vol_humble,
+					humble_net_vol_num: r.avg_net_vol_humble,
+					humble_wallet_count: r.max_wallet_humble,
+					humble_sentiment: r.last_sentiment_humble,
+					// Exit Liq
+					exit_liq_long_vol_num: r.avg_long_vol_exit_liq,
+					exit_liq_short_vol_num: r.avg_short_vol_exit_liq,
+					exit_liq_net_vol_num: r.avg_net_vol_exit_liq,
+					exit_liq_wallet_count: r.max_wallet_exit_liq,
+					exit_liq_sentiment: r.last_sentiment_exit_liq,
+					// Semi Rekt
+					semi_rekt_long_vol_num: r.avg_long_vol_semi_rekt,
+					semi_rekt_short_vol_num: r.avg_short_vol_semi_rekt,
+					semi_rekt_net_vol_num: r.avg_net_vol_semi_rekt,
+					semi_rekt_wallet_count: r.max_wallet_semi_rekt,
+					semi_rekt_sentiment: r.last_sentiment_semi_rekt,
+					// Full Rekt
+					full_rekt_long_vol_num: r.avg_long_vol_full_rekt,
+					full_rekt_short_vol_num: r.avg_short_vol_full_rekt,
+					full_rekt_net_vol_num: r.avg_net_vol_full_rekt,
+					full_rekt_wallet_count: r.max_wallet_full_rekt,
+					full_rekt_sentiment: r.last_sentiment_full_rekt,
+					// Giga Rekt
+					giga_rekt_long_vol_num: r.avg_long_vol_giga_rekt,
+					giga_rekt_short_vol_num: r.avg_short_vol_giga_rekt,
+					giga_rekt_net_vol_num: r.avg_net_vol_giga_rekt,
+					giga_rekt_wallet_count: r.max_wallet_giga_rekt,
+					giga_rekt_sentiment: r.last_sentiment_giga_rekt
 				}));
 
 				const btcData = rRows.filter(r => r.symbol === 'btc').map(r => ({
