@@ -21,35 +21,37 @@ const HISTORY_REFRESH_INTERVAL = 15 * 60 * 1000; // Refresh history every 15 min
 // Logic
 // ============================================
 async function pollLatest() {
-  const newData = await fetchLatest();
-  if (!newData) return;
+    const newData = await fetchLatest();
+    if (!newData) return;
 
-  if (allData) {
-    calculateAllDeltas(allData, newData);
-  }
-  allData = newData;
-  render();
+    if (allData) {
+        calculateAllDeltas(allData, newData);
+    }
+    allData = newData;
+    render();
 }
 
 async function loadHistory() {
-  historyData = await fetchHistory(selectedRange);
-  lastHistoryLoad = Date.now();
-  render();
+    historyData = await fetchHistory(selectedRange);
+    lastHistoryLoad = Date.now();
+    render();
 }
 
 async function refreshAll() {
-  // 1. Fetch Latest Data ASAP (Critical for UI)
-  const latestPromise = pollLatest();
+    // 1. Fetch Latest Data ASAP (Critical for UI)
+    const latestPromise = pollLatest();
 
-  // 2. Fetch History in background (Secondary)
-  // Only refresh history if enough time has passed AND range is short (1h, 4h)
-  const isShortRange = ['1h', '4h'].includes(selectedRange);
-  if (isShortRange && (Date.now() - lastHistoryLoad > HISTORY_REFRESH_INTERVAL)) {
-    loadHistory().catch(console.warn);
-  }
+    // 2. Fetch History in background (Secondary)
+    // Always fetch on initial load, or if history is stale
+    const isInitial = lastHistoryLoad === 0;
+    const isStale = (Date.now() - lastHistoryLoad > HISTORY_REFRESH_INTERVAL);
 
-  // 3. Await ONLY latest data for "interactive" state
-  await latestPromise;
+    if (isInitial || isStale) {
+        loadHistory().catch(console.warn);
+    }
+
+    // 3. Await ONLY latest data for "interactive" state
+    await latestPromise;
 }
 
 function render() {
@@ -66,78 +68,78 @@ function render() {
 // Event Listeners
 // ============================================
 function initListeners() {
-  const dom = getDom();
+    const dom = getDom();
 
-  // Asset Switcher
-  dom.assetBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-          const activeBtn = document.querySelector('.asset-btn.active');
-          if (activeBtn) activeBtn.classList.remove('active');
-          btn.classList.add('active');
-          currentAsset = btn.dataset.asset;
-          render();
-      });
-  });
+    // Asset Switcher
+    dom.assetBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const activeBtn = document.querySelector('.asset-btn.active');
+            if (activeBtn) activeBtn.classList.remove('active');
+            btn.classList.add('active');
+            currentAsset = btn.dataset.asset;
+            render();
+        });
+    });
 
-  // Mute Toggle
-  if (dom.muteBtn) {
-      dom.muteBtn.addEventListener('click', toggleMute);
-  }
+    // Mute Toggle
+    if (dom.muteBtn) {
+        dom.muteBtn.addEventListener('click', toggleMute);
+    }
 
-  // Range Switcher (Custom Dropdown)
-  const dd = document.getElementById('range-dropdown');
-  if (dd) {
-      const trigger = dd.querySelector('.dropdown-trigger');
-      const selectedText = dd.querySelector('.selected-text');
-      const items = dd.querySelectorAll('.dropdown-item');
+    // Range Switcher (Custom Dropdown)
+    const dd = document.getElementById('range-dropdown');
+    if (dd) {
+        const trigger = dd.querySelector('.dropdown-trigger');
+        const selectedText = dd.querySelector('.selected-text');
+        const items = dd.querySelectorAll('.dropdown-item');
 
-      // Restore from storage
-      const saved = localStorage.getItem('hyper_range') || '1h';
-      selectedRange = saved;
+        // Restore from storage
+        const saved = localStorage.getItem('hyper_range') || '1h';
+        selectedRange = saved;
 
-      // Update UI to match saved state
-      const savedItem = Array.from(items).find(i => i.dataset.value === saved);
-      if (savedItem) {
-          selectedText.textContent = savedItem.textContent;
-          items.forEach(i => i.classList.remove('active'));
-          savedItem.classList.add('active');
-      }
+        // Update UI to match saved state
+        const savedItem = Array.from(items).find(i => i.dataset.value === saved);
+        if (savedItem) {
+            selectedText.textContent = savedItem.textContent;
+            items.forEach(i => i.classList.remove('active'));
+            savedItem.classList.add('active');
+        }
 
-      // Toggle Menu
-      trigger.addEventListener('click', (e) => {
-          e.stopPropagation();
-          dd.classList.toggle('open');
-      });
+        // Toggle Menu
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dd.classList.toggle('open');
+        });
 
-      // Handle Selection
-      items.forEach(item => {
-          item.addEventListener('click', (e) => {
-              e.stopPropagation();
-              const val = item.dataset.value;
+        // Handle Selection
+        items.forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const val = item.dataset.value;
 
-              if (val === selectedRange) {
-                  dd.classList.remove('open');
-                  return;
-              }
+                if (val === selectedRange) {
+                    dd.classList.remove('open');
+                    return;
+                }
 
-              selectedRange = val;
-              localStorage.setItem('hyper_range', val);
+                selectedRange = val;
+                localStorage.setItem('hyper_range', val);
 
-              // UI Update
-              selectedText.textContent = item.textContent;
-              items.forEach(i => i.classList.remove('active'));
-              item.classList.add('active');
+                // UI Update
+                selectedText.textContent = item.textContent;
+                items.forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
 
-              dd.classList.remove('open');
-              loadHistory();
-          });
-      });
+                dd.classList.remove('open');
+                loadHistory();
+            });
+        });
 
-      // Close when clicking outside
-      document.addEventListener('click', () => {
-          dd.classList.remove('open');
-      });
-  }
+        // Close when clicking outside
+        document.addEventListener('click', () => {
+            dd.classList.remove('open');
+        });
+    }
 }
 
 // ============================================
@@ -202,52 +204,52 @@ function initPullToRefresh() {
 // Boot
 // ============================================
 async function boot() {
-  if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').then(reg => {
-          reg.update(); // Force update check
-      }).catch(console.warn);
-  }
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').then(reg => {
+            reg.update(); // Force update check
+        }).catch(console.warn);
+    }
 
-  initUi();
-  initListeners();
-  initPullToRefresh();
+    initUi();
+    initListeners();
+    initPullToRefresh();
 
-  // Show UI immediately (skeleton state)
-  showApp();
+    // Show UI immediately (skeleton state)
+    showApp();
 
-  // Connection status listener
-  onConnectionStatusChange(updateConnectionStatus);
+    // Connection status listener
+    onConnectionStatusChange(updateConnectionStatus);
 
-  // Request notification permission
-  requestNotificationPermission();
+    // Request notification permission
+    requestNotificationPermission();
 
-  // Initial load (Non-blocking history)
-  await refreshAll();
+    // Initial load (Non-blocking history)
+    await refreshAll();
 
-  // Use Web Worker for background timing
-  if (window.Worker) {
-      const pollWorker = new Worker('timer.worker.js');
-      pollWorker.onmessage = (e) => {
-          if (e.data === 'tick') pollLatest();
-      };
-      pollWorker.postMessage({ action: 'start', interval: POLL_INTERVAL });
-  } else {
-      // Fallback for older browsers
-      pollTimer = setInterval(pollLatest, POLL_INTERVAL);
-  }
+    // Use Web Worker for background timing
+    if (window.Worker) {
+        const pollWorker = new Worker('timer.worker.js');
+        pollWorker.onmessage = (e) => {
+            if (e.data === 'tick') pollLatest();
+        };
+        pollWorker.postMessage({ action: 'start', interval: POLL_INTERVAL });
+    } else {
+        // Fallback for older browsers
+        pollTimer = setInterval(pollLatest, POLL_INTERVAL);
+    }
 
-  // Optional: You can still use visibilitychange to limit frequency if needed,
-  // but for "background play", we keep it running.
-  document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) {
-          // Only poll latest on visibility change, history refreshes on its own schedule
-          pollLatest();
-          // Only refresh history if stale (>5 min)
-          if (Date.now() - lastHistoryLoad > HISTORY_REFRESH_INTERVAL) {
-              loadHistory();
-          }
-      }
-  });
+    // Optional: You can still use visibilitychange to limit frequency if needed,
+    // but for "background play", we keep it running.
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            // Only poll latest on visibility change, history refreshes on its own schedule
+            pollLatest();
+            // Only refresh history if stale (>5 min)
+            if (Date.now() - lastHistoryLoad > HISTORY_REFRESH_INTERVAL) {
+                loadHistory();
+            }
+        }
+    });
 }
 
 boot();
