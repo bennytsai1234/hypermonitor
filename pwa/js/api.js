@@ -46,8 +46,14 @@ function loadCachedLatest() {
 
 export async function fetchHistory(range) {
   const cacheKey = HISTORY_CACHE_PREFIX + range;
+
+  // Map frontend ranges to backend expectations
+  let apiRange = range;
+  if (range === '1d') apiRange = '24h';
+  if (range === '1w') apiRange = '7d';
+
   try {
-    const res = await fetch(`${API_BASE}/history?range=${range}`);
+    const res = await fetch(`${API_BASE}/history?range=${apiRange}`);
     if (!res.ok) return loadCachedHistory(cacheKey);
     const data = await res.json();
 
