@@ -12,7 +12,9 @@
     "node": ">=18"
   },
   "pkg": {
-    "targets": ["node18-win-x64"],
+    "targets": [
+      "node18-win-x64"
+    ],
     "assets": [],
     "outputPath": "dist",
     "scripts": "scripts/headless_scraper.js"
@@ -21,6 +23,7 @@
     "puppeteer": "^24.3.0"
   },
   "devDependencies": {
-    "pkg": "latest"
+    "pkg": "latest",
+    "typescript": "^5.9.3"
   }
 }
