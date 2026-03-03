@@ -5,7 +5,7 @@ echo ║  Hyperliquid Scraper - Build .EXE       ║
 echo ╚══════════════════════════════════════════╝
 echo.
 
-cd /d "%~dp0.."
+cd /d "%~dp0..\.."
 
 echo [1/3] Installing dependencies...
 call npm install
