@@ -9,6 +9,7 @@
     "test": "node signal.js --once --dry-run"
   },
   "dependencies": {
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "nodemailer": "^8.0.2"
   }
 }
