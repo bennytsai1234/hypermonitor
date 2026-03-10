@@ -14,6 +14,7 @@
  */
 const CONFIG = require('./config');
 const binance = require('./binance-api');
+const nodemailer = require('nodemailer');
 
 // ============================================
 // State
@@ -22,6 +23,7 @@ let previousNet = null;
 let instrumentInfo = null;
 let leverageSet = false;
 let totalTraded = 0;
+let lastEmailTime = 0;
 
 // ============================================
 // Logging
@@ -29,6 +31,41 @@ let totalTraded = 0;
 function log(msg) {
   const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
   console.log(`[${now}] ${msg}`);
+}
+
+// ============================================
+// Email Notification
+// ============================================
+async function sendEmail(subject, text) {
+  if (!CONFIG.GMAIL_USER || !CONFIG.GMAIL_APP_PASSWORD) return;
+
+  if (Date.now() - lastEmailTime < 60000) {
+    log('⚠️ Email alert throttled (max 1 per minute).');
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: CONFIG.GMAIL_USER,
+      pass: CONFIG.GMAIL_APP_PASSWORD,
+    },
+  });
+
+  const mailOptions = {
+    from: CONFIG.GMAIL_USER,
+    to: 'bennytsai0711@gmail.com',
+    subject: `🚨 Hyper Alert (Binance): ${subject}`,
+    text: text,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    log(`📧 Email sent: ${info.response}`);
+    lastEmailTime = Date.now();
+  } catch (error) {
+    log(`❌ Email failed: ${error.message}`);
+  }
 }
 
 // ============================================
@@ -82,19 +119,59 @@ async function fetchLatest() {
 // ============================================
 async function processSignal(data) {
   // Select Data Source based on Configuration
-  const useSmart = CONFIG.SIGNAL_SOURCE === 'smart';
+  const src = CONFIG.SIGNAL_SOURCE;
   let longVol, shortVol, sentiment, sourceName;
 
-  if (useSmart) {
-    sourceName = '🧠 Smart Money';
-    longVol = parseFloat(data.smart_long_vol_num) || 0;
-    shortVol = parseFloat(data.smart_short_vol_num) || 0;
-    sentiment = data.smart_sentiment || '';
-  } else {
-    sourceName = '🖨️ Super Money';
-    longVol = parseFloat(data.long_vol_num) || 0;
-    shortVol = parseFloat(data.short_vol_num) || 0;
-    sentiment = data.sentiment || '';
+  switch (src) {
+    case 'smart':
+      sourceName = '🧠 Smart Money';
+      longVol = parseFloat(data.smart_long_vol_num) || 0;
+      shortVol = parseFloat(data.smart_short_vol_num) || 0;
+      sentiment = data.smart_sentiment || '';
+      break;
+    case 'grinder':
+      sourceName = '⚙️ 套利高手';
+      longVol = parseFloat(data.grinder_long_vol_num) || 0;
+      shortVol = parseFloat(data.grinder_short_vol_num) || 0;
+      sentiment = data.grinder_sentiment || '';
+      break;
+    case 'humble':
+      sourceName = '🐜 螞蟻玩家';
+      longVol = parseFloat(data.humble_long_vol_num) || 0;
+      shortVol = parseFloat(data.humble_short_vol_num) || 0;
+      sentiment = data.humble_sentiment || '';
+      break;
+    case 'exitLiq':
+      sourceName = '🤡 合約小白';
+      longVol = parseFloat(data.exit_liq_long_vol_num) || 0;
+      shortVol = parseFloat(data.exit_liq_short_vol_num) || 0;
+      sentiment = data.exit_liq_sentiment || '';
+      break;
+    case 'semiRekt':
+      sourceName = '🔪 割肉俠';
+      longVol = parseFloat(data.semi_rekt_long_vol_num) || 0;
+      shortVol = parseFloat(data.semi_rekt_short_vol_num) || 0;
+      sentiment = data.semi_rekt_sentiment || '';
+      break;
+    case 'fullRekt':
+      sourceName = '🩸 扛單狂人';
+      longVol = parseFloat(data.full_rekt_long_vol_num) || 0;
+      shortVol = parseFloat(data.full_rekt_short_vol_num) || 0;
+      sentiment = data.full_rekt_sentiment || '';
+      break;
+    case 'gigaRekt':
+      sourceName = '💀 爆倉達人';
+      longVol = parseFloat(data.giga_rekt_long_vol_num) || 0;
+      shortVol = parseFloat(data.giga_rekt_short_vol_num) || 0;
+      sentiment = data.giga_rekt_sentiment || '';
+      break;
+    case 'printer':
+    default:
+      sourceName = '🖨️ Super Money';
+      longVol = parseFloat(data.long_vol_num) || 0;
+      shortVol = parseFloat(data.short_vol_num) || 0;
+      sentiment = data.sentiment || '';
+      break;
   }
 
   const currentNet = longVol - shortVol;  // 正=多頭佔優, 負=空頭佔優
@@ -104,8 +181,8 @@ async function processSignal(data) {
   // or Coinglass didn't render it properly. We must ignore this tick to prevent
   // artificial huge delta spikes when it recovers.
   if (Math.abs(longVol) < 1000000 && Math.abs(shortVol) < 1000000) {
-      log(`🛑 Data Anomaly Filtered: Long ${formatUSD(longVol)}, Short ${formatUSD(shortVol)}. Skipping tick.`);
-      return;
+    log(`🛑 Data Anomaly Filtered: Long ${formatUSD(longVol)}, Short ${formatUSD(shortVol)}. Skipping tick.`);
+    return;
   }
 
   // First run: just record, don't trade
@@ -121,6 +198,13 @@ async function processSignal(data) {
   // Calculate delta
   const deltaH = currentNet - previousNet;
   previousNet = currentNet;
+
+  const NOTIFY_THRESHOLD = 20000000; // 2000萬
+  if (Math.abs(deltaH) > NOTIFY_THRESHOLD) {
+    const msg = `Market Pressure Delta > 2000萬!\nValue: ${formatUSD(deltaH)}\nExchange: Binance\nTime: ${new Date().toLocaleString()}\nSentiment: ${sentiment}`;
+    // Run in background
+    sendEmail('Significant Market Move', msg).catch(console.error);
+  }
 
   // Check minimum threshold
   if (Math.abs(deltaH) < CONFIG.MIN_DELTA) {
@@ -163,7 +247,7 @@ async function processSignal(data) {
 
   // ============================================
   // Hybrid Strategy
-  // < 400萬: Maker (Limit - Post Only) via 6m Candle
+  // < 400萬: Limit via 6m Candle
   // >= 400萬: Market (Immediate)
   // ============================================
 
@@ -304,7 +388,7 @@ async function main() {
   log(`   Formula: margin = delta × ${CONFIG.RATIO}, position = margin × ${CONFIG.LEVERAGE}x`);
   log(`   Example: 100萬 delta → $${(1000000 * CONFIG.RATIO).toFixed(0)} margin → $${(1000000 * CONFIG.RATIO * CONFIG.LEVERAGE).toFixed(0)} position`);
   log(`   Min Delta: ${formatUSD(CONFIG.MIN_DELTA)}`);
-  log(`   Order Type: Hybrid (≥400w Market, <400w Maker 6m)`);
+  log(`   Order Type: Hybrid (≥400w Market, <400w Limit 6m)`);
   log(`   Mode: ${CONFIG.DRY_RUN ? '🔕 DRY RUN' : (CONFIG.BINANCE_TESTNET ? '🧪 TESTNET' : '🔴 LIVE')}`);
   log('');
 
