@@ -245,7 +245,7 @@ async function processSignal(data) {
   const side = deltaH > 0 ? 'buy' : 'sell';
 
   // Strategy Thresholds
-  const MARKET_THRESHOLD = 3000000; // 300萬
+  const MARKET_THRESHOLD = 4000000; // 400萬
   const absDelta = Math.abs(deltaH);
 
   let orderType = '';
@@ -255,14 +255,14 @@ async function processSignal(data) {
 
   // ============================================
   // Hybrid Strategy
-  // < 300萬: Limit via 6m Candle
-  // >= 300萬: Market (Immediate)
+  // < 400萬: Limit via 6m Candle
+  // >= 400萬: Market (Immediate)
   // ============================================
 
 
 
   if (absDelta < MARKET_THRESHOLD) {
-    // --- Case A: Small Delta (< 300萬) → Limit Strategy (6m Candle Price) ---
+    // --- Case A: Small Delta (< 400萬) → Limit Strategy (6m Candle Price) ---
 
     // 1. Fetch recent 1m candles
     let klines = [];
@@ -332,10 +332,10 @@ async function processSignal(data) {
     orderOpts = { price: targetPrice }; // Removed postOnly: true
 
   } else {
-    // --- Case B: Large Delta (>= 300萬) → Market Strategy ---
+    // --- Case B: Large Delta (>= 400萬) → Market Strategy ---
     orderType = 'MARKET';
     targetPrice = price; // For estimation
-    strategyNote = `(🔥 Big Signal >= 300w → Immediate Entry)`;
+    strategyNote = `(🔥 Big Signal >= 400w → Immediate Entry)`;
     orderOpts = { type: 'market' }; // API uses lowercase 'market' for OKX
   }
 
@@ -395,7 +395,7 @@ async function main() {
   log(`   Leverage: ${CONFIG.LEVERAGE}x`);
   log(`   Ratio: 1/${(1 / CONFIG.RATIO).toFixed(0)} (${formatUSD(1 / CONFIG.RATIO)} delta → $1 order)`);
   log(`   Min Delta: ${formatUSD(CONFIG.MIN_DELTA)}`);
-  log(`   Order Type: Hybrid (≥500w Market, <500w Maker 6m)`);
+  log(`   Order Type: Hybrid (≥400w Market, <400w Limit 6m)`);
   log(`   Mode: ${CONFIG.DRY_RUN ? '🔕 DRY RUN' : (CONFIG.OKX_DEMO ? '🧪 DEMO' : '🔴 LIVE')}`);
   log('');
 
