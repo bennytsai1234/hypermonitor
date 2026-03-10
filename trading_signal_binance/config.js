@@ -18,7 +18,7 @@ module.exports = {
   BINANCE_TESTNET: process.env.BINANCE_TESTNET === 'true',
 
   // Trading parameters
-  SIGNAL_SOURCE: process.env.SIGNAL_SOURCE || 'printer', // Options: 'printer' | 'smart'
+  SIGNAL_SOURCE: process.env.SIGNAL_SOURCE || 'printer', // Options: 'printer' | 'smart' | 'grinder' | 'humble' | 'exitLiq' | 'semiRekt' | 'fullRekt' | 'gigaRekt'
   INST_ID: process.env.INST_ID || 'BTCUSDT',
   LEVERAGE: parseInt(process.env.LEVERAGE || '20'),
   // Margin ratio: delta × RATIO = margin amount
@@ -27,6 +27,10 @@ module.exports = {
   MIN_DELTA: parseFloat(process.env.MIN_DELTA || '500000'),
   MAX_ORDER_USD: parseFloat(process.env.MAX_ORDER_USD || '2000'),
   POLL_INTERVAL: parseInt(process.env.POLL_INTERVAL || '10') * 1000,
+
+  // Email Notification
+  GMAIL_USER: process.env.GMAIL_USER || '',
+  GMAIL_APP_PASSWORD: process.env.GMAIL_APP_PASSWORD || '',
 
   // Flags
   DRY_RUN: process.argv.includes('--dry-run'),
