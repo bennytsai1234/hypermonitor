@@ -1,66 +1,40 @@
 # ⚡ Hyperliquid 超級印鈔機監控終端
 
-本專案提供 **Windows 桌面端**、**Android 行動端** 與 **PWA 網頁版** 三種監控介面，專為專業交易員設計，實時追蹤 Coinglass 上的「超級印鈔機」策略資金流向。
+本專案提供監控 Coinglass 上「超級印鈔機」策略資金流向的系統，專為專業交易員設計。本專案已全面捨棄舊版 Flutter 架構，**轉為全端 (Node.js + Cloudflare Worker + PWA) 與自動化交易架構**。
 
-## 📱 平台版本
+## 🏗️ 專案架構 (Architecture)
 
-| 版本 | 技術棧 | 適用場景 | 特色 |
-| :--- | :--- | :--- | :--- |
-| **PWA 網頁版** | HTML/JS (Vanilla) | 手機、平板、任何瀏覽器 | 免安裝、RWD 響應式、音效警報 |
-| **Windows 桌面版** | Flutter + WebView2 | 專業多螢幕監控 | 高效能圖表、置頂懸浮窗、雙路爬蟲 |
-| **Android 行動版** | Flutter + WebView | 行動監控 / 備援發報機 | 前台服務常駐、螢幕常亮、即時爬取上傳 |
+專案分為四個核心模組，形成完整的資料爬取、儲存、視覺化與自動下單循環：
 
----
-
-## 🌐 PWA 網頁版
-
-輕量級、跨平台的即時監控面板。
-
-*   **網址**：`https://hyper-monitor.pages.dev` (或自行部署)
-*   **功能**：
-    *   每 10 秒自動更新數據。
-    *   **音效警報**：多空勢力顯著變化時播放提示音。
-    *   **視覺化 Delta**：紅綠增減標示，一眼識別資金流向。
-    *   **離線支援**：透過 Service Worker 提供類 App 體驗。
-*   **文檔**：詳細部署與開發說明請見 [**pwa/README.md**](pwa/README.md)。若您想自己部署後端 API (Cloudflare Worker)，請見 [**DEPLOY_GUIDE.md**](DEPLOY_GUIDE.md)。
+1. **資料爬蟲 (Data Fetching)**: `scripts/`
+   - 基於 Node.js 執行的爬蟲程式 (如 `headless_scraper.js`)。
+   - 負責定時擷取網頁資料並發送至後端 API。
+2. **中介層 API (Middleware)**: `worker/`
+   - 部署於 Cloudflare Worker，負責接收、暫存與聚合資料。
+   - 提供高效能邊緣運算 API 供 PWA 或策略腳本讀取 `/latest`。
+3. **前端視覺化 (Frontend UI)**: `pwa/`
+   - 基於 HTML, CSS, Vanilla JS 建立的漸進式網頁應用 (Progressive Web App)。
+   - 提供即時圖表、音效警報與離線支援 (Service Worker)。
+   - 網址: `https://hyper-monitor.pages.dev` (或自行部署)
+4. **自動化交易 (Trading Bots)**: `trading_signal_binance/` 與 `trading_signal_okx/`
+   - Node.js 自動下單腳本。
+   - 根據 Worker 或直接從爬蟲接收到的訊號進行自動化交易操作。
 
 ---
 
-## 🖥️ Windows 桌面版 (v1.2.0)
+## 🚀 開發與部署
 
-基於 Flutter 開發的高效能桌面應用。
-
-### 核心功能
-1.  **數據採集**：雙路獨立爬蟲 (Printer Source / Range Source)，互不干擾。
-2.  **視覺化監控**：
-    *   **三柱擎天佈局**：左欄全體、中欄核心對沖、右欄單幣。
-    *   **大閃爍警示**：Delta > $50k 時觸發全螢幕彩虹邊框閃爍。
-3.  **UI 風格**：OLED 極致純黑主題，霓虹配色。
-
-### 檔案結構
-```text
-lib/
-├── main.dart                  # 程式入口
-├── core/
-│   ├── data_model.dart        # 數據模型
-│   └── data_scraper.dart      # 雙路爬蟲引擎
-└── ui/
-    ├── dashboard_screen.dart  # 主畫面邏輯
-    └── widgets/               # UI 組件 (MetricCard, TrendChart 等)
-```
-
-### 開發與構建
-需安裝 Flutter SDK 與 Visual Studio (C++ Desktop Development)。
-
-```bash
-# 運行
-flutter run -d windows
-
-# 構建發布版
-flutter build windows --release
-```
+- **前端部署 (PWA)**:
+  詳細部署與開發說明請見 [**pwa/README.md**](pwa/README.md)。若您想自己部署後端 API，請見 [**pwa/DEPLOY_GUIDE.md**](pwa/DEPLOY_GUIDE.md)。
+- **啟動資料爬蟲**:
+  ```bash
+  npm i
+  npm start
+  ```
+- **配置交易機器人**:
+  請參閱 `trading_signal_binance/README.md` 或對應的設定文件，配置您的 API Keys 與交易策略。
 
 ---
 
 ## ⚠️ 免責聲明
-本程式依賴 Coinglass 的網頁 DOM 結構或非公開 API，若來源網站改版，可能需更新爬蟲邏輯或 API 解析規則。
+本程式依賴非公開 API 與網頁 DOM 結構。若資料來源網站改版，爬蟲模組 (`scripts/`) 可能需要對應更新解析規則。自動化交易涉及高風險，請先透過模擬盤 (Testnet) 進行充分測試。

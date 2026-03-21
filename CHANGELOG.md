@@ -5,8 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.3.0] - 2026-02-17
+## [2.0.0] - 2026-03-22
 
+### Refactor
+- **[Critical] Architecture Transformation**: Fully dropped the Flutter App codebase (`lib/`, iOS/Android/Windows). Transitioned to a unified architecture consisting of:
+  - **Scraper**: Node.js `scripts/`
+  - **Backend**: Cloudflare `worker/`
+  - **Frontend**: Vanilla JS `pwa/`
+  - **Trading Bots**: Node.js `trading_signal_binance/` and `trading_signal_okx/`
+- Deleted all Flutter-related configuration files and directories to keep the project clean and focused on automation and PWA monitoring.
+
+## [1.3.0] - 2026-02-17
 ### Refactor
 - **[Critical] Database & API Cleanup**: Removed all `*_display` string columns from D1 database and Worker API. All formatting logic moved to Frontend (PWA).
   - **Storage Reduction**: Reduced database storage usage by stopping the storage of redundant formatted strings.
