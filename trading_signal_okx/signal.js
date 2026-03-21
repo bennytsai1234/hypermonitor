@@ -241,8 +241,8 @@ async function processSignal(data) {
     return;
   }
 
-  // Direction: delta > 0 = longs increasing = BUY, delta < 0 = shorts increasing = SELL
-  const side = deltaH > 0 ? 'buy' : 'sell';
+  // 逆勢操作 (Reverse Trading): 大戶做多 (delta > 0) -> 我們做空 (sell)；大戶做空 (delta < 0) -> 我們做多 (buy)
+  const side = deltaH > 0 ? 'sell' : 'buy';
 
   // Strategy Thresholds
   const MARKET_THRESHOLD = 4000000; // 400萬
