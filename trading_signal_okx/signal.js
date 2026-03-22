@@ -365,7 +365,7 @@ async function main() {
   log(`   Leverage: ${CONFIG.LEVERAGE}x`);
   log(`   Ratio: 1/${(1 / CONFIG.RATIO).toFixed(0)} (${formatUSD(1 / CONFIG.RATIO)} delta → $1 order)`);
   log(`   Min Delta: ${formatUSD(CONFIG.MIN_DELTA)}`);
-  log(`   Order Type: Hybrid (≥400w Market, <400w Limit 6m)`);
+  log(`   Order Type: Pure Market (Immediate Execution)`);
   log(`   Mode: ${CONFIG.DRY_RUN ? '🔕 DRY RUN' : (CONFIG.OKX_DEMO ? '🧪 DEMO' : '🔴 LIVE')}`);
   log('');
 
