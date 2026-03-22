@@ -244,100 +244,10 @@ async function processSignal(data) {
   // 逆勢操作 (Reverse Trading): 大戶做多 (delta > 0) -> 我們做空 (sell)；大戶做空 (delta < 0) -> 我們做多 (buy)
   const side = deltaH > 0 ? 'sell' : 'buy';
 
-  // Strategy Thresholds
-  const MARKET_THRESHOLD = 4000000; // 400萬
-  const absDelta = Math.abs(deltaH);
-
-  let orderType = '';
-  let orderOpts = {};
-  let targetPrice = 0;
-  let strategyNote = '';
-
-  // ============================================
-  // Hybrid Strategy
-  // < 400萬: Limit via 6m Candle
-  // >= 400萬: Market (Immediate)
-  // ============================================
-
-
-
-  if (absDelta < MARKET_THRESHOLD) {
-    // --- Case A: Small Delta (< 400萬) → Limit Strategy (6m Candle Price) ---
-
-    // 1. Fetch recent 1m candles
-    let klines = [];
-    try {
-      klines = await okx.getKlines(CONFIG.INST_ID, '1m', 15);
-    } catch (e) {
-      log(`⚠️ Fetch klines failed: ${e.message}`);
-    }
-
-    // 2. Aggregate "Previous 6m Candle"
-    const now = Date.now();
-    const BLOCK_MS = 6 * 60 * 1000;
-    const currentBlockStart = now - (now % BLOCK_MS);
-    const prevBlockStart = currentBlockStart - BLOCK_MS;
-
-    const targetCandles = klines.filter(k => {
-      const ts = parseInt(k[0]);
-      return ts >= prevBlockStart && ts < currentBlockStart;
-    });
-
-    if (targetCandles.length > 0) {
-      let blockHigh = -Infinity;
-      let blockLow = Infinity;
-
-      for (const c of targetCandles) {
-        const h = parseFloat(c[2]);
-        const l = parseFloat(c[3]);
-        if (h > blockHigh) blockHigh = h;
-        if (l < blockLow) blockLow = l;
-      }
-
-      if (side === 'buy') {
-        // Buy: Limit at Lower of (Current, 6m Low)
-        if (price < blockLow) {
-          targetPrice = price;
-          strategyNote = `(Curr ${price} < 6m Low ${blockLow} → Limit@Curr)`;
-        } else {
-          targetPrice = blockLow;
-          strategyNote = `(Limit @ 6m Low ${blockLow})`;
-        }
-      } else {
-        // Sell: Limit at Higher of (Current, 6m High)
-        if (price > blockHigh) {
-          targetPrice = price;
-          strategyNote = `(Curr ${price} > 6m High ${blockHigh} → Limit@Curr)`;
-        } else {
-          targetPrice = blockHigh;
-          strategyNote = `(Limit @ 6m High ${blockHigh})`;
-        }
-      }
-      log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
-    } else {
-      log(`⚠️ No complete 6m candle found. Fallback to Limit @ current.`);
-      targetPrice = price;
-    }
-
-    // --- CRITICAL FIX: Round price to Tick Size ---
-    // OKX API will reject "96000.0999999" if tickSz is "0.1"
-    if (instrumentInfo.tickSz) {
-      const pStr = instrumentInfo.tickSz.toString();
-      const decimals = pStr.includes('.') ? pStr.split('.')[1].length : 0;
-      targetPrice = parseFloat(targetPrice.toFixed(decimals));
-    }
-
-    // Strategy A: Standard Limit Order (Not Post-Only)
-    orderType = 'LIMIT';
-    orderOpts = { price: targetPrice }; // Removed postOnly: true
-
-  } else {
-    // --- Case B: Large Delta (>= 400萬) → Market Strategy ---
-    orderType = 'MARKET';
-    targetPrice = price; // For estimation
-    strategyNote = `(🔥 Big Signal >= 400w → Immediate Entry)`;
-    orderOpts = { type: 'market' }; // API uses lowercase 'market' for OKX
-  }
+  let orderType = 'MARKET';
+  let orderOpts = { type: 'market' }; // API uses lowercase 'market' for OKX
+  let targetPrice = price; // For estimation
+  let strategyNote = `(🔥 Immediate Market Entry)`;
 
   const actualUSD = sz * contractValueUSD;
 
