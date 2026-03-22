@@ -23,9 +23,11 @@
 - 網址: `https://hyper-monitor.pages.dev` (或透過 `scripts/deploy_pwa.bat` 單獨部署)
 
 ### 4. 歷史回測引擎 (Backtesting): `scripts/`
-- 內建 `backtest.js` 與 `hyper.sqlite`，提供策略驗證環境。
-- 支援模擬各類市場壓力閾值與策略分組 (Normal/Reverse)，輸出完整的 PNL 收益曲線。
-- 提供 `backtest_chart.html` 用於視覺化回測成果與勝率分析。
+- 內建 `backtest_v2.js` 與 `hyper.sqlite`，提供策略驗證環境。
+- 支援 BTC + ETH 雙合約、8 組交易者群組 × 正/反方向 = 32 策略同時回測。
+- 零點切割法 (Zero-Crossing) 自動偵測持倉翻轉輪次，計算勝率與盈虧比。
+- 輸出 PNL 曲線、Sharpe Ratio、Max Drawdown、Calmar Ratio 等進階指標。
+- 提供 `backtest_chart.html` 用於視覺化回測成果。
 
 ### 5. 自動化交易機器人 (Trading Bots): `trading_signal_binance/` 與 `trading_signal_okx/`
 - 獨立的 Node.js 服務，分別串接 Binance 與 OKX API。
@@ -62,8 +64,33 @@ node index.js
 ### 執行歷史回測
 ```bash
 cd scripts
-node backtest.js
+npm install
+node backtest_v2.js  # v2 回測引擎 (BTC+ETH, 32 策略)
 ```
+
+---
+
+## 📊 回測結論 (Backtest v2 · 2026-03-22)
+
+> **⚠️ 數據穩定性**：D1 資料庫中 `2026-03-02 15:07` 之前的數據因新舊爬蟲同時上傳而存在交錯汙染 (flickering)，回測應從此時間點之後開始。目前可用穩定數據約 **20 天** (03-02 ~ 03-22)。
+
+### 關鍵發現 (20 天穩定數據 · 32 策略)
+
+| 排名 | 策略 | PNL | MaxDD | Sharpe | 特性 |
+|------|------|-----|-------|--------|------|
+| 🥇 | `BTC_exit_liq_reverse` | +$22.37 | $28.34 | **3.20** | 最穩定，低回撤 |
+| 🥈 | `ETH_smart_reverse` | +$36.84 | $229.39 | 0.87 | 最高收益，高波動 |
+| 🥉 | `ETH_full_rekt_normal` | +$13.70 | $143.88 | 0.70 | 中等穩定 |
+
+- **Reverse (反向) 策略普遍優於 Normal**：此期間震盪市中逆向操作更有優勢。
+- **`exit_liq_reverse` 跨幣種穩定**：BTC 和 ETH 上均盈利，最可靠的信號來源。
+- 20 天樣本偏短，結論需持續累積數據驗證。
+
+### 定期回測流程
+1. 從 Cloudflare D1 導出最新數據快照至 `scripts/hyper.sqlite`
+2. 執行 `node backtest_v2.js`，結果輸出至 `backtest_v2_result.json`
+3. 開啟 `backtest_chart.html` 視覺化比較
+4. 比對新舊結論，觀察策略是否隨市場變化而衰退或強化
 
 ---
 

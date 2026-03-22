@@ -95,3 +95,16 @@ Agent 注意：在執行任何指令前，請先讀取並適配以下專案特�
 
 - **Issue (2026-03-22)**:架構繁重，Flutter 開發緩慢且包體過大。
   - **Fix**: **[Architectural Pivot]** 捨棄 Flutter 原有程式碼體系；全面重構為爬蟲 (Scraper)、中繼快取 (Worker) 與純視覺無狀態終端 (PWA) 分離的現代化架構，並輔以多套交易機器人。
+
+- **Issue (2026-03-22)**: D1 歷史數據汙染 — 新舊爬蟲同時上傳導致數據交錯 (flickering)。
+  - **Root Cause**: `2026-02-23` ~ `2026-03-02` 期間，舊爬蟲仍間歇性上傳不含新欄位的行，與新爬蟲的完整數據交錯混入。Grinder ~ Giga Rekt 六組各有 188 行汙染。
+  - **Fix**: 回測引擎 v2 (`backtest_v2.js`) 起始點設為 **`2026-03-02 15:07:06`** (所有欄位穩定的時間點)。
+  - **Result**: 32 策略回測 (8 組 × 正/反 × BTC/ETH)。最穩定策略：`BTC_exit_liq_reverse` (Sharpe 3.20)。
+
+---
+
+## 📊 回測知識備忘 (Backtest Knowledge)
+- **穩定數據起點**: `2026-03-02 15:07:06`，之前的數據有 flickering 汙染。
+- **回測引擎**: `scripts/backtest_v2.js` (取代舊版 `backtest.js`)。
+- **定期回測 SOP**: (1) 導出 D1 最新快照至 `hyper.sqlite` → (2) `node backtest_v2.js` → (3) 開啟 `backtest_chart.html` 比對。
+- **核心結論**: Reverse 策略在震盪市優於 Normal；`exit_liq_reverse` 跨幣種穩定。結論需持續驗證。

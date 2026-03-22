@@ -126,6 +126,25 @@ hypermonitor/
 - **安全禁令**：嚴禁硬編碼 API 金鑰；嚴禁對生產 D1 資料庫進行寫入測試；`MIN_DELTA` / `MAX_ORDER_USD` 等風控參數不可輕易修改。
 - **Shell 環境**：Windows PowerShell，不支援 `&&`，使用 `;` 分隔多指令。
 
+## 回測數據與定期回測
+
+### 數據穩定性
+- D1 資料庫中 **`2026-03-02 15:07:06` 之前的數據不可靠**：新舊爬蟲同時上傳導致 Grinder ~ Giga Rekt 六組欄位存在交錯 NULL 汙染 (共 188 行 flickering)。
+- 回測引擎 v2 (`scripts/backtest_v2.js`) 已將起始點硬編碼為此穩定時間點。
+
+### 最新回測結論 (2026-03-22 · 20 天穩定數據)
+- 全體 32 策略 (8 組 × 正/反 × BTC/ETH) 中，**8 個盈利，24 個虧損**。
+- 最穩定：`BTC_exit_liq_reverse` (Sharpe **3.20**，MaxDD 僅 $28.34)。
+- 最高收益：`ETH_smart_reverse` (PNL +$36.84，但 MaxDD $229.39)。
+- Reverse (反向) 策略在此期間普遍優於 Normal。
+
+### 定期回測 SOP
+1. 從 Cloudflare D1 導出最新數據至 `scripts/hyper.sqlite`（使用 `wrangler d1 export`）。
+2. 執行 `cd scripts && node backtest_v2.js`。
+3. 檢視 console 輸出的排名表，結果也寫入 `backtest_v2_result.json`。
+4. 開啟 `backtest_chart.html` 視覺化 PNL 曲線。
+5. 與之前的結論比對，觀察策略是否衰退或強化，更新本文件記錄。
+
 ## 重要資源
 
 - `worker/schema.sql` — D1 完整 Schema 定義，修改前務必理解欄位關係。
