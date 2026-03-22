@@ -244,6 +244,66 @@ async function processSignal(data) {
   // 逆勢操作 (Reverse Trading): 大戶做多 (delta > 0) -> 我們做空 (sell)；大戶做空 (delta < 0) -> 我們做多 (buy)
   const side = deltaH > 0 ? 'sell' : 'buy';
 
+  /*
+  // ============================================
+  // [DISABLED] Hybrid Strategy (Kept for reference)
+  // < 400萬: Limit via 6m Candle
+  // >= 400萬: Market (Immediate)
+  // ============================================
+  const MARKET_THRESHOLD = 4000000;
+  if (Math.abs(deltaH) < MARKET_THRESHOLD) {
+    let klines = [];
+    try { klines = await okx.getKlines(CONFIG.INST_ID, '1m', 15); } catch (e) { log(`⚠️ Fetch klines failed: ${e.message}`); }
+    
+    const now = Date.now();
+    const BLOCK_MS = 6 * 60 * 1000;
+    const currentBlockStart = now - (now % BLOCK_MS);
+    const prevBlockStart = currentBlockStart - BLOCK_MS;
+    const targetCandles = klines.filter(k => { const ts = parseInt(k[0]); return ts >= prevBlockStart && ts < currentBlockStart; });
+    
+    let targetPrice = 0;
+    let strategyNote = '';
+    
+    if (targetCandles.length > 0) {
+      let blockHigh = -Infinity, blockLow = Infinity;
+      for (const c of targetCandles) {
+        const h = parseFloat(c[2]), l = parseFloat(c[3]);
+        if (h > blockHigh) blockHigh = h;
+        if (l < blockLow) blockLow = l;
+      }
+      if (side === 'buy') {
+        if (price < blockLow) { targetPrice = price; strategyNote = `(Curr ${price} < 6m Low ${blockLow} → Limit@Curr)`; } 
+        else { targetPrice = blockLow; strategyNote = `(Limit @ 6m Low ${blockLow})`; }
+      } else {
+        if (price > blockHigh) { targetPrice = price; strategyNote = `(Curr ${price} > 6m High ${blockHigh} → Limit@Curr)`; } 
+        else { targetPrice = blockHigh; strategyNote = `(Limit @ 6m High ${blockHigh})`; }
+      }
+      log(`🕯️ Prev 6m Candle [${new Date(prevBlockStart).toLocaleTimeString()}]: High ${blockHigh}, Low ${blockLow}, Curr ${price}`);
+    } else {
+      log(`⚠️ No complete 6m candle found. Fallback to Limit @ current.`);
+      targetPrice = price;
+    }
+    
+    if (instrumentInfo.tickSz) {
+      const pStr = instrumentInfo.tickSz.toString();
+      const decimals = pStr.includes('.') ? pStr.split('.')[1].length : 0;
+      targetPrice = parseFloat(targetPrice.toFixed(decimals));
+    }
+    
+    let orderType = 'LIMIT'; 
+    let orderOpts = { price: targetPrice };
+  } else {
+    let orderType = 'MARKET'; 
+    let targetPrice = price;
+    let strategyNote = `(🔥 Big Signal >= 400w → Immediate Entry)`; 
+    let orderOpts = { type: 'market' };
+  }
+  */
+
+  // ============================================
+  // Pure Market Strategy
+  // All signals use Market Orders
+  // ============================================
   let orderType = 'MARKET';
   let orderOpts = { type: 'market' }; // API uses lowercase 'market' for OKX
   let targetPrice = price; // For estimation
