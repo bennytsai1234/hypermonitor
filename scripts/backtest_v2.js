@@ -17,7 +17,7 @@ const STABLE_START = '2026-03-02 15:07:06';
 const CONFIG = {
     RATIO: 1 / 100000,     // $10,000,000 delta → $100 order
     FEE_RATE: 0.0005,      // 0.05% per trade (taker fee)
-    MIN_DELTA: 5_000_000,  // $5M minimum trigger
+    MIN_DELTA: 1_000_000,  // $1M minimum trigger
     MAX_DELTA: 40_000_000, // $40M maximum trigger
 };
 
