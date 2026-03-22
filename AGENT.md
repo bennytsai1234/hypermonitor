@@ -1,0 +1,153 @@
+# AGENT.md
+
+This file provides guidance to AI coding agents when working with code in this repository.
+
+## 專案概述
+
+**Hypermonitor** 是一套加密貨幣市場壓力監控與自動交易系統，監控 Coinglass/Hyperliquid 資金流向。系統由五個獨立模組組成，形成從資料爬取到自動下單的完整閉環。架構已於 2026-03-22 全面轉型為 Node.js + Cloudflare Worker + PWA，完全捨棄 Flutter。
+
+## 常用指令
+
+各模組指令需在對應目錄下執行：
+
+```bash
+# === 資料爬蟲 (scraper/) ===
+cd scraper
+npm install
+npm start                    # 啟動 Puppeteer 無頭爬蟲
+
+# === Cloudflare Worker (worker/) ===
+cd worker
+npm install
+npx wrangler dev             # 本機開發伺服器
+npx wrangler deploy          # 部署至 Cloudflare Edge
+
+# === PWA 前端 (pwa/) ===
+# 純靜態檔案，使用任意 HTTP 伺服器即可
+npx serve pwa                # 或 python -m http.server
+# 部署至 Cloudflare Pages：
+scripts/build/deploy_pwa.bat
+
+# === 交易機器人 (trading_signal_okx/ 或 trading_signal_binance/) ===
+cd trading_signal_okx
+npm install
+npm run dry-run              # 紙上交易測試 (不下真單)
+npm start                    # 實盤啟動 (需 .env 金鑰)
+
+# === 歷史回測 (scripts/) ===
+cd scripts
+npm install
+node backtest.js             # 執行策略回測，輸出 backtest_result.json
+# 開啟 backtest_chart.html 視覺化回測結果
+```
+
+> **注意**：交易機器人的 API 金鑰必須透過 `.env` 提供，嚴禁硬編碼於程式碼中。
+
+## 架構概覽
+
+```
+hypermonitor/
+├── scraper/                  # 資料爬蟲 (Node.js + Puppeteer)
+│   └── index.js              # 進入點，定時爬取 Coinglass 頁面資料
+├── worker/                   # 中介層 API (Cloudflare Worker + D1)
+│   ├── src/index.ts          # Worker 主程式 (TypeScript)
+│   ├── schema.sql            # D1 資料庫 Schema 定義
+│   ├── wrangler.toml         # Wrangler 部署配置
+│   └── migration_v*.sql      # 資料庫遷移腳本
+├── pwa/                      # 前端視覺化面板 (Vanilla JS PWA)
+│   ├── index.html            # 主頁面
+│   ├── app.js                # 應用進入點 (ES Module)
+│   ├── style.css             # 全域樣式
+│   ├── sw.js                 # Service Worker (快取版本管理)
+│   ├── timer.worker.js       # Web Worker (計時器)
+│   └── js/
+│       ├── api.js            # API 呼叫封裝
+│       ├── chart.js          # Chart.js 圖表渲染
+│       ├── config.js         # API 端點與輪詢設定
+│       ├── ui.js             # DOM 操作與 UI 邏輯
+│       ├── utils.js          # 格式化與工具函式
+│       └── vendor/           # Chart.js 等第三方庫 (本地副本)
+├── trading_signal_okx/       # OKX 自動交易機器人
+│   ├── signal.js             # 主策略引擎
+│   ├── okx-api.js            # OKX REST API 封裝
+│   └── config.js             # 可配置參數 (均讀取 .env)
+├── trading_signal_binance/   # Binance 自動交易機器人
+│   ├── signal.js             # 主策略引擎
+│   ├── binance-api.js        # Binance REST API 封裝
+│   ├── config.js             # 可配置參數
+│   └── telegram.js           # Telegram 通知
+├── scripts/                  # 回測與部署工具
+│   ├── backtest.js           # 回測引擎 (讀取 hyper.sqlite)
+│   ├── backtest_chart.html   # 回測結果視覺化
+│   └── hyper.sqlite          # 歷史資料 SQLite 快照
+├── GEMINI.md                 # AI Agent 開發規範 (Gemini 專用)
+├── CLAUDE.md                 # AI Agent 開發規範 (Claude 專用)
+├── AGENT.md                  # AI Agent 通用規範 (本檔案)
+└── CHANGELOG.md              # 版本與變更日誌
+```
+
+## 技術棧
+
+| 模組 | 技術 | 核心依賴 |
+|------|------|----------|
+| 資料爬蟲 | Node.js ≥18 | `puppeteer` (無頭瀏覽器) |
+| 中介層 API | Cloudflare Worker (TypeScript) | `wrangler`, D1 (Serverless SQLite) |
+| 前端面板 | Vanilla JS + HTML/CSS | `Chart.js`, Service Worker, Web Worker |
+| 交易機器人 | Node.js | `dotenv`, `nodemailer`, 原生 `crypto` (HMAC 簽名) |
+| 回測引擎 | Node.js | `better-sqlite3` |
+
+## 資料流與 API
+
+資料流向：`Scraper → Worker (POST /data) → D1 → Worker (GET /latest, /history) → PWA / Trading Bots`
+
+### Worker API 端點
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| POST | `/data` | 接收爬蟲上傳的最新市場數據 |
+| GET | `/latest` | 取得最新一筆數據 (L1 記憶體快取 15s) |
+| GET | `/history?range=1h` | 取得歷史聚合數據 (L2 邊緣快取 60s) |
+| GET | `/stats` | 資料庫健康狀態 |
+| GET | `/cleanup?days=N` | 手動觸發舊資料清理 |
+
+### D1 資料庫結構
+
+- **`printer_metrics`**：Hyperliquid 印鈔機多空壓力數據，含 8 個交易者層級 (Printer / Smart Money / Grinder / Humble / Exit Liq / Semi Rekt / Full Rekt / Giga Rekt)。
+- **`range_metrics`**：BTC/ETH 的 24h 成交量範圍數據，含價格。
+
+## 開發規範
+
+- **溝通語言**：所有對話使用繁體中文，代碼與 Git Commit 維持英文 (Conventional Commits 格式)。
+- **代碼修改**：優先使用局部替換，嚴禁對 Git 追蹤檔案使用全量覆寫，避免代碼遺失與截斷。
+- **即時備份**：每次修改完單個檔案後，同一輪次內立即執行 `git add <file> ; git commit -m "backup: update <file>"`。
+- **Shell 環境**：Windows PowerShell 7，不支援 `&&`，使用 `;` 分隔多指令；複雜指令先寫入 `.ps1` 暫存檔再執行。
+- **PWA 快取**：修改 PWA 檔案後，必須更新 `pwa/sw.js` 中的 `CACHE_NAME` 版本號，並確認新檔案已加入 `ASSETS` 列表。
+- **跨模組一致性**：修改 `worker/src/index.ts` 的 API 回傳格式後，必須同步檢查 `pwa/js/api.js` 與兩個交易機器人的解析邏輯。
+- **文檔同步**：新功能更新 `CHANGELOG.md`；策略邏輯變更需同步更新機器人目錄下的 README；依賴變更需同步 `package.json`。
+- **驗證流程**：機器人測試使用 `DRY_RUN=true`；PWA 部署後要求使用者強制刷新；Worker 部署後確認快取已更新。
+
+## 安全禁令
+
+1. **嚴禁硬編碼金鑰**：API Key、Secret、Passphrase 等敏感資訊必須透過 `.env` 提供，不得出現在任何代碼、日誌或 Commit 中。
+2. **嚴禁生產環境寫入測試**：不得對生產 D1 資料庫執行 `INSERT`/`UPDATE`，使用本地測試實例。
+3. **風控參數保護**：`MIN_DELTA`、`MAX_ORDER_USD` 等參數不可輕易修改，避免行情波動時暴衝下單。
+4. **危險操作授權**：`rm -rf`、`git reset --hard` 等毀滅性操作必須先取得使用者明確授權。
+
+## 重要資源
+
+- `worker/schema.sql` — D1 完整 Schema 定義，修改前務必理解欄位關係。
+- `trading_signal_okx/.env.example` — OKX Bot 環境變數範本。
+- `trading_signal_binance/.env.example` — Binance Bot 環境變數範本。
+- `pwa/alert.mp3` — PWA 音效警報檔案，不可刪除。
+- `scripts/hyper.sqlite` — 歷史回測資料庫快照 (~25MB)。
+- `CHANGELOG.md` — 版本變更紀錄，任何功能新增或修復必須同步更新。
+
+## 疑難排解
+
+| 問題場景 | 解決方案 |
+|----------|----------|
+| 代碼編輯 (replace) 失敗 | 嚴禁改用全量覆寫。正確做法：縮小替換範圍，檢查隱形字元 (Tabs vs Spaces)。 |
+| Shell 語法錯誤 | Windows PowerShell 不支援 `&&`，改用 `;` 分隔指令。 |
+| PWA 緩存不更新 | 更新 `pwa/sw.js` 的 `CACHE_NAME` 版本號，並確保新檔案加入 `ASSETS` 列表。 |
+| PWA 音效無聲 | 確認 `alert.mp3` 存在於 `pwa/`，且使用者已與頁面互動 (點擊喇叭按鈕解鎖 AudioContext)。 |
+| DOM 初始化錯誤 | PWA 的 DOM 查詢必須封裝在初始化函數中 (如 `initUi()`)，不可在模組頂層執行。 |
