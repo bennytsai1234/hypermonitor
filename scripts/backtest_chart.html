@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyper PNL Backtest Result</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #121212; color: #eee; margin: 0; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+        .card { background: #1e1e1e; border-radius: 12px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid #2a2a2a; }
+        .card h3 { margin: 0 0 10px 0; font-size: 16px; display: flex; justify-content: space-between;}
+        .card .stats { font-size: 13px; color: #888; margin-bottom: 15px; }
+        .stats span { display: block; margin-bottom: 4px; }
+        .positive { color: #00ff88; }
+        .negative { color: #ff3366; }
+        canvas { width: 100% !important; height: 200px !important; }
+        button { background: #3a3a3a; border: none; color: white; padding: 8px 15px; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #4a4a4a; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1 style="margin:0;">16 Strategies PNL Dashboard</h1>
+                <p style="margin:5px 0 0; color:#888;">Normal = Follow / Reverse = Contrarian | Ratio: $1000 Delta = $1 Trade</p>
+            </div>
+            <button onclick="loadData()">Reload Data</button>
+        </div>
+
+        <div class="grid" id="charts-container">
+            <!-- Charts injected here -->
+        </div>
+    </div>
+
+    <script>
+        const groupTitles = {
+            'super': 'Super Money (All)',
+            'smart': '🧠 Smart Money',
+            'grinder': '⚙️ Grinder',
+            'humble': '🐜 Humble',
+            'exit_liq': '🤡 Exit Liquidity',
+            'semi_rekt': '🔪 Semi Rekt',
+            'full_rekt': '🩸 Full Rekt',
+            'giga_rekt': '💀 Giga Rekt'
+        };
+
+        async function loadData() {
+            try {
+                // To fetch local JSON via live server or file:// (if allowed in browser flags)
+                // Assuming it's served via HTTP (e.g., Live Server)
+                const res = await fetch('./backtest_result.json');
+                const data = await res.json();
+                renderCharts(data);
+            } catch (err) {
+                alert("Failed to load data. Make sure to run this via a local server (e.g. VSCode Live Server) " + err.message);
+            }
+        }
+
+        function renderCharts(data) {
+            const container = document.getElementById('charts-container');
+            container.innerHTML = '';
+
+            // Map and sort by final PNL descending
+            const strategies = Object.values(data).sort((a, b) => b.final_pnl - a.final_pnl);
+
+            strategies.forEach((st, index) => {
+                const groupName = st.name.split('_');
+                const dir = groupName.pop(); // 'normal' or 'reverse'
+                const gId = groupName.join('_');
+                const title = `${groupTitles[gId]} - ${dir.toUpperCase()}`;
+
+                const pnlClass = st.final_pnl >= 0 ? 'positive' : 'negative';
+
+                // Reduce data points for rendering performance
+                const downsampled = st.hist.filter((_, i) => i % 5 === 0 || i === st.hist.length - 1);
+                
+                const labels = downsampled.map(h => new Date(h.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                const pnlData = downsampled.map(h => h.pnl);
+
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <h3><span><span style="color:#666">#${index+1} </span> ${title}</span> <span class="${pnlClass}">$${st.final_pnl.toFixed(2)}</span></h3>
+                    <div class="stats">
+                        <span>Max Drawdown: <b style="color:#ffcc00">-$${st.max_drawdown.toFixed(2)}</b></span>
+                        <span>Trades Executed: <b>${st.trade_count}</b></span>
+                    </div>
+                    <div>
+                        <canvas id="chart-${st.name}"></canvas>
+                    </div>
+                `;
+                container.appendChild(card);
+
+                const ctx = document.getElementById(`chart-${st.name}`).getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Equity (USD)',
+                            data: pnlData,
+                            borderColor: st.final_pnl >= 0 ? '#00ff88' : '#ff3366',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            pointRadius: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { maxTicksLimit: 6, color: '#555' } },
+                            y: { grid: { color: '#333' }, ticks: { color: '#888' }}
+                        }
+                    }
+                });
+            });
+        }
+
+        window.onload = loadData;
+    </script>
+</body>
+</html>
