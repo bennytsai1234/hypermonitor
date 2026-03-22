@@ -221,8 +221,8 @@ async function processSignal(data) {
 
 
 
-  // Calculate order value (direct, no accumulation)
-  const orderUSD = Math.abs(deltaH) * CONFIG.RATIO;
+  // Calculate order value (Fixed Amount)
+  const orderUSD = CONFIG.ORDER_USD;
 
   // Get price and instrument info
   if (!instrumentInfo) {

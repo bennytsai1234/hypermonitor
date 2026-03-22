@@ -18,9 +18,8 @@ const CONFIG = {
   SIGNAL_SOURCE: process.env.SIGNAL_SOURCE || 'printer', // Options: 'printer' | 'smart'
   INST_ID: process.env.INST_ID || 'BTC-USDT-SWAP',
   LEVERAGE: parseInt(process.env.LEVERAGE || '10'),
-  RATIO: parseFloat(process.env.RATIO || '0.00001'),  // 1/100,000
-  MIN_DELTA: parseFloat(process.env.MIN_DELTA || '500000'),  // 50万
-  MAX_ORDER_USD: parseFloat(process.env.MAX_ORDER_USD || '2000'),
+  ORDER_USD: parseFloat(process.env.ORDER_USD || '40'),
+  MIN_DELTA: parseFloat(process.env.MIN_DELTA || '4000000'),
 
   // Polling
   POLL_INTERVAL: parseInt(process.env.POLL_INTERVAL || '10') * 1000,
