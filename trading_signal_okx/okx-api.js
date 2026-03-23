@@ -174,6 +174,10 @@ async function placeOrder(instId, side, posSide, sz, opts = {}) {
   // Only include posSide for hedge mode (if needed, though typically net mode is default for simple bots)
   if (posSide) body.posSide = posSide;
 
+  if (opts.attachAlgoOrds) {
+    body.attachAlgoOrds = opts.attachAlgoOrds;
+  }
+
   return okxPost(path, body);
 }
 

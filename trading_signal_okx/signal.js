@@ -305,9 +305,30 @@ async function processSignal(data) {
   // All signals use Market Orders
   // ============================================
   let orderType = 'MARKET';
-  let orderOpts = { type: 'market' }; // API uses lowercase 'market' for OKX
   let targetPrice = price; // For estimation
-  let strategyNote = `(🔥 Immediate Market Entry)`;
+  
+  const SL_PCT = 0.02; // 2% 停損
+  const TP_PCT = 0.03; // 3% 停利
+  
+  const slPrice = side === 'buy' ? targetPrice * (1 - SL_PCT) : targetPrice * (1 + SL_PCT);
+  const tpPrice = side === 'buy' ? targetPrice * (1 + TP_PCT) : targetPrice * (1 - TP_PCT);
+  
+  const tickStr = instrumentInfo.tickSz.toString();
+  const decimals = tickStr.includes('.') ? tickStr.split('.')[1].length : 0;
+  const slPriceStr = slPrice.toFixed(decimals);
+  const tpPriceStr = tpPrice.toFixed(decimals);
+
+  let orderOpts = { 
+    type: 'market',
+    attachAlgoOrds: [{
+      slTriggerPx: slPriceStr,
+      slOrdPx: '-1',
+      tpTriggerPx: tpPriceStr,
+      tpOrdPx: '-1'
+    }]
+  };
+  
+  let strategyNote = `(🔥 Market Entry | SL: ${slPriceStr}, TP: ${tpPriceStr})`;
 
   const actualUSD = sz * contractValueUSD;
 
@@ -363,7 +384,8 @@ async function main() {
   log(`   Source: ${CONFIG.SIGNAL_SOURCE || 'printer'}`);
   log(`   Instrument: ${CONFIG.INST_ID}`);
   log(`   Leverage: ${CONFIG.LEVERAGE}x`);
-  log(`   Ratio: 1/${(1 / CONFIG.RATIO).toFixed(0)} (${formatUSD(1 / CONFIG.RATIO)} delta → $1 order)`);
+  log(`   Order Size: Fixed $${CONFIG.ORDER_USD} USD per trade`);
+  log(`   Safety: TP = 3%, SL = 2% attached at entry`);
   log(`   Min Delta: ${formatUSD(CONFIG.MIN_DELTA)}`);
   log(`   Order Type: Pure Market (Immediate Execution)`);
   log(`   Mode: ${CONFIG.DRY_RUN ? '🔕 DRY RUN' : (CONFIG.OKX_DEMO ? '🧪 DEMO' : '🔴 LIVE')}`);
