@@ -121,6 +121,7 @@ hypermonitor/
 - **代碼修改**：優先使用局部替換，嚴禁對 Git 追蹤檔案使用全量覆寫，避免代碼遺失與截斷。
 - **即時備份**：每次修改完單個檔案後，同一輪次內立即執行 `git add <file> ; git commit -m "backup: update <file>"`。
 - **Shell 環境**：Windows PowerShell 7，不支援 `&&`，使用 `;` 分隔多指令；複雜指令先寫入 `.ps1` 暫存檔再執行。
+- **WSL 常駐服務**：`openclaw-gateway.service` 與 `hermes-gateway.service` 為刻意保留的 24/7 基礎服務。任何 WSL 優化、背景服務整理、開機加速或資源回收流程，除非使用者明確授權，否則不得停用、mask、disable、改為手動啟動，或移除其 `linger`/自動啟動能力。
 - **PWA 快取**：修改 PWA 檔案後，必須更新 `pwa/sw.js` 中的 `CACHE_NAME` 版本號，並確認新檔案已加入 `ASSETS` 列表。
 - **跨模組一致性**：修改 `worker/src/index.ts` 的 API 回傳格式後，必須同步檢查 `pwa/js/api.js` 與兩個交易機器人的解析邏輯。
 - **文檔同步**：新功能更新 `CHANGELOG.md`；策略邏輯變更需同步更新機器人目錄下的 README；依賴變更需同步 `package.json`。
